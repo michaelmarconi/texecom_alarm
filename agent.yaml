@@ -1,0 +1,3 @@
+name: texecom_alarm
+description: Home Assistant app that bridges a Texecom Premier Elite alarm panel to MQTT
+extends: https://github.com/michaelmarconi/guvnor.git
