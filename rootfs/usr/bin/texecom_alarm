@@ -1,0 +1,3 @@
+#!/bin/bash
+
+echo "All done! Replace this with the real Texecom <-> MQTT bridge."
