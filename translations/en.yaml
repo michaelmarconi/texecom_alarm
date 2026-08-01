@@ -1,0 +1,4 @@
+configuration:
+  message:
+    name: Message
+    description: Placeholder option, printed to the log on startup. Replace with real Texecom Alarm options (panel host, port, UDL password, MQTT settings, etc.).
