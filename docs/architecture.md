@@ -1,0 +1,387 @@
+# Architecture
+
+<!-- Synthesised by /architecture on 2026-08-03 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-002-use-frame-resync-and-asymmetric-reconnect-for-panel-protocol-collisions.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md -->
+
+**Date:** 2026-08-03
+**State:** Accepted ✅
+
+## Overview
+
+The household today arms, disarms, and watches its alarm through `the prior MQTT bridge`. Two
+specific behaviours motivate this project: arming to Home mode has never completed
+without an add-on crash, and crashes/restarts happen occasionally under other
+conditions too — both empirically confirmed against the live panel in this project's
+own spikes. Every day, several times a day, the household's automations, dashboard,
+and HomeKit bridges all depend on `the prior MQTT bridge` staying up.
+
+The Texecom Alarm App takes over that role: a self-built Home Assistant App (add-on)
+that lives on the same Home Assistant OS host, takes over the alarm panel's single
+ComIP connection once `the prior MQTT bridge` is stopped, and republishes everything Home
+Assistant already consumes — zone state and alarm state — over the same MQTT discovery
+mechanism `the prior MQTT bridge` uses today. Nothing on the consuming side (the
+`house_alarm_panel` template wrapper, its automations, the Security dashboard, the
+HomeKit bridges) needs to change to keep working.
+
+The hard part here isn't scale — this is a handful of TCP messages a second against 40
+in-use zones. It's two coordination problems the live panel itself forces: the panel's
+own SmartCom/ComIP hardware periodically pollutes the same TCP session with unrelated
+modem traffic around arm/disarm/trigger events — a real, panel-level behaviour that
+any client assuming every byte is Connect-protocol will trip over, regardless of which
+software is on the other end; and the panel's ComIP module only accepts one TCP client
+at a time, so the handoff between `the prior MQTT bridge` and this app has to be sequenced
+deliberately, not just installed alongside it.
+
+Building this commits the project to:
+
+- Discovering the zone list from the panel itself at every startup, rather than
+  hand-maintaining one in configuration.
+- Treating any unrecognised byte on the wire as recoverable rather than fatal, and
+  reconnecting with a budget that is deliberately longer after a real alarm trigger
+  than after an ordinary arm or disarm.
+- Publishing to Home Assistant purely via MQTT discovery, with all household-specific
+  arming and notification logic staying entirely outside this app.
+
+**Diagram colours:** blue = this system (authored components and local storage); grey =
+external people and systems.
+
+**Names used below:** Texecom Alarm App.
+
+### In the wider system
+
+The app sits between the physical alarm panel and the household's existing Home
+Assistant setup, talking to each over a completely different protocol.
+
+```mermaid
+flowchart TB
+    Household[Household members]:::external
+    HA["Home Assistant<br/>+ existing config layer<br/>(dashboard, automations, HomeKit)"]:::external
+    Broker[MQTT Broker]:::external
+    Panel["Texecom Premier Elite panel<br/>via ComIP module"]:::external
+    App[Texecom Alarm App]:::owned
+
+    Household -->|arm/disarm, view dashboard| HA
+    HA <-->|discovery + state topics| Broker
+    App <-->|discovery + state topics| Broker
+    App <-->|Texecom Connect protocol, TCP| Panel
+
+    classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
+    classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
+```
+
+### Components at a glance
+
+This project has a single project-owned peer, **Texecom Alarm App** — there is no
+second codebase to map here. Its two external dependencies (the panel and the MQTT
+broker) and its internal shape are detailed under `## Components` below.
+
+### When things go wrong
+
+- **Panel unreachable at startup** — the app cannot build any zone/alarm entities
+  without first reaching and logging into the panel (ADR-001); there is currently no
+  offline or cached fallback (see Open questions).
+- **Unexpected byte on the wire** — the app scans forward for the next valid frame
+  header instead of tearing down the connection (ADR-002).
+- **Connection dropped** — the app reconnects with a budget sized to what dropped it
+  (short after an ordinary arm/disarm, much longer after a real trigger) and flips a
+  dedicated connectivity `binary_sensor` to degraded for the duration (ADR-002). The
+  `alarm_control_panel` and zone entities themselves keep reporting their last known
+  state throughout — they are never marked unavailable because of this; only the app
+  process itself being down does that (ADR-004).
+- **MQTT broker unreachable** — out of scope to solve beyond standard client
+  reconnect behaviour; this app has the same standing dependency on the broker that
+  `the prior MQTT bridge` does today.
+
+## Components
+
+### Texecom Alarm App
+
+A single long-running process that speaks the Texecom Connect binary protocol to the
+alarm panel on one side, and Home Assistant's MQTT discovery protocol on the other. It
+owns no other project-owned peers — Home Assistant, the MQTT broker, and the panel are
+all externally owned.
+
+```mermaid
+flowchart LR
+    subgraph App["Texecom Alarm App"]
+        direction TB
+        Client["Protocol Client<br/>framing, CRC-8, resync"]:::owned
+        Decoder["Zone / Area / Log<br/>Event Decoder"]:::owned
+        Reconnect["Reconnect Manager<br/>asymmetric backoff"]:::owned
+        Publisher["MQTT Discovery +<br/>State Publisher"]:::owned
+    end
+    Panel["Texecom Panel<br/>ComIP module"]:::external
+    Broker[MQTT Broker]:::external
+
+    Panel <-->|TCP, Connect protocol| Client
+    Client --> Decoder
+    Decoder --> Publisher
+    Client -.->|on drop| Reconnect
+    Reconnect -.->|re-LOGIN, re-subscribe| Client
+    Publisher <-->|discovery / state / command topics| Broker
+
+    classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
+    classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
+```
+
+**Role:** Bridges the Texecom Premier Elite panel's ComIP/Connect-protocol session to
+Home Assistant, taking over the role `the prior MQTT bridge` plays today.
+**Technology:** Python 3, packaged as a Home Assistant App (Docker image on
+`ghcr.io/home-assistant/base`, s6-overlay-supervised process) — the App-not-integration
+shape is ADR-003; the language itself was decided directly during this architecture
+session (2026-08-03), building on the framing/CRC/resync/decode code already validated
+live against the panel in SPIKE-001 and SPIKE-002 — it is not yet backed by its own ADR
+(see Open questions).
+**Exposes:** Home Assistant MQTT discovery topics and their paired state/command
+topics for: one `alarm_control_panel` entity; one `binary_sensor` entity per in-use
+zone; one dedicated connectivity/freshness `binary_sensor` reporting panel-link health
+(ADR-004); and a "last trigger" snapshot attribute (initiating zone, timestamp) on the
+alarm entity (ADR-004). No HTTP API, no HA config-flow, no entity-registry presence
+beyond what HA's own MQTT integration creates from these discovery payloads (ADR-003).
+**Consumes:**
+- Texecom Connect protocol over TCP to the panel's ComIP module (ADR-001, ADR-002).
+- The household's MQTT broker, as a standing runtime dependency (ADR-003) — the same
+  broker `the prior MQTT bridge` already uses today.
+- App configuration (panel host/port, UDL password, MQTT broker settings) via the HA
+  Supervisor's `config.yaml`/`options.json`/`bashio::config` mechanism, already
+  scaffolded in this repo.
+
+Key behaviours:
+
+- **Startup / zone discovery** (ADR-001): opens the TCP connection, waits ≥500ms, logs
+  in with the UDL password (factory default `1234`, confirmed in SPIKE-001 — not
+  blank), sends `GETPANELIDENTIFICATION` for the zone count, then loops
+  `GETZONEDETAILS` across every zone number and discards any slot the panel reports as
+  `zoneType=0` (unused) rather than creating an entity for it.
+- **Event subscription and steady-state decode**: sends `SETEVENTMESSAGES` to
+  subscribe to `ZONE`/`AREA`/`OUTPUT`/`USER`/`LOG` push messages, then decodes each
+  unsolicited message into the corresponding zone/alarm state and publishes it as an
+  MQTT state update — no polling.
+- **Idle keepalive and ordinary collision recovery**: sends a safe read-only command
+  (e.g. `GETDATETIME`) periodically; on a 2–3s timeout, resends with the same sequence
+  number, matching the panel's own documented and empirically-confirmed recovery
+  behaviour (ADR-002).
+- **Frame resync** (ADR-002): treats a byte that doesn't match the expected frame
+  header as recoverable — scans forward for the next valid header instead of raising —
+  because the panel's own SmartCom/ComIP hardware is confirmed to multiplex unrelated
+  modem traffic onto the same session around arm/disarm/trigger events, on ordinary
+  keypad use alone.
+- **Asymmetric reconnect** (ADR-002): on a dropped connection, uses a short retry
+  budget (~10s) after an ordinary arm/disarm-adjacent drop, and a substantially longer
+  budget (tens of seconds to a minute or more) after a real-trigger-adjacent forced
+  disconnect, flipping the dedicated connectivity `binary_sensor` to degraded
+  throughout — never the `alarm_control_panel`/zone entities themselves (ADR-004).
+- **Availability and trigger snapshot** (ADR-004): the `alarm_control_panel` and zone
+  entities' availability is governed solely by whether the app process itself is
+  running (MQTT Last-Will) — never by panel-link health, so a panel-link outage never
+  blanks them. A dedicated connectivity `binary_sensor` carries panel-link health
+  separately. The app also keeps a short rolling buffer of recent zone/log activity
+  and publishes a "last trigger" snapshot (initiating zone, timestamp) the instant it
+  decodes a transition into `in alarm`, so the household retains immediate context
+  even if the ensuing reconnect takes the full observed window to complete.
+- **Cutover dependency** (ADR-001): because the panel's ComIP module accepts only one
+  TCP client at a time, `the prior MQTT bridge` must be fully stopped — not merely idle —
+  before this app's first connection attempt.
+- **Arm/disarm command handling — unresolved.** The app is expected to eventually
+  accept `arm_away` / `arm_night` / `arm_home` / `disarm` over its `alarm_control_panel`
+  MQTT command topic and issue the matching Texecom Connect command to the panel. **No
+  spike or prior art has determined the byte-level command/body needed to actively
+  arm or disarm this panel** — SPIKE-002 only decoded the panel's own observation-side
+  events (`Part Arm 2`/`part armed`, etc.), not the send side, and guessing an
+  undocumented command against a live, occupied household security panel was
+  explicitly ruled unsafe during that spike. This is a hard gap, not an implementation
+  detail — see Open questions.
+
+## Key flows
+
+### Startup and zone discovery
+
+Runs once per app start, after the operator has stopped `the prior MQTT bridge` as a one-time
+cutover step (the ComIP module will not accept a second client while `the prior MQTT bridge`
+still holds the session).
+
+```mermaid
+flowchart LR
+    Stop["the prior MQTT bridge<br/>stopped"]:::external
+    Open["App opens TCP,<br/>LOGIN"]:::owned
+    Ident["GETPANELIDENTIFICATION<br/>zone count"]:::owned
+    Loop["GETZONEDETAILS x N<br/>type + name"]:::owned
+    Sub["SETEVENTMESSAGES<br/>subscribe"]:::owned
+    Pub["Publish MQTT<br/>discovery configs"]:::owned
+    HAEnt["HA creates<br/>entities"]:::external
+
+    Stop --> Open --> Ident --> Loop --> Sub --> Pub --> HAEnt
+
+    classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
+    classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
+```
+
+Zone slots the panel reports as unused are dropped during the `GETZONEDETAILS` loop
+and never reach the discovery-publish step, so Home Assistant never sees a dead entity
+for them.
+
+### Steady-state zone and alarm reporting
+
+The normal operating loop once discovery has published, for every physical event at
+the panel.
+
+```mermaid
+flowchart LR
+    Event["Physical event<br/>at panel"]:::external
+    Push["Panel pushes<br/>ZONE/AREA/LOG"]:::external
+    Decode["App decodes<br/>event"]:::owned
+    State["App publishes<br/>MQTT state"]:::owned
+    Reflect["HA entity<br/>updates"]:::external
+
+    Event --> Push --> Decode --> State --> Reflect
+
+    classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
+    classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
+```
+
+There is no client-tunable poll cadence here — state changes arrive as unsolicited
+pushes only once `SETEVENTMESSAGES` has been sent, and the panel's own reporting
+latency was observed to fall within the same wall-clock second as the physical action
+in SPIKE-002.
+
+### Protocol collision recovery
+
+The flow that exists specifically because of the confirmed crash mechanism: the
+panel's own hardware, not client timing, is the source of the disruption.
+
+```mermaid
+flowchart LR
+    Trigger["Panel decodes<br/>in alarm event"]:::external
+    Snap["Publish trigger<br/>snapshot"]:::owned
+    Multiplex["Panel multiplexes<br/>non-protocol bytes"]:::external
+    Resync["App resyncs to<br/>next frame header"]:::owned
+    Drop{"Forced TCP<br/>disconnect?"}:::owned
+    Short["Short reconnect<br/>budget (~10s)"]:::owned
+    Long["Long reconnect<br/>budget (60s+)"]:::owned
+    Degrade["Flip connectivity<br/>sensor degraded"]:::owned
+    Resume["Re-LOGIN, resubscribe,<br/>resume reporting"]:::owned
+
+    Trigger --> Snap
+    Trigger --> Multiplex
+    Multiplex --> Resync
+    Resync --> Drop
+    Drop -->|ordinary arm/disarm| Short --> Degrade --> Resume
+    Drop -->|real trigger| Long --> Degrade
+
+    classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
+    classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
+```
+
+Most collisions never reach the "forced disconnect" branch at all — resync alone
+keeps the session alive through an ordinary arm/disarm's corrupted-byte burst, as
+SPIKE-002 demonstrated twice. Only a real trigger has been confirmed to force a full
+disconnect. The `alarm_control_panel` entity itself is unaffected by this whole flow —
+it keeps reporting `triggered` throughout; only the dedicated connectivity
+`binary_sensor` reflects the degraded/recovering link (ADR-004).
+
+### Arm/disarm command — open gap
+
+Shown for completeness, but the final step is not yet implementable: the wire-level
+command this app would need to send does not exist in any inspected prior art or
+spike.
+
+```mermaid
+flowchart LR
+    Cmd["Household arm/disarm<br/>via HA / HomeKit"]:::external
+    Wrapper["house_alarm_panel<br/>wrapper (unchanged)"]:::external
+    MqttCmd["MQTT command<br/>topic"]:::external
+    Recv["App receives<br/>command"]:::owned
+    Unknown["? unresolved: no known<br/>Connect-protocol send command"]:::owned
+
+    Cmd --> Wrapper --> MqttCmd --> Recv --> Unknown
+
+    classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
+    classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
+```
+
+Closing this gap safely requires a new, dedicated investigation against the live
+panel — not a guess shipped into a household security system — before
+`spec-alarm-control.md`'s arm/disarm acceptance criteria can be built at all. See Open
+questions.
+
+## Security, operations, scope, and open questions
+
+**Security:** The panel is protected only by its factory-default UDL password (`1234`,
+confirmed live in SPIKE-001), reachable solely over the household LAN — an inherited,
+pre-existing condition (RISK-009), not something this app changes. MQTT broker
+credentials are supplied via the same HA Supervisor config mechanism as the panel's;
+no new external network exposure is introduced.
+
+**Logging and monitoring:** Standard `bashio::log` output via the s6-supervised
+process, plus a dedicated connectivity/freshness `binary_sensor` published over MQTT
+that reflects degraded panel-link health during recovery windows (ADR-002, ADR-004) —
+the `alarm_control_panel`/zone entities themselves are not used for this signal, since
+their own last-known state must stay visible throughout (ADR-004).
+
+**Deployment:** Ships as a Home Assistant App (add-on) using the existing
+`config.yaml`/`Dockerfile`/`rootfs` scaffold (arch: `aarch64`, `amd64`), run as a
+single s6-supervised process that restarts automatically on a non-zero exit. Cutover
+from `the prior MQTT bridge` is a hard sequencing step, not a side-by-side rollout: `the prior MQTT bridge`
+must be stopped before this app's first connection attempt, because the panel's ComIP
+module accepts only one TCP client at a time (ADR-001).
+
+**Out of scope.**
+
+- Building or changing the Lovelace dashboard or HomeKit exposure — both keep working
+  off the same entity names/states this app publishes.
+- Reimplementing the arm guard-condition or notification logic that lives in
+  `configuration/templates/house_alarm.yaml` / `script.notify_actor` — stays entirely
+  in the household's own Home Assistant configuration (ADR-003).
+- Support for the older UDL/Wintex serial protocol, or any panel model other than the
+  one this project was built against.
+- Publishing or packaging this app for other households — a possible future stretch
+  goal that isn't shaping this architecture.
+
+**Open questions.**
+
+- **Send-side arm/disarm framing is completely unknown** — no spike or prior art has
+  issued a real arm/disarm command over Connect protocol; SPIKE-002 only decoded the
+  panel's own observation-side events. This blocks `spec-alarm-control.md`'s core
+  arm/disarm acceptance criteria outright. → run `/spike` to investigate this safely
+  before planning the arm-control capability's command-issuing path.
+- **Python 3 was decided directly in this session**, not by a standing ADR. → run
+  `/adr` if this should be formally, immutably recorded before build begins. (Docker
+  packaging and the s6-overlay-supervised process are not a comparable decision point —
+  both are inherited, platform-mandated requirements of building any Home Assistant
+  App/add-on at all, fixed by this repo's pre-existing scaffold rather than chosen
+  among alternatives.)
+- **Entity ID/naming migration** (RISK-005): should new entity IDs exactly match
+  today's `alarm_control_panel.texecom_alarm_arm_status` /
+  `binary_sensor.texecom_alarm_*` naming, or is a documented rename acceptable? Both
+  specs flag this as needing to close out before Phase 2 build starts on either
+  capability. → household/spec-author decision.
+- **Exact reconnect wait times/retry counts are not finalised** (ADR-002 follow-on;
+  only one real trigger data point exists). This architecture assumes a short (~10s)
+  budget for arm/disarm-adjacent drops and a longer, configurable (60s+) budget for
+  trigger-adjacent drops — treat both as tunable defaults, not final values.
+- **What "alarm reset" means as a product-observable signal is unresolved** (ADR-002
+  follow-on) — no distinct Connect-protocol event was observed for clearing the
+  alarm-memory indicator, even in a dedicated follow-up test. This architecture
+  assumes the `AREA` event returning to `armed`/`disarmed` is the practical signal,
+  not a still-unobserved `LOG type=45` event — needs confirmation before
+  implementation.
+- **Whether the ComIP module's one-connection-at-a-time behaviour is a fixed
+  hardware/firmware limit or a configurable installer setting** was not tested by any
+  spike — this affects whether a side-by-side testing period alongside `the prior MQTT bridge`
+  is ever possible, or whether cutover must always be a hard stop-then-start.
+- **Whether to add a last-known-good cached zone list fallback** for when the panel
+  can't be reached at startup (ADR-001's Option C) is an explicit open follow-on, not
+  part of this architecture — there is currently no offline/static fallback at all.
+- **The panel's Com Port / UDL-Digi-Options configuration has not yet been checked or
+  recorded** (ADR-002's secondary mitigation) — a one-time operational task,
+  independent of this app's own resync/reconnect logic. Separately, whether this
+  isolation would also shorten or eliminate the trigger-time forced disconnect itself
+  (rather than just the ordinary arm/disarm collision noise SPIKE-002 tested it
+  against) is an explicit new Spike Candidate in `spec-alarm-control.md`, not yet
+  investigated. → run `/spike`.
+
+## Review
+
+| # | Date | Verdict | Issues |
+|---|------|---------|--------|
+| 1 | 2026-08-03 | Issues found | 1 |
+| 2 | 2026-08-03 | Clear | — |

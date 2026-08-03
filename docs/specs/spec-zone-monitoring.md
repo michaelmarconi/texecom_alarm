@@ -36,6 +36,9 @@ uninstalled once this is delivered.
   working correctly.
 - Operation fully independent of `the prior MQTT bridge`, which will be uninstalled once
   this capability is delivered.
+- The same connectivity/freshness signal defined in `spec-alarm-control.md` covers
+  zone entities too: their availability is governed solely by whether the app
+  itself is running, never by panel-link health.
 
 **Out of scope**
 
@@ -67,6 +70,10 @@ uninstalled once this is delivered.
 4. Given `the prior MQTT bridge` has been fully uninstalled, When zone monitoring is
    exercised end-to-end, Then no functionality depends on it being present — no
    crashes, no missing data, no silent fallback behavior.
+5. Given the panel/network connection drops, When reconnection is in progress,
+   Then every zone `binary_sensor` entity continues reporting its last known state
+   (never "unavailable" due to this) and the shared connectivity `binary_sensor`
+   (see `spec-alarm-control.md`) reflects the degraded panel link.
 
 ## User Stories
 
@@ -78,8 +85,13 @@ uninstalled once this is delivered.
 
 ## Edge Cases
 
-- Panel/network connection drops: zone entities should reflect an "unavailable"
-  state rather than silently freezing on the last-known value.
+- Panel/network connection drops: zone entities continue reporting their last known
+  state; they never drop to "unavailable" because of a panel-link issue. Only a
+  genuine app-offline condition (the app process itself down, detected via MQTT's
+  standard availability/Last-Will mechanism) marks zone entities "unavailable". The
+  same connectivity/freshness `binary_sensor` used by the alarm entity (see
+  `spec-alarm-control.md`) reports panel-link health, so zone-state currency is
+  visible.
 - Integration restart: zone entities should re-sync to the panel's current state
   on startup rather than defaulting to an incorrect on/off value.
 - Entity ID/naming migration: if new entity IDs differ from today's
