@@ -39,9 +39,9 @@ app) or under-investigating the collision-avoidance timing needed for the
 |---|---|
 | Source | spec-alarm-control.md § Spike Candidates |
 | Category | Scope and sequencing |
-| Severity | Medium |
-| Severity rationale | This is a genuine architectural fork (keep the raw-entity + template-wrapper split, or model the alarm more natively and retire the wrapper) that changes what phase 2 actually builds and what migration work `configuration/templates/house_alarm.yaml` needs — deciding it late risks rework of already-built entities. |
-| Spike required | Yes |
+| Severity | Low |
+| Severity rationale | Downgraded 2026-08-02 — see Dismissal rationale below. Originally: this is a genuine architectural fork (keep the raw-entity + template-wrapper split, or model the alarm more natively and retire the wrapper) that changes what phase 2 actually builds and what migration work `configuration/templates/house_alarm.yaml` needs — deciding it late risks rework of already-built entities. |
+| Spike required | No (dismissed 2026-08-02, was Yes) |
 
 Whether the replacement should expose a more natively-modeled HA alarm (removing
 the need for the `house_alarm_panel` template wrapper) or preserve today's
@@ -49,6 +49,23 @@ two-layer split is still open. Because the wrapper currently carries all the
 guard-condition/notification logic that is explicitly out of scope to touch, the
 "right" answer materially affects migration risk and effort — this should be
 decided deliberately, not implicitly by whatever the build happens to produce.
+
+**Dismissal rationale (2026-08-02):** Raised during a `/spike 004` interview, before any
+experiment was designed. The interview surfaced two prior decisions that jointly eliminate this
+risk's original "two-layer vs. collapsed" framing: (1) this project is being built as a Home
+Assistant **App** (add-on), not a native `custom_components` integration, which makes MQTT
+discovery the only available entity-surfacing mechanism — there is no "more natively-modeled"
+alternative to compare it against; and (2) `spec-alarm-control.md` already establishes as a
+non-goal that household-specific guard-condition/notification logic stays in the HA config layer,
+not the app, so "should the app collapse the wrapper" was never this app's decision to make — any
+household (this one or a future one, since the app is intended to be generally reusable) remains
+free to keep or drop its own wrapper independently of what this app publishes. The one piece of the
+original question that is a genuine technical fact — whether HA's MQTT `alarm_control_panel`
+discovery schema supports the full state/service set needed (`armed_home`, `pending`, `arming`,
+`triggered`, `arm_home` as a feature) — is documented, stable, first-party HA behaviour (see
+`https://www.home-assistant.io/integrations/alarm_control_panel.mqtt`), not a genuine unknown on
+the level of the undocumented Texecom wire protocol, and doesn't warrant a dedicated advance
+research spike; it can be confirmed trivially during build.
 
 ### RISK-003: Programmatic zone-list enumeration capability is unknown
 
@@ -70,14 +87,31 @@ maintenance burden.
 | Field | Value |
 |---|---|
 | Category | Performance and scale assumptions |
-| Severity | Medium |
-| Severity rationale | The 2-second constraint is stated as a hard requirement (it underpins the 60s auto-arm motion-cancel and the "I'm leaving" front-door wait) but no evidence yet shows what update latency the protocol can sustain safely — and the fastest possible polling/query cadence is exactly the axis suspected of triggering the current add-on's TX/RX collision crash, so "fast enough" and "safe enough" may be in tension. |
-| Spike required | Yes |
+| Severity | Low |
+| Severity rationale | Downgraded 2026-08-02 — see Dismissal rationale below. Originally: the 2-second constraint is stated as a hard requirement (it underpins the 60s auto-arm motion-cancel and the "I'm leaving" front-door wait) but no evidence yet shows what update latency the protocol can sustain safely — and the fastest possible polling/query cadence is exactly the axis suspected of triggering the current add-on's TX/RX collision crash, so "fast enough" and "safe enough" may be in tension. |
+| Spike required | No (dismissed 2026-08-02, was Yes) |
 
 There's no established basis yet for how quickly zone state can be queried or
 pushed without approaching the timing conditions that are suspected to cause the
 current add-on's crash pattern. Resolving RISK-001's protocol/timing findings
 first is a prerequisite to answering this with evidence rather than guesswork.
+
+**Dismissal rationale (2026-08-02):** Raised during a `/spike 003` interview, before any
+experiment was designed. SPIKE-001 and SPIKE-002 (both since Validated ✅) establish that the
+Texecom Connect protocol delivers zone/area state via unsolicited push messages once subscribed
+via `SETEVENTMESSAGES` — there is no client-tunable poll cadence, so this risk's original framing
+("how quickly can zone state be queried or pushed") no longer describes a variable this project
+controls. SPIKE-002's own captured logs additionally show zone/area events decoding within the
+same wall-clock second as the physical action in every observed case — a suggestive (not
+rigorous) sign that panel-side latency already sits well under 2 seconds. Separately, re-examining
+`spec-zone-monitoring.md`'s two cited consumers shows neither actually needs sub-2-second
+precision: the auto-arm motion-cancel countdown runs for 60 seconds, and the "I'm leaving" script
+waits for a door-sensor transition rather than racing a clock — both tolerate several seconds of
+slack. The 2-second figure reads as a round-number aspiration rather than a value derived from
+either consumer's real tolerance. The one genuinely open sub-question this interview surfaced —
+whether this project's own resync/reconnect behaviour (ADR-002) ever adds meaningful delay on top
+of the panel's inherent latency — is narrower and lower-stakes than a dedicated spike; it can be
+checked informally during implementation/build instead of investigated in advance.
 
 ### RISK-005: Entity naming/migration decision is open in both specs
 
@@ -176,12 +210,18 @@ diagnosed rather than assumed.
 
 ## Section 2 — Dismissed candidates
 
-No specs contained a Spike Candidates item that is dismissed. All three
+No specs contained a Spike Candidates item that is dismissed at analysis time. All three
 `## Spike Candidates` items found across the two specs (the arm_home/triggered
 framing, the wrapper-architecture choice, and zone-list enumeration) were
 surfaced as risks above — see RISK-001, RISK-002, and RISK-003 respectively —
 none were covered by an existing accepted ADR (there are no ADRs yet in
-`docs/adrs/`) and none were judged to be non-genuine.
+`docs/adrs/`) and none were judged to be non-genuine at the time.
+
+**Update (2026-08-02):** RISK-002's spike (SPIKE-004) was subsequently dismissed during its own
+`/spike 004` interview, before any experiment was designed — see RISK-002's Dismissal rationale
+in Section 1 and SPIKE-004 in Section 3. This was a later finding (the project's App-not-integration
+architecture and an existing spec non-goal jointly removed the premise), not a re-litigation of
+this original analysis pass.
 
 ## Section 3 — Ordered spike list
 
@@ -215,7 +255,7 @@ empirically-verified command/response sequence for both, plus concrete
 collision-avoidance timing guidance (e.g. minimum inter-command gaps, safe
 polling cadence) for the app to follow.
 
-### SPIKE-003: Establish the safe achievable zone-state update latency
+### SPIKE-003: ~~Establish the safe achievable zone-state update latency~~ — Dismissed 2026-08-02
 
 | Field | Value |
 |---|---|
@@ -223,14 +263,13 @@ polling cadence) for the app to follow.
 | Depends on | SPIKE-001, SPIKE-002 |
 | Sequencing rationale | Latency can only be measured meaningfully once the actual protocol mechanics for reading zone/status state (SPIKE-001) and the collision-avoidance timing constraints uncovered while decoding commands (SPIKE-002) are known — testing polling/event frequency against the 2-second target before that would risk re-triggering the exact crash pattern this project needs to avoid. |
 
-Using the framing and collision-avoidance findings from SPIKE-001/SPIKE-002,
-empirically test how quickly zone state can be refreshed (via polling frequency
-or push events, whichever the protocol supports) while staying clear of the
-collision-crash conditions. A good output is a documented safe update cadence
-that meets or explicitly falls short of the 2-second target in
-`spec-zone-monitoring.md`, with the gap flagged if it falls short.
+**Dismissed — no experiment run.** See RISK-004's Dismissal rationale in Section 1: this was
+raised and closed during a `/spike 003` interview, before any experiment design was written. The
+original framing assumed a client-tunable polling/push cadence, which SPIKE-001/SPIKE-002 already
+show doesn't exist, and the 2-second target's actual downstream consumers don't need sub-2-second
+precision. No `docs/spikes/spike-003-*/` folder was created.
 
-### SPIKE-004: Decide two-layer vs. collapsed HA alarm entity architecture
+### SPIKE-004: ~~Decide two-layer vs. collapsed HA alarm entity architecture~~ — Dismissed 2026-08-02
 
 | Field | Value |
 |---|---|
@@ -238,13 +277,17 @@ that meets or explicitly falls short of the 2-second target in
 | Depends on | SPIKE-002 |
 | Sequencing rationale | This is a downstream design decision, not a protocol unknown — it's best made once SPIKE-002 confirms exactly which arm states/commands (including the previously-unsupported Home mode) are actually available to model, so the architecture choice is grounded in what the panel can really do rather than made speculatively. |
 
-Decide whether the replacement should expose a more natively-modeled HA alarm
-(e.g. via MQTT `alarm_control_panel` discovery covering all real panel states)
-in a way that could retire the `house_alarm_panel` template-wrapper layer, or
-whether to preserve today's two-layer split. A good output is a documented
-decision (candidate for an ADR) plus, if collapsing the wrapper is chosen, an
-explicit migration plan for the guard-condition/notification logic that
-currently lives in `configuration/templates/house_alarm.yaml`.
+**Dismissed — no experiment run.** See RISK-002's Dismissal rationale in Section 1: this was
+raised and closed during a `/spike 004` interview, before any experiment design was written. The
+original framing assumed a live choice between a "collapsed" native entity and today's two-layer
+wrapper; the project's App (not integration) architecture removes the native-entity alternative
+entirely (MQTT discovery is the only surfacing mechanism available to an App), and
+`spec-alarm-control.md`'s existing non-goal (guard-condition/notification logic stays out of the
+app) means the wrapper question was never this app's decision to make in the first place. The
+one remaining factual question — whether MQTT discovery's `alarm_control_panel` schema supports
+the states/services needed — is answered directly and confidently by first-party HA documentation,
+not something that benefits from an advance research spike. No `docs/spikes/spike-004-*/` folder
+was created.
 
 ## Review
 
