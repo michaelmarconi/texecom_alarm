@@ -37,6 +37,13 @@ normal arm/disarm cycles or an actual alarm trigger.
   automations/scripts/HomeKit exposure can react to it.
 - Surviving an actual alarm trigger (siren activation) without crashing, and
   correctly reporting the `triggered` state throughout the event.
+- A persisted snapshot of the most recent zone/log activity leading into a trigger
+  (which zone initiated entry, and when), surviving any subsequent connection
+  outage.
+- A dedicated connectivity/freshness signal reporting whether the panel link is
+  currently live or degraded, independent of the `alarm_control_panel`/zone
+  entities' own state — those entities' availability is governed solely by whether
+  the app itself is running (MQTT Last-Will), never by panel-link health.
 - Operation fully independent of `the prior MQTT bridge`, which will be uninstalled once this
   capability is delivered.
 
@@ -63,7 +70,10 @@ normal arm/disarm cycles or an actual alarm trigger.
 3. Given the panel is armed in any mode, When a zone is triggered while armed such
    that the alarm actually activates (siren sounds), Then the integration continues
    running without crashing and the `alarm_control_panel` entity correctly reports
-   the `triggered` state throughout the event.
+   the `triggered` state throughout the event, including through any connection
+   outage the panel itself forces at trigger time — the entity's last known state
+   persists; only a true app-offline condition (see Edge Cases) would ever mark it
+   unavailable.
 4. Given the `house_alarm_panel` wrapper entity forwards an arm or disarm call to the
    new `alarm_control_panel` entity, When that call succeeds or fails, Then the
    wrapper entity's state accurately reflects the outcome, preserving today's
@@ -72,6 +82,12 @@ normal arm/disarm cycles or an actual alarm trigger.
    exercised end-to-end (including a triggered alarm event), Then no functionality
    depends on it being present — no crashes, no missing state, no silent fallback
    behavior.
+6. Given a zone triggers the alarm while armed, When the panel's connection is
+   subsequently forced closed and reconnection is in progress, Then the
+   `alarm_control_panel` entity continues reporting `triggered` (never "unavailable"
+   due to this), a connectivity `binary_sensor` reflects the degraded panel link, and
+   a "last trigger" snapshot (initiating zone, timestamp) remains visible throughout
+   the outage.
 
 ## User Stories
 
@@ -88,9 +104,14 @@ normal arm/disarm cycles or an actual alarm trigger.
 
 - An arm command is issued while the panel is already mid-transition
   (arming/pending) — must not crash or leave the entity in an inconsistent state.
-- Network/connection drop to the panel during an arm/disarm command or while
-  triggered — the entity should reflect an "unavailable" state rather than silently
-  freezing on a stale value.
+- Network/connection drop to the panel (during an arm/disarm command, while
+  triggered, or at any other time) — the `alarm_control_panel` entity continues
+  reporting its last known state; it never drops to "unavailable" because of a
+  panel-link issue. Only a genuine app-offline condition (the app process itself
+  down, detected via MQTT's standard availability/Last-Will mechanism) marks the
+  entity "unavailable". A dedicated connectivity/freshness `binary_sensor` reports
+  whether the panel link is currently live or degraded, so the household can judge
+  how current the displayed state is.
 - Integration restart while the panel is armed or triggered — must re-sync to the
   panel's actual current state on startup, not default to disarmed or another
   incorrect value.
@@ -125,6 +146,10 @@ normal arm/disarm cycles or an actual alarm trigger.
 - The exact byte-level command framing for `arm_home` (`part_arm_2`) and for
   reliably surviving/reporting a triggered event without inducing the suspected
   TX/RX collision crash — needs Phase 1 protocol research before this can be built.
+- Whether isolating the panel's Com Port from ARC/remote-reporting traffic (see
+  `docs/protocol-reference.md`) also shortens or eliminates the trigger-time forced
+  disconnect itself, distinct from the ordinary arm/disarm collision noise SPIKE-002
+  tested it against.
 
 ## Review
 
