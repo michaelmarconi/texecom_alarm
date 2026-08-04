@@ -95,5 +95,5 @@ Note: Exit/entry (arming/pending) come from live AREA pushes only; the area-flag
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
