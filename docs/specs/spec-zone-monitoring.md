@@ -59,21 +59,33 @@ uninstalled once this is delivered.
    When Home Assistant starts up, Then all ~35 zone entities are present with
    correct names/types (door contact, window contact, shock sensor, PIR motion,
    other).
+   - **How we'll know:** manual acceptance test (live ~35 inventory match with
+     `the prior MQTT bridge` uninstalled); in-use zone discovery also covered by end-to-end
+     test (stand-in: FakePanel)
 2. Given one representative zone from each of the five sensor classes (door,
    window, shock, PIR, other), When that zone is physically triggered and then
    cleared, Then the corresponding HA entity state changes to reflect it within 2
    seconds of the physical trigger/clear.
+   - **How we'll know:** manual acceptance test (physical open/clear on one zone per
+     sensor class)
 3. Given a dependent aggregate or automation (e.g. `binary_sensor.all_doors`, the
    auto-arm motion-cancel, or the "I'm leaving" script's front-door wait), When
    the underlying zone entities change state, Then that aggregate/automation
    continues to function correctly without modification to its own logic.
+   - **How we'll know:** manual acceptance test (household HA aggregates/automations
+     against live zone entities)
 4. Given `the prior MQTT bridge` has been fully uninstalled, When zone monitoring is
    exercised end-to-end, Then no functionality depends on it being present — no
    crashes, no missing data, no silent fallback behavior.
+   - **How we'll know:** manual acceptance test (`the prior MQTT bridge` uninstalled; zone
+     monitoring exercised)
 5. Given the panel/network connection drops, When reconnection is in progress,
    Then every zone `binary_sensor` entity continues reporting its last known state
    (never "unavailable" due to this) and the shared connectivity `binary_sensor`
    (see `spec-alarm-control.md`) reflects the degraded panel link.
+   - **How we'll know:** end-to-end test (stand-in: FakePanel) for last-known zone
+     state plus panel-link connectivity sensor; optional manual acceptance test for
+     a live connection drop
 
 ## User Stories
 
@@ -131,3 +143,4 @@ uninstalled once this is delivered.
 |---|------|---------|--------|
 | 1 | 2026-08-01 | Issues found | 2 |
 | 2 | 2026-08-01 | Clear | — |
+| 3 | 2026-08-04 | Clear | — |
