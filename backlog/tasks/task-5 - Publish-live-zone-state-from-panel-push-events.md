@@ -79,3 +79,10 @@ Note: Physical open/close flip was not run in SPIKE-006; CI proves snapshot and 
 
 `cd texecom-alarm-app && python -m pytest tests/test_zone_state.py tests/test_protocol_client.py tests/test_e2e_fake_panel.py -q` — FakePanel GetZoneState → MQTT `"0"`/`"1"` for in-use zones only; injected ZONE push updates state; no arm/omit cmds during snapshot.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
