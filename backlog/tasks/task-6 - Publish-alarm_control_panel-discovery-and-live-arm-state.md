@@ -90,3 +90,10 @@ Note: Exit/entry (arming/pending) come from live AREA pushes only; the area-flag
 
 `cd texecom-alarm-app && python -m pytest tests/test_area_state.py tests/test_mqtt_discovery.py tests/test_protocol_client.py tests/test_e2e_fake_panel.py -q` — FakePanel GetAreaFlags → retained alarm state; injected AREA push updates state; discovery payload shape; no arm/omit cmds during snapshot.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
