@@ -1,6 +1,6 @@
 # Plan
 
-**State:** Draft 📝
+**State:** Approved ✅
 
 ---
 
@@ -14,4 +14,4 @@
 
 ## Review
 
-<!-- Populated by /review. Do not edit manually. -->
+<!-- Practitioner accepted without formal /review. -->
