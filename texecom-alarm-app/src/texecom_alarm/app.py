@@ -18,7 +18,8 @@ from texecom_alarm.mqtt.discovery import (
 )
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
 from texecom_alarm.protocol.client import PanelClient
-from texecom_alarm.protocol.frame import MSG_AREA, MSG_ZONE
+from texecom_alarm.protocol.frame import MSG_AREA, MSG_LOG, MSG_ZONE
+from texecom_alarm.trigger_snapshot import TriggerActivityBuffer, maybe_publish_trigger_snapshot
 from texecom_alarm.zone_state import handle_zone_message, publish_zone_state_snapshot
 from texecom_alarm.zones import enumerate_zones
 
@@ -86,7 +87,7 @@ async def run(
             topic_prefix=cfg.mqtt_topic_prefix,
             zone_count=zone_count,
         )
-        await publish_area_state_snapshot(
+        initial_alarm_payload = await publish_area_state_snapshot(
             panel_client,
             mqtt_client,
             settings=cfg,
@@ -108,6 +109,7 @@ async def run(
                 settings=cfg,
                 topic_prefix=cfg.mqtt_topic_prefix,
                 in_use_zones=in_use,
+                initial_alarm_payload=initial_alarm_payload,
             ),
             name="panel-listen",
         )
@@ -180,9 +182,13 @@ async def _listen_panel_messages(
     topic_prefix: str,
     in_use_zones: set[int],
     idle_timeout: float = _KEEPALIVE_IDLE_TIMEOUT,
+    initial_alarm_payload: str | None = None,
 ) -> None:
     """Steady-state loop: ZONE/AREA pushes update MQTT; keepalive on idle timeout."""
     logger.debug("panel_listen_start")
+    activity = TriggerActivityBuffer()
+    # Seed from area-flags snapshot so cold-start already-in-alarm does not invent.
+    last_alarm_payload: str | None = initial_alarm_payload
     while True:
         try:
             frame = await panel.recv_message(timeout=idle_timeout)
@@ -195,19 +201,36 @@ async def _listen_panel_messages(
             continue
         subtype = body[0]
         if subtype == MSG_ZONE:
+            if len(body) >= 3:
+                activity.record_zone(body[1], body[2])
             await handle_zone_message(
                 mqtt,  # type: ignore[arg-type]
                 body,
                 topic_prefix=topic_prefix,
                 in_use_zones=in_use_zones,
             )
+        elif subtype == MSG_LOG:
+            # Record type/group when present; LOG never publishes MQTT state.
+            if len(body) >= 3:
+                activity.record_log(body[1], body[2])
+            else:
+                logger.debug("log_message_short", extra={"body": body.hex()})
         elif subtype == MSG_AREA:
-            await handle_area_message(
+            new_payload = await handle_area_message(
                 mqtt,  # type: ignore[arg-type]
                 body,
                 settings=settings,
                 topic_prefix=topic_prefix,
             )
+            if new_payload is not None:
+                await maybe_publish_trigger_snapshot(
+                    mqtt,  # type: ignore[arg-type]
+                    previous_payload=last_alarm_payload,
+                    new_payload=new_payload,
+                    topic_prefix=topic_prefix,
+                    buffer=activity,
+                )
+                last_alarm_payload = new_payload
         else:
             logger.debug("panel_message_ignored", extra={"subtype": subtype})
 

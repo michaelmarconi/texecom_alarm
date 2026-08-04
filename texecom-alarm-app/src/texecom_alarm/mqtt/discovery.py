@@ -52,6 +52,10 @@ def alarm_command_topic(topic_prefix: str) -> str:
     return f"{topic_prefix}/alarm/command"
 
 
+def alarm_attributes_topic(topic_prefix: str) -> str:
+    return f"{topic_prefix}/alarm/attributes"
+
+
 def alarm_discovery_topic(object_id: str = ALARM_OBJECT_ID) -> str:
     return f"homeassistant/alarm_control_panel/{object_id}/config"
 
@@ -78,6 +82,7 @@ def alarm_discovery_payload(*, topic_prefix: str) -> dict[str, object]:
         "object_id": ALARM_OBJECT_ID,
         "state_topic": alarm_state_topic(topic_prefix),
         "command_topic": alarm_command_topic(topic_prefix),
+        "json_attributes_topic": alarm_attributes_topic(topic_prefix),
         "availability_topic": availability_topic(topic_prefix),
         "payload_available": AVAILABILITY_ONLINE,
         "payload_not_available": AVAILABILITY_OFFLINE,

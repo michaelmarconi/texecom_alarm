@@ -11,6 +11,7 @@ from texecom_alarm.mqtt.discovery import (
     ALARM_OBJECT_ID,
     AVAILABILITY_OFFLINE,
     AVAILABILITY_ONLINE,
+    alarm_attributes_topic,
     alarm_discovery_payload,
     alarm_discovery_topic,
     availability_topic,
@@ -33,12 +34,17 @@ def test_alarm_discovery_topic() -> None:
     )
 
 
+def test_alarm_attributes_topic() -> None:
+    assert alarm_attributes_topic("texecom") == "texecom/alarm/attributes"
+
+
 def test_alarm_discovery_payload_shape() -> None:
     payload = alarm_discovery_payload(topic_prefix="texecom")
     assert payload["unique_id"] == "texecom_alarm_arm_status"
     assert payload["object_id"] == "texecom_alarm_arm_status"
     assert payload["state_topic"] == "texecom/alarm/state"
     assert payload["command_topic"] == "texecom/alarm/command"
+    assert payload["json_attributes_topic"] == "texecom/alarm/attributes"
     assert payload["availability_topic"] == "texecom/status"
     assert payload["payload_available"] == AVAILABILITY_ONLINE
     assert payload["payload_not_available"] == AVAILABILITY_OFFLINE
