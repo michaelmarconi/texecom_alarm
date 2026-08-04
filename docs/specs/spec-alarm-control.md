@@ -43,7 +43,8 @@ normal arm/disarm cycles or an actual alarm trigger.
 - A dedicated connectivity/freshness signal reporting whether the panel link is
   currently live or degraded, independent of the `alarm_control_panel`/zone
   entities' own state — those entities' availability is governed solely by whether
-  the app itself is running (MQTT Last-Will), never by panel-link health.
+  the app itself is running (via the broker's standard process-offline signal),
+  never by panel-link health.
 - Operation fully independent of `the prior MQTT bridge`, which will be uninstalled once this
   capability is delivered.
 
@@ -64,9 +65,14 @@ normal arm/disarm cycles or an actual alarm trigger.
    `arm_away`, `arm_night`, and `arm_home` are each triggered 3 consecutive times,
    Then the panel transitions to the corresponding armed state each time without the
    integration crashing or restarting.
+   - **How we'll know:** manual acceptance test (live panel ×3 arm cycles with
+     `the prior MQTT bridge` uninstalled); MQTT arm command path also covered by end-to-end
+     test (stand-in: FakePanel)
 2. Given the panel is in any state (disarmed, armed_away, armed_night, armed_home,
    triggered, pending, or arming), When disarm is triggered, Then the panel
    transitions to disarmed without the integration crashing.
+   - **How we'll know:** manual acceptance test (live disarm from each state); MQTT
+     disarm command path also covered by end-to-end test (stand-in: FakePanel)
 3. Given the panel is armed in any mode, When a zone is triggered while armed such
    that the alarm actually activates (siren sounds), Then the integration continues
    running without crashing and the `alarm_control_panel` entity correctly reports
@@ -74,20 +80,28 @@ normal arm/disarm cycles or an actual alarm trigger.
    outage the panel itself forces at trigger time — the entity's last known state
    persists; only a true app-offline condition (see Edge Cases) would ever mark it
    unavailable.
+   - **How we'll know:** manual acceptance test (live siren trigger through forced
+     disconnect)
 4. Given the `house_alarm_panel` wrapper entity forwards an arm or disarm call to the
    new `alarm_control_panel` entity, When that call succeeds or fails, Then the
    wrapper entity's state accurately reflects the outcome, preserving today's
    forwarding behavior.
+   - **How we'll know:** manual acceptance test (household HA wrapper → new entity)
 5. Given `the prior MQTT bridge` has been fully uninstalled, When arm/disarm control is
    exercised end-to-end (including a triggered alarm event), Then no functionality
    depends on it being present — no crashes, no missing state, no silent fallback
    behavior.
+   - **How we'll know:** manual acceptance test (`the prior MQTT bridge` uninstalled; arm/disarm
+     plus trigger exercised)
 6. Given a zone triggers the alarm while armed, When the panel's connection is
    subsequently forced closed and reconnection is in progress, Then the
    `alarm_control_panel` entity continues reporting `triggered` (never "unavailable"
    due to this), a connectivity `binary_sensor` reflects the degraded panel link, and
    a "last trigger" snapshot (initiating zone, timestamp) remains visible throughout
    the outage.
+   - **How we'll know:** end-to-end test (stand-in: FakePanel) for retained `triggered`,
+     connectivity off, and snapshot attributes across reconnect; manual acceptance
+     test for live trigger-time outage
 
 ## User Stories
 
@@ -171,3 +185,5 @@ normal arm/disarm cycles or an actual alarm trigger.
 |---|------|---------|--------|
 | 1 | 2026-08-01 | Clear | — |
 | 2 | 2026-08-03 | Clear | — |
+| 3 | 2026-08-04 | Issues found | 1 |
+| 4 | 2026-08-04 | Clear | — |
