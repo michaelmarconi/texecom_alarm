@@ -18,6 +18,8 @@ from texecom_alarm.protocol.frame import (
     CMD_GETPANELIDENTIFICATION,
     CMD_GETZONEDETAILS,
     CMD_LOGIN,
+    CMD_SET_AREA_ARM,
+    CMD_SET_AREA_DISARM,
     CMD_SETEVENTMESSAGES,
     HEADER_START,
     MSG_AREA,
@@ -85,6 +87,11 @@ class FakePanel:
         self.area_flags_override: bytes | None = None
         self.last_seteventmessages_body: bytes | None = None
         self.seteventmessages_calls = 0
+        self.last_arm_mode: int | None = None
+        self.last_arm_body: bytes | None = None
+        self.arm_calls: list[int] = []
+        self.last_disarm_body: bytes | None = None
+        self.disarm_calls = 0
         self._handlers: dict[int, Callable[[Frame], bytes]] = {
             CMD_LOGIN: self._handle_login,
             CMD_GETDATETIME: self._handle_getdatetime,
@@ -93,6 +100,8 @@ class FakePanel:
             CMD_GET_ZONE_STATE: self._handle_get_zone_state,
             CMD_GET_AREA_FLAGS: self._handle_get_area_flags,
             CMD_SETEVENTMESSAGES: self._handle_set_event_messages,
+            CMD_SET_AREA_ARM: self._handle_set_area_arm,
+            CMD_SET_AREA_DISARM: self._handle_set_area_disarm,
         }
 
     async def start(self) -> None:
@@ -301,3 +310,16 @@ class FakePanel:
         self.seteventmessages_calls += 1
         self.last_seteventmessages_body = frame.body[1:]
         return bytes([CMD_SETEVENTMESSAGES, ACK])
+
+    def _handle_set_area_arm(self, frame: Frame) -> bytes:
+        body = frame.body[1:]
+        self.last_arm_body = body
+        if body:
+            self.last_arm_mode = body[0]
+            self.arm_calls.append(body[0])
+        return bytes([CMD_SET_AREA_ARM, ACK])
+
+    def _handle_set_area_disarm(self, frame: Frame) -> bytes:
+        self.last_disarm_body = frame.body[1:]
+        self.disarm_calls += 1
+        return bytes([CMD_SET_AREA_DISARM, ACK])

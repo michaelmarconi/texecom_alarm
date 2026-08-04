@@ -9,6 +9,8 @@ from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient, Protoco
 from texecom_alarm.protocol.frame import (
     CMD_GET_AREA_FLAGS,
     CMD_GETDATETIME,
+    CMD_SET_AREA_ARM,
+    CMD_SET_AREA_DISARM,
     CMD_SETEVENTMESSAGES,
     MSG_AREA,
     MSG_ZONE,
@@ -352,3 +354,36 @@ async def test_forced_disconnect_peer_close(panel: FakePanel) -> None:
     with pytest.raises(ForcedDisconnect, match="closed by peer"):
         await client.keepalive()
     await client.close()
+
+
+@pytest.mark.asyncio
+async def test_set_area_arm_sends_cmd_6_with_mode_and_area() -> None:
+    panel = FakePanel(udl_password="1234")
+    await panel.start()
+    try:
+        client = await _logged_in_client(panel)
+        await client.set_area_arm(0)
+        assert panel.last_command == CMD_SET_AREA_ARM
+        assert panel.last_arm_body == bytes([0x00, 0x01])
+        assert panel.last_arm_mode == 0
+        await client.set_area_arm(2)
+        assert panel.last_arm_body == bytes([0x02, 0x01])
+        assert panel.last_arm_mode == 2
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_set_area_disarm_sends_cmd_8_with_01() -> None:
+    panel = FakePanel(udl_password="1234")
+    await panel.start()
+    try:
+        client = await _logged_in_client(panel)
+        await client.set_area_disarm()
+        assert panel.last_command == CMD_SET_AREA_DISARM
+        assert panel.last_disarm_body == bytes([0x01])
+        assert panel.disarm_calls == 1
+        await client.close()
+    finally:
+        await panel.stop()

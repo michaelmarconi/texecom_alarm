@@ -21,6 +21,7 @@ from texecom_alarm.config import Settings
 from texecom_alarm.mqtt.discovery import AVAILABILITY_OFFLINE, AVAILABILITY_ONLINE
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
 from texecom_alarm.protocol.client import PanelClient
+from texecom_alarm.protocol.frame import CMD_SET_AREA_ARM, CMD_SET_AREA_DISARM
 
 _MOSQUITTO_IMAGE = "eclipse-mosquitto:2"
 
@@ -435,6 +436,169 @@ async def test_e2e_alarm_snapshot_live_area_and_discovery() -> None:
                 break
             await asyncio.sleep(0.02)
         assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_mqtt_arm_disarm_commands() -> None:
+    """TASK-7 AC-1/AC-2/AC-3: MQTT ARM_*/DISARM → FakePanel cmd 6/8 bodies."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[
+            FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00),
+            FakeZone(number=2, zone_type=0, name=""),
+        ],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = Settings(
+            panel_host=panel.host,
+            panel_port=panel.port,
+            udl_password="1234",
+            mqtt_host="127.0.0.1",
+            mqtt_port=1883,
+            mqtt_username="",
+            mqtt_password="",
+            mqtt_topic_prefix="texecom",
+            part_arm_away=0,
+            part_arm_night=1,
+            part_arm_home=2,
+        )
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        for _ in range(150):
+            if "texecom/alarm/command" in mqtt.subscribed:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+        assert "texecom/alarm/command" in mqtt.subscribed
+
+        async def _wait_arm(mode: int) -> None:
+            for _ in range(100):
+                if panel.last_arm_mode == mode and panel.last_arm_body == bytes([mode, 0x01]):
+                    return
+                if task.done():
+                    exc = task.exception()
+                    if exc is not None:
+                        raise exc
+                await asyncio.sleep(0.02)
+            raise AssertionError(f"expected arm mode {mode}, got {panel.last_arm_mode!r}")
+
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
+        await _wait_arm(0)
+        assert panel.last_command == CMD_SET_AREA_ARM
+
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_NIGHT")
+        await _wait_arm(1)
+
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_HOME")
+        await _wait_arm(2)
+
+        before_cmds = list(panel.commands_seen)
+        await mqtt.push_inbound("texecom/alarm/command", "NOT_A_COMMAND")
+        await asyncio.sleep(0.1)
+        assert panel.commands_seen == before_cmds
+
+        disarm_before = panel.disarm_calls
+        await mqtt.push_inbound("texecom/alarm/command", "DISARM")
+        for _ in range(100):
+            if panel.disarm_calls > disarm_before:
+                break
+            await asyncio.sleep(0.02)
+        assert panel.disarm_calls == disarm_before + 1
+        assert panel.last_disarm_body == bytes([0x01])
+        assert panel.last_command == CMD_SET_AREA_DISARM
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_mqtt_arm_uses_remapped_part_arm_bytes() -> None:
+    """AC-3: changing Settings.part_arm_* changes the mode byte without code change."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = Settings(
+            panel_host=panel.host,
+            panel_port=panel.port,
+            udl_password="1234",
+            mqtt_host="127.0.0.1",
+            mqtt_port=1883,
+            mqtt_username="",
+            mqtt_password="",
+            mqtt_topic_prefix="texecom",
+            part_arm_away=7,
+            part_arm_night=8,
+            part_arm_home=9,
+        )
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        for _ in range(150):
+            if "texecom/alarm/command" in mqtt.subscribed:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
+        for _ in range(100):
+            if panel.last_arm_body == bytes([0x07, 0x01]):
+                break
+            await asyncio.sleep(0.02)
+        assert panel.last_arm_body == bytes([0x07, 0x01])
+
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_NIGHT")
+        for _ in range(100):
+            if panel.last_arm_body == bytes([0x08, 0x01]):
+                break
+            await asyncio.sleep(0.02)
+        assert panel.last_arm_body == bytes([0x08, 0x01])
+
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_HOME")
+        for _ in range(100):
+            if panel.last_arm_body == bytes([0x09, 0x01]):
+                break
+            await asyncio.sleep(0.02)
+        assert panel.last_arm_body == bytes([0x09, 0x01])
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)
