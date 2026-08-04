@@ -20,6 +20,10 @@ options:
   part_arm_away: 0
   part_arm_night: 1
   part_arm_home: 2
+  reconnect_normal_attempts: 4
+  reconnect_normal_interval_seconds: 2.5
+  reconnect_trigger_attempts: 18
+  reconnect_trigger_interval_seconds: 5
 schema:
   panel_host: str
   panel_port: port
@@ -32,3 +36,7 @@ schema:
   part_arm_away: int(0,255)
   part_arm_night: int(0,255)
   part_arm_home: int(0,255)
+  reconnect_normal_attempts: int(1,10000)
+  reconnect_normal_interval_seconds: float(0,)
+  reconnect_trigger_attempts: int(1,10000)
+  reconnect_trigger_interval_seconds: float(0,)

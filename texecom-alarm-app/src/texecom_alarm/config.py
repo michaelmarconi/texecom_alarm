@@ -16,6 +16,11 @@ DEFAULT_MQTT_TOPIC_PREFIX = "texecom"
 DEFAULT_PART_ARM_AWAY = 0
 DEFAULT_PART_ARM_NIGHT = 1
 DEFAULT_PART_ARM_HOME = 2
+# Tunable reconnect budgets (ADR-002) — not final hardcodes; SPIKE-002 one data point.
+DEFAULT_RECONNECT_NORMAL_ATTEMPTS = 4
+DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS = 2.5
+DEFAULT_RECONNECT_TRIGGER_ATTEMPTS = 18
+DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS = 5.0
 
 _ENV_KEYS = {
     "panel_host": "TEXECOM_PANEL_HOST",
@@ -29,6 +34,10 @@ _ENV_KEYS = {
     "part_arm_away": "TEXECOM_PART_ARM_AWAY",
     "part_arm_night": "TEXECOM_PART_ARM_NIGHT",
     "part_arm_home": "TEXECOM_PART_ARM_HOME",
+    "reconnect_normal_attempts": "TEXECOM_RECONNECT_NORMAL_ATTEMPTS",
+    "reconnect_normal_interval_seconds": "TEXECOM_RECONNECT_NORMAL_INTERVAL_SECONDS",
+    "reconnect_trigger_attempts": "TEXECOM_RECONNECT_TRIGGER_ATTEMPTS",
+    "reconnect_trigger_interval_seconds": "TEXECOM_RECONNECT_TRIGGER_INTERVAL_SECONDS",
 }
 
 
@@ -51,6 +60,10 @@ class Settings:
     part_arm_away: int
     part_arm_night: int
     part_arm_home: int
+    reconnect_normal_attempts: int = DEFAULT_RECONNECT_NORMAL_ATTEMPTS
+    reconnect_normal_interval_seconds: float = DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS
+    reconnect_trigger_attempts: int = DEFAULT_RECONNECT_TRIGGER_ATTEMPTS
+    reconnect_trigger_interval_seconds: float = DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS
 
 
 def load_settings(
@@ -127,6 +140,32 @@ def _parse(raw: Mapping[str, Any]) -> Settings:
         part_arm_home=_optional_int(
             raw, "part_arm_home", DEFAULT_PART_ARM_HOME, minimum=0, maximum=255
         ),
+        reconnect_normal_attempts=_optional_int(
+            raw,
+            "reconnect_normal_attempts",
+            DEFAULT_RECONNECT_NORMAL_ATTEMPTS,
+            minimum=1,
+            maximum=10_000,
+        ),
+        reconnect_normal_interval_seconds=_optional_float(
+            raw,
+            "reconnect_normal_interval_seconds",
+            DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
+            minimum=0.0,
+        ),
+        reconnect_trigger_attempts=_optional_int(
+            raw,
+            "reconnect_trigger_attempts",
+            DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
+            minimum=1,
+            maximum=10_000,
+        ),
+        reconnect_trigger_interval_seconds=_optional_float(
+            raw,
+            "reconnect_trigger_interval_seconds",
+            DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
+            minimum=0.0,
+        ),
     )
 
 
@@ -168,4 +207,23 @@ def _optional_int(
         raise ConfigError(f"option {key} must be an integer") from exc
     if number < minimum or number > maximum:
         raise ConfigError(f"option {key} must be between {minimum} and {maximum}")
+    return number
+
+
+def _optional_float(
+    raw: Mapping[str, Any],
+    key: str,
+    default: float,
+    *,
+    minimum: float,
+) -> float:
+    if key not in raw or raw[key] is None or raw[key] == "":
+        return default
+    value = raw[key]
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"option {key} must be a number") from exc
+    if number < minimum:
+        raise ConfigError(f"option {key} must be >= {minimum}")
     return number
