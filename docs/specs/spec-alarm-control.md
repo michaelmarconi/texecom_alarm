@@ -122,6 +122,11 @@ normal arm/disarm cycles or an actual alarm trigger.
 
 - No runtime dependency on `the prior MQTT bridge` — it will be uninstalled once this
   capability is delivered.
+- The mapping between HA's `arm_home`/`arm_night` labels and the panel's
+  physical Part-Arm slot number (which of up to three engineer-configured
+  slots each maps to) must be a documented, per-installation configuration
+  value — never hardcoded to this household's own panel layout. Different
+  Premier Elite installations can and do configure these slots differently.
 - The `house_alarm_panel` wrapper entity's guard-condition and notification logic is
   not reimplemented here — this spec only needs to keep the underlying entity's
   forwarding contract (state in, command out) intact.
@@ -134,6 +139,11 @@ normal arm/disarm cycles or an actual alarm trigger.
   `alarm_control_panel.texecom_alarm_arm_status` naming, or is a documented
   rename/migration (updating `house_alarm.yaml`'s target) acceptable? (Owner:
   household/spec author — resolve before Phase 2 build starts on this capability.)
+- Can the panel's own protocol (e.g. `GETAREADETAILS`, `cmd=35`, never yet
+  exercised) report each Part-Arm slot's configured role/name, allowing the
+  Home/Night-to-slot mapping to be auto-detected — or must it always be a
+  manually-specified add-on config value? (Owner: needs a dedicated spike —
+  see Spike Candidates below.)
 
 ## Spike Candidates
 
@@ -150,6 +160,11 @@ normal arm/disarm cycles or an actual alarm trigger.
   `docs/protocol-reference.md`) also shortens or eliminates the trigger-time forced
   disconnect itself, distinct from the ordinary arm/disarm collision noise SPIKE-002
   tested it against.
+- Whether `GETAREADETAILS` (`cmd=35`) or any other unexercised command exposes each
+  Part-Arm slot's configured name/role, enabling the Home/Night-to-slot mapping to
+  be auto-detected at startup instead of requiring manual add-on configuration.
+  (Raised 2026-08-04, following SPIKE-005's finding that this mapping is
+  engineer-configured per installation, not a protocol constant.)
 
 ## Review
 
