@@ -7,8 +7,12 @@ import logging
 
 from texecom_alarm.protocol.frame import (
     ACK,
+    CMD_GET_ZONE_STATE,
     CMD_GETDATETIME,
     CMD_LOGIN,
+    CMD_SETEVENTMESSAGES,
+    MAX_ZONES_PER_STATE_REQUEST,
+    NAK,
     TYPE_MESSAGE,
     TYPE_RESPONSE,
     Frame,
@@ -51,6 +55,7 @@ class PanelClient:
         self._buf = bytearray()
         self._seq = 0
         self._authenticated = False
+        self._message_queue: asyncio.Queue[Frame] = asyncio.Queue()
 
     @property
     def authenticated(self) -> bool:
@@ -64,6 +69,7 @@ class PanelClient:
         self._reader, self._writer = await asyncio.open_connection(self.host, self.port)
         self._buf.clear()
         self._authenticated = False
+        self._message_queue = asyncio.Queue()
         if self.login_delay > 0:
             await asyncio.sleep(self.login_delay)
 
@@ -98,6 +104,58 @@ class PanelClient:
             CMD_GETDATETIME,
             retries=self.keepalive_retries,
         )
+
+    async def get_zone_state(self, start: int, count: int) -> bytes:
+        """GetZoneState (cmd 2): return exactly ``count`` status bytes.
+
+        Uses 1-byte ``startZone`` (panels with ≤256 zones). Batches must be
+        at most ``MAX_ZONES_PER_STATE_REQUEST`` (168).
+        """
+        if count < 1 or count > MAX_ZONES_PER_STATE_REQUEST:
+            raise ProtocolError(
+                f"GetZoneState: count {count} out of range 1..{MAX_ZONES_PER_STATE_REQUEST}"
+            )
+        if not (1 <= start <= 255):
+            raise ProtocolError(f"GetZoneState: start {start} out of 1-byte range")
+        logger.debug("panel_get_zone_state", extra={"start": start, "count": count})
+        payload = await self.send_command(CMD_GET_ZONE_STATE, bytes([start, count]))
+        if len(payload) == 1 and payload[0] == NAK:
+            raise ProtocolError("GetZoneState NAK")
+        if len(payload) != count:
+            raise ProtocolError(f"GetZoneState: expected {count} status bytes, got {len(payload)}")
+        return payload
+
+    async def set_event_messages(self) -> None:
+        """SETEVENTMESSAGES (cmd 37): subscribe to DEBUG|ZONE|AREA|OUTPUT|USER|LOG."""
+        events = 1 | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5)
+        body = bytes([events & 0xFF, (events >> 8) & 0xFF])
+        logger.debug("panel_set_event_messages", extra={"mask": events})
+        payload = await self.send_command(CMD_SETEVENTMESSAGES, body)
+        if len(payload) >= 1 and payload[0] == NAK:
+            raise ProtocolError("SETEVENTMESSAGES NAK")
+        logger.debug("panel_set_event_messages_ok")
+
+    async def recv_message(self, *, timeout: float | None = None) -> Frame:
+        """Return the next queued unsolicited ``'M'`` frame, or wait for one."""
+        if not self._message_queue.empty():
+            return self._message_queue.get_nowait()
+        if self._reader is None:
+            raise ProtocolError("not connected")
+        wait_timeout = self.response_timeout if timeout is None else timeout
+        deadline = asyncio.get_running_loop().time() + wait_timeout
+        while True:
+            if not self._message_queue.empty():
+                return self._message_queue.get_nowait()
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise TimeoutError("timed out waiting for message")
+            frame = await self._recv_frame(timeout=remaining)
+            if frame.msg_type == TYPE_MESSAGE:
+                return frame
+            logger.debug(
+                "panel_recv_message_skip",
+                extra={"msg_type": frame.msg_type},
+            )
 
     async def send_command(
         self,
@@ -147,6 +205,7 @@ class PanelClient:
                     "panel_interleaved_message",
                     extra={"seq": frame.sequence, "body": frame.body.hex()},
                 )
+                self._message_queue.put_nowait(frame)
                 continue
             if frame.msg_type != TYPE_RESPONSE:
                 logger.debug(
