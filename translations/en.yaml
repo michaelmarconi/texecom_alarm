@@ -1,4 +1,34 @@
 configuration:
-  message:
-    name: Message
-    description: Placeholder option, printed to the log on startup. Replace with real Texecom Alarm options (panel host, port, UDL password, MQTT settings, etc.).
+  panel_host:
+    name: Panel host
+    description: Hostname or IP of the Texecom ComIP / Connect module.
+  panel_port:
+    name: Panel port
+    description: TCP port for the panel ComIP session (default 10001).
+  udl_password:
+    name: UDL password
+    description: Panel UDL login password.
+  mqtt_host:
+    name: MQTT host
+    description: MQTT broker hostname or IP.
+  mqtt_port:
+    name: MQTT port
+    description: MQTT broker port (default 1883).
+  mqtt_username:
+    name: MQTT username
+    description: Optional MQTT username (leave empty if unused).
+  mqtt_password:
+    name: MQTT password
+    description: Optional MQTT password (leave empty if unused).
+  mqtt_topic_prefix:
+    name: MQTT topic prefix
+    description: Root prefix for discovery and state topics (default texecom).
+  part_arm_away:
+    name: Part-Arm mode byte (Away)
+    description: Mode byte for Home Assistant Away — must match this installation's Part-Arm layout.
+  part_arm_night:
+    name: Part-Arm mode byte (Night)
+    description: Mode byte for Home Assistant Night — must match this installation's Part-Arm layout.
+  part_arm_home:
+    name: Part-Arm mode byte (Home)
+    description: Mode byte for Home Assistant Home — must match this installation's Part-Arm layout.
