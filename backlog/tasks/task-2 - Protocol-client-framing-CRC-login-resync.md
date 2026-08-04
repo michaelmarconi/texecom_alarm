@@ -52,3 +52,10 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/protocol/__init__.py 
 5. Expand FakePanel into an asyncio test double that speaks enough framing for login + keepalive + garbage injection.
 Test strategy: TDD unit tests for CRC/framing; async client tests against FakePanel for login success, resync-after-garbage, and keepalive retry — never the live household panel.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: claimed
+<!-- SECTION:FINAL_SUMMARY:END -->

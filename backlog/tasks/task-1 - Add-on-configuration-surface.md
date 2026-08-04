@@ -52,3 +52,10 @@ Files likely affected: config.yaml (modify), DOCS.md (modify), rootfs/etc/servic
 4. Wire bashio::config keys in the s6 run script for the real option names.
 Test strategy: pytest unit tests for defaults, required fields, and Part-Arm mapping parse — no broker or panel.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: claimed
+<!-- SECTION:FINAL_SUMMARY:END -->
