@@ -4,7 +4,7 @@ title: Publish live zone state from panel push events
 status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 16:07'
+updated_date: '2026-08-04 16:13'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -90,5 +90,5 @@ Verification: python -m pytest tests/test_zone_state.py tests/test_protocol_clie
 Notes/assumptions: enumerate_zones now returns (zones, zone_count) so the snapshot can cover the full panel slot range without a second identification query; GetZoneState uses 1-byte start (panels ≤256 zones) per ADR-006/SPIKE-006.
 
 ## Build phase
-phase: awaiting-review
+phase: awaiting-merge-signoff
 <!-- SECTION:FINAL_SUMMARY:END -->
