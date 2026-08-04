@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 
 from texecom_alarm.protocol.crc import crc8
 from texecom_alarm.protocol.frame import (
     ACK,
     CMD_GETDATETIME,
+    CMD_GETPANELIDENTIFICATION,
+    CMD_GETZONEDETAILS,
     CMD_LOGIN,
     HEADER_START,
     TYPE_COMMAND,
@@ -23,10 +26,25 @@ from texecom_alarm.protocol.frame import (
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class FakeZone:
+    """Configured zone slot for FakePanel enumeration responses."""
+
+    number: int
+    zone_type: int
+    name: str
+
+
 class FakePanel:
     """Minimal asyncio TCP panel double for protocol-client tests."""
 
-    def __init__(self, udl_password: str = "1234") -> None:
+    def __init__(
+        self,
+        udl_password: str = "1234",
+        *,
+        zones: Sequence[FakeZone] | None = None,
+        zone_count: int | None = None,
+    ) -> None:
         self.udl_password = udl_password
         self.host = "127.0.0.1"
         self.port = 0
@@ -45,9 +63,19 @@ class FakePanel:
         self.close_on_next_command = False
         self.plusplusplus_on_next_command = False
         self.command_frame_before_response = False
+        self._zones = {z.number: z for z in (zones or ())}
+        if zone_count is not None:
+            self.zone_count = zone_count
+        elif self._zones:
+            self.zone_count = max(self._zones)
+        else:
+            self.zone_count = 0
+        self.zone_detail_queries: list[int] = []
         self._handlers: dict[int, Callable[[Frame], bytes]] = {
             CMD_LOGIN: self._handle_login,
             CMD_GETDATETIME: self._handle_getdatetime,
+            CMD_GETPANELIDENTIFICATION: self._handle_get_panel_identification,
+            CMD_GETZONEDETAILS: self._handle_get_zone_details,
         }
 
     async def start(self) -> None:
@@ -179,3 +207,22 @@ class FakePanel:
     def _handle_getdatetime(self, frame: Frame) -> bytes:
         # Minimal opaque datetime payload after the command echo byte.
         return bytes([CMD_GETDATETIME, 0x18, 0x08, 0x04, 0x0E, 0x25, 0x00])
+
+    def _handle_get_panel_identification(self, frame: Frame) -> bytes:
+        # 32-byte identification string; second whitespace token is zone count.
+        text = f"Elite {self.zone_count}     ENG->SW V6.02.02LS1"
+        payload = text.encode("ascii")[:32].ljust(32, b" ")
+        return bytes([CMD_GETPANELIDENTIFICATION]) + payload
+
+    def _handle_get_zone_details(self, frame: Frame) -> bytes:
+        if len(frame.body) < 2:
+            return bytes([CMD_GETZONEDETAILS, 0x15])
+        zone_number = frame.body[1]
+        self.zone_detail_queries.append(zone_number)
+        zone = self._zones.get(zone_number)
+        if zone is None:
+            zone = FakeZone(number=zone_number, zone_type=0, name="")
+        # 34-byte payload: type, area bitmap, 32-byte null-padded name.
+        name_bytes = zone.name.encode("ascii", errors="replace")[:32].ljust(32, b"\x00")
+        payload = bytes([zone.zone_type, 0x01]) + name_bytes
+        return bytes([CMD_GETZONEDETAILS]) + payload
