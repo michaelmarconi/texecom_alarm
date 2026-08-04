@@ -1,10 +1,10 @@
 ---
 id: TASK-5
 title: Publish live zone state from panel push events
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 16:00'
+updated_date: '2026-08-04 16:07'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -83,6 +83,12 @@ Note: Physical open/close flip was not run in SPIKE-006; CI proves snapshot and 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Live zone state from GetZoneState snapshot + ZONE pushes, retained MQTT for in-use zones only (Secure→"0", Active/Tamper/Short→"1").
+Changed files: texecom-alarm-app/src/texecom_alarm/protocol/frame.py, texecom-alarm-app/src/texecom_alarm/protocol/client.py, texecom-alarm-app/src/texecom_alarm/zone_state.py, texecom-alarm-app/src/texecom_alarm/zones.py, texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/tests/fake_panel.py, texecom-alarm-app/tests/test_zone_state.py, texecom-alarm-app/tests/test_protocol_client.py, texecom-alarm-app/tests/test_e2e_fake_panel.py, texecom-alarm-app/tests/test_zones.py
+Verification: python -m pytest tests/test_zone_state.py tests/test_protocol_client.py tests/test_e2e_fake_panel.py -q → 35 passed; full suite pytest --cov=texecom_alarm --cov-fail-under=90 → 88 passed, 94.87% coverage; ruff check + ruff format --check clean
+Notes/assumptions: enumerate_zones now returns (zones, zone_count) so the snapshot can cover the full panel slot range without a second identification query; GetZoneState uses 1-byte start (panels ≤256 zones) per ADR-006/SPIKE-006.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
