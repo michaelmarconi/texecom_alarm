@@ -59,6 +59,7 @@ async def test_listen_loop_sends_keepalive_on_idle_timeout() -> None:
             _listen_zone_messages(
                 client,
                 mqtt,
+                settings=_settings(panel),
                 topic_prefix="texecom",
                 in_use_zones={1},
                 idle_timeout=0.05,

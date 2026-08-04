@@ -98,6 +98,7 @@ async def run(
             _listen_panel_messages(
                 panel_client,
                 mqtt_client,
+                settings=cfg,
                 topic_prefix=cfg.mqtt_topic_prefix,
                 in_use_zones=in_use,
             ),
@@ -137,6 +138,7 @@ async def _listen_panel_messages(
     panel: PanelClient,
     mqtt: object,
     *,
+    settings: Settings,
     topic_prefix: str,
     in_use_zones: set[int],
     idle_timeout: float = _KEEPALIVE_IDLE_TIMEOUT,
@@ -165,6 +167,7 @@ async def _listen_panel_messages(
             await handle_area_message(
                 mqtt,  # type: ignore[arg-type]
                 body,
+                settings=settings,
                 topic_prefix=topic_prefix,
             )
         else:

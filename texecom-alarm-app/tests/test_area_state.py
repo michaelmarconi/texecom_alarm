@@ -62,7 +62,14 @@ def _set_flag(flags: bytearray, flag_index: int, area_number: int, *, area_size:
     ],
 )
 def test_mqtt_payload_for_live_area_state(state: int, expected: str) -> None:
-    assert mqtt_payload_for_area_state(state) == expected
+    assert mqtt_payload_for_area_state(state, _settings()) == expected
+
+
+def test_mqtt_payload_for_live_part_arm_uses_remapped_settings() -> None:
+    """AREA 6/7 are Part-Arm slots 1/2 — HA mode follows Settings (ADR-005)."""
+    remapped = _settings(part_arm_night=2, part_arm_home=1, part_arm_away=0)
+    assert mqtt_payload_for_area_state(6, remapped) == "armed_home"
+    assert mqtt_payload_for_area_state(7, remapped) == "armed_night"
 
 
 def test_flag_bit_reads_area_bit() -> None:
@@ -163,22 +170,37 @@ async def test_snapshot_publishes_area_1_disarmed_only() -> None:
 async def test_handle_area_message_publishes_mapped_states() -> None:
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
+    settings = _settings()
     # MSG_AREA, area 1, state 3 → armed_away
-    await handle_area_message(mqtt, bytes([2, 1, 3]), topic_prefix="texecom")
+    await handle_area_message(mqtt, bytes([2, 1, 3]), settings=settings, topic_prefix="texecom")
     assert mqtt.payloads_for("texecom/alarm/state") == ["armed_away"]
 
-    await handle_area_message(mqtt, bytes([2, 1, 5]), topic_prefix="texecom")
+    await handle_area_message(mqtt, bytes([2, 1, 5]), settings=settings, topic_prefix="texecom")
     assert mqtt.payloads_for("texecom/alarm/state")[-1] == "triggered"
 
     # Unused area 2 — no publish.
     before = len(mqtt.messages)
-    await handle_area_message(mqtt, bytes([2, 2, 3]), topic_prefix="texecom")
+    await handle_area_message(mqtt, bytes([2, 2, 3]), settings=settings, topic_prefix="texecom")
     assert len(mqtt.messages) == before
+
+
+@pytest.mark.asyncio
+async def test_handle_area_message_remapped_part_arm_publishes_correct_ha_mode() -> None:
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    # Swap Night/Home slots vs defaults: slot 1 → Home, slot 2 → Night.
+    settings = _settings(part_arm_night=2, part_arm_home=1, part_arm_away=0)
+    # AREA state 6 = Part Arm 1 → armed_home under remapped Settings.
+    await handle_area_message(mqtt, bytes([2, 1, 6]), settings=settings, topic_prefix="texecom")
+    assert mqtt.payloads_for("texecom/alarm/state") == ["armed_home"]
+    # AREA state 7 = Part Arm 2 → armed_night.
+    await handle_area_message(mqtt, bytes([2, 1, 7]), settings=settings, topic_prefix="texecom")
+    assert mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_night"
 
 
 @pytest.mark.asyncio
 async def test_handle_area_message_ignores_short_body() -> None:
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
-    await handle_area_message(mqtt, bytes([2, 1]), topic_prefix="texecom")
+    await handle_area_message(mqtt, bytes([2, 1]), settings=_settings(), topic_prefix="texecom")
     assert mqtt.payloads_for("texecom/alarm/state") == []
