@@ -38,7 +38,7 @@ FLAG_PART_ARM_3 = 52
 # HOUSE on this Elite 88 — only in-use area gets an MQTT entity.
 HOUSE_AREA_NUMBER = 1
 
-# Live AREA state byte → HA alarm_control_panel payload (task working hypothesis).
+# Live AREA state byte → HA alarm_control_panel payload (non–Part-Arm states).
 _LIVE_AREA_STATE_MAP: dict[int, str] = {
     0: "disarmed",
     1: "arming",
@@ -46,8 +46,12 @@ _LIVE_AREA_STATE_MAP: dict[int, str] = {
     3: "armed_away",
     4: "arming",
     5: "triggered",
-    6: "armed_night",
-    7: "armed_home",
+}
+
+# Settled Part-Arm AREA bytes → panel Part-Arm slot (protocol-reference: 6→1, 7→2).
+_LIVE_PART_ARM_STATE_TO_SLOT: dict[int, int] = {
+    6: 1,
+    7: 2,
 }
 
 
@@ -80,8 +84,15 @@ def flag_bit(flags: bytes, flag_index: int, *, area_size: int, area_number: int)
     return bool(value & (1 << (area_number - 1)))
 
 
-def mqtt_payload_for_area_state(state: int) -> str:
-    """Map live AREA state byte → MQTT alarm_control_panel payload."""
+def mqtt_payload_for_area_state(state: int, settings: Settings) -> str:
+    """Map live AREA state byte → MQTT alarm_control_panel payload.
+
+    Part-Arm settled states (6/7) use the same install-time slot → HA mapping
+    as the area-flags snapshot (ADR-005).
+    """
+    slot = _LIVE_PART_ARM_STATE_TO_SLOT.get(state)
+    if slot is not None:
+        return _ha_state_for_part_arm_slot(slot, settings)
     return _LIVE_AREA_STATE_MAP.get(state, "disarmed")
 
 
@@ -173,6 +184,7 @@ async def handle_area_message(
     mqtt: MqttPublisher,
     body: bytes,
     *,
+    settings: Settings,
     topic_prefix: str,
 ) -> None:
     """Publish MQTT alarm state for an AREA push (body[0]==MSG_AREA) for area 1."""
@@ -186,5 +198,5 @@ async def handle_area_message(
     if area_number != HOUSE_AREA_NUMBER:
         logger.debug("area_message_unused_ignored", extra={"area": area_number})
         return
-    payload = mqtt_payload_for_area_state(state)
+    payload = mqtt_payload_for_area_state(state, settings)
     await publish_alarm_state(mqtt, payload=payload, topic_prefix=topic_prefix)
