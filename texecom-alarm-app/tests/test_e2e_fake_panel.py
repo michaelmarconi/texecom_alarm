@@ -191,7 +191,7 @@ async def _e2e_discovery_retained_and_lwt() -> None:
                 deadline = asyncio.get_running_loop().time() + 15.0
                 alarm_cfg = "homeassistant/alarm_control_panel/texecom_alarm_arm_status/config"
                 while asyncio.get_running_loop().time() < deadline and not (
-                    len(discovered) >= 3
+                    len(discovered) >= 4
                     and alarm_cfg in discovered
                     and AVAILABILITY_ONLINE in status_payloads
                 ):
@@ -215,11 +215,17 @@ async def _e2e_discovery_retained_and_lwt() -> None:
                     "homeassistant/binary_sensor/texecom_alarm_kitchen_pir_3/config" in discovered
                 )
                 assert alarm_cfg in discovered
+                assert "homeassistant/binary_sensor/texecom_alarm_panel_link/config" in discovered
                 assert AVAILABILITY_ONLINE in status_payloads
 
                 front = discovered["homeassistant/binary_sensor/texecom_alarm_front_door_1/config"]
                 assert front["availability_topic"] == "texecom/status"
                 assert front["unique_id"] == "texecom_alarm_front_door_1"
+
+                link = discovered["homeassistant/binary_sensor/texecom_alarm_panel_link/config"]
+                assert link["availability_topic"] == "texecom/status"
+                assert link["device_class"] == "connectivity"
+                assert link["state_topic"] == "texecom/panel_link/state"
 
                 # Simulate app-process crash: abort MQTT TCP without DISCONNECT → LWT.
                 await mqtt.abort()
@@ -286,6 +292,9 @@ async def test_e2e_app_run_with_recording_mqtt() -> None:
         topics = [m.topic for m in mqtt.messages]
         assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in topics
         assert "homeassistant/alarm_control_panel/texecom_alarm_arm_status/config" in topics
+        assert "homeassistant/binary_sensor/texecom_alarm_panel_link/config" in topics
+        assert "texecom/panel_link/state" in topics
+        assert mqtt.payloads_for("texecom/panel_link/state")[0] == "ON"
         assert "texecom/status" in topics
         assert mqtt.will_payload == AVAILABILITY_OFFLINE
         assert mqtt.payloads_for("texecom/status")[-1] == AVAILABILITY_OFFLINE

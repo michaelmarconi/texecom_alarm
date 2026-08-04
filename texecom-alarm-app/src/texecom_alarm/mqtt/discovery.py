@@ -14,6 +14,9 @@ AVAILABILITY_ONLINE = "online"
 AVAILABILITY_OFFLINE = "offline"
 
 ALARM_OBJECT_ID = "texecom_alarm_arm_status"
+CONNECTIVITY_OBJECT_ID = "texecom_alarm_panel_link"
+PANEL_LINK_ON = "ON"
+PANEL_LINK_OFF = "OFF"
 
 
 class MqttPublisher(Protocol):
@@ -60,6 +63,14 @@ def alarm_discovery_topic(object_id: str = ALARM_OBJECT_ID) -> str:
     return f"homeassistant/alarm_control_panel/{object_id}/config"
 
 
+def connectivity_state_topic(topic_prefix: str) -> str:
+    return f"{topic_prefix}/panel_link/state"
+
+
+def connectivity_discovery_topic(object_id: str = CONNECTIVITY_OBJECT_ID) -> str:
+    return f"homeassistant/binary_sensor/{object_id}/config"
+
+
 def zone_discovery_payload(zone: Zone, *, topic_prefix: str) -> dict[str, object]:
     object_id = zone_object_id(zone)
     return {
@@ -89,6 +100,21 @@ def alarm_discovery_payload(*, topic_prefix: str) -> dict[str, object]:
         "code_arm_required": False,
         "code_disarm_required": False,
         "supported_features": ["arm_home", "arm_away", "arm_night"],
+    }
+
+
+def connectivity_discovery_payload(*, topic_prefix: str) -> dict[str, object]:
+    return {
+        "name": "Panel Link",
+        "unique_id": CONNECTIVITY_OBJECT_ID,
+        "object_id": CONNECTIVITY_OBJECT_ID,
+        "state_topic": connectivity_state_topic(topic_prefix),
+        "availability_topic": availability_topic(topic_prefix),
+        "payload_available": AVAILABILITY_ONLINE,
+        "payload_not_available": AVAILABILITY_OFFLINE,
+        "device_class": "connectivity",
+        "payload_on": PANEL_LINK_ON,
+        "payload_off": PANEL_LINK_OFF,
     }
 
 
@@ -128,4 +154,20 @@ async def publish_alarm_discovery(
     logger.debug(
         "mqtt_alarm_discovery_published",
         extra={"topic": topic, "object_id": ALARM_OBJECT_ID},
+    )
+
+
+async def publish_connectivity_discovery(
+    mqtt: MqttPublisher,
+    *,
+    topic_prefix: str,
+) -> None:
+    """Publish retained panel-link connectivity binary_sensor discovery (ADR-004)."""
+    topic = connectivity_discovery_topic()
+    payload = connectivity_discovery_payload(topic_prefix=topic_prefix)
+    body = json.dumps(payload, separators=(",", ":"))
+    await mqtt.publish(topic, body, retain=True)
+    logger.debug(
+        "mqtt_connectivity_discovery_published",
+        extra={"topic": topic, "object_id": CONNECTIVITY_OBJECT_ID},
     )

@@ -143,6 +143,17 @@ class FakePanel:
         writer.write(encode_frame(TYPE_MESSAGE, 0, body))
         await writer.drain()
 
+    async def force_disconnect(self) -> None:
+        """Close the current TCP client session (mid-session drop for reconnect tests)."""
+        writer = self._writer
+        if writer is None or writer.is_closing():
+            raise RuntimeError("FakePanel has no connected client")
+        writer.close()
+        await writer.wait_closed()
+        if self._writer is writer:
+            self._writer = None
+        self.authenticated = False
+
     def connect(self) -> None:
         """Sync stub retained for older e2e smoke shape."""
         self.authenticated = False
