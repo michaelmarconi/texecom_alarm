@@ -2,27 +2,39 @@
 
 from __future__ import annotations
 
+import pytest
+from tests.fake_panel import FakePanel
+
 from texecom_alarm import healthcheck
-
-
-class FakePanel:
-    """Stand-in for the ComIP TCP session used by future E2E suites."""
-
-    def __init__(self) -> None:
-        self.connected = False
-
-    def connect(self) -> None:
-        self.connected = True
-
-    def close(self) -> None:
-        self.connected = False
+from texecom_alarm.protocol.client import PanelClient
 
 
 def test_fake_panel_session_lifecycle() -> None:
     panel = FakePanel()
-    assert not panel.connected
+    assert not panel.authenticated
     panel.connect()
-    assert panel.connected
+    assert not panel.authenticated
     assert healthcheck().startswith("texecom-alarm/")
     panel.close()
-    assert not panel.connected
+    assert not panel.authenticated
+
+
+@pytest.mark.asyncio
+async def test_e2e_login_against_fake_panel() -> None:
+    panel = FakePanel(udl_password="1234")
+    await panel.start()
+    try:
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+        assert client.authenticated
+        assert panel.authenticated
+        await client.close()
+    finally:
+        await panel.stop()
