@@ -1,10 +1,10 @@
 ---
 id: TASK-8
 title: Persist and publish last-trigger snapshot
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 17:20'
+updated_date: '2026-08-04 17:21'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -38,9 +38,9 @@ Note: Initiating-zone selection is a heuristic (most recent Active zone in the b
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Injected ZONE Active then AREA in-alarm (state 5) publishes retained {prefix}/alarm/attributes with the initiating zone number and a timestamp
-- [ ] #2 Alarm discovery includes json_attributes_topic pointing at that attributes topic
-- [ ] #3 A later disarm updates alarm state but does not clear the retained last-trigger attributes
+- [x] #1 Injected ZONE Active then AREA in-alarm (state 5) publishes retained {prefix}/alarm/attributes with the initiating zone number and a timestamp
+- [x] #2 Alarm discovery includes json_attributes_topic pointing at that attributes topic
+- [x] #3 A later disarm updates alarm state but does not clear the retained last-trigger attributes
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -89,10 +89,10 @@ Verification: `cd texecom-alarm-app && .venv/bin/python -m pytest tests/ -q --co
 Notes/assumptions: Seeded `last_alarm_payload` from the area-flags snapshot return so cold-start already-in-alarm does not invent a snapshot; MSG_LOG recorded as body[1]=type, body[2]=group per protocol-reference.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 docs/definition-of-done.md
+- [x] #1 docs/definition-of-done.md
 <!-- DOD:END -->
