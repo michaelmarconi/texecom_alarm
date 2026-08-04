@@ -410,6 +410,7 @@ async def test_e2e_alarm_snapshot_live_area_and_discovery() -> None:
         assert payload["unique_id"] == "texecom_alarm_arm_status"
         assert payload["object_id"] == "texecom_alarm_arm_status"
         assert payload["availability_topic"] == "texecom/status"
+        assert payload["json_attributes_topic"] == "texecom/alarm/attributes"
         assert "arm_home" in payload["supported_features"]
         assert "arm_away" in payload["supported_features"]
         assert "arm_night" in payload["supported_features"]
@@ -436,6 +437,82 @@ async def test_e2e_alarm_snapshot_live_area_and_discovery() -> None:
                 break
             await asyncio.sleep(0.02)
         assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_trigger_snapshot_attributes_retained_across_disarm() -> None:
+    """TASK-8 AC-1/AC-3: ZONE Active then AREA in-alarm → retained attributes; disarm keeps them."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[
+            FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00),
+            FakeZone(number=2, zone_type=0, name=""),
+        ],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel, mqtt_port=1883)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        for _ in range(150):
+            if mqtt.payloads_for("texecom/alarm/state"):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        await panel.inject_zone_message(zone_number=1, status=0x01)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/zone/1/state")[-1:] == ["1"]:
+                break
+            await asyncio.sleep(0.02)
+
+        await panel.inject_area_message(area_number=1, state=5)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/alarm/attributes"):
+                break
+            await asyncio.sleep(0.02)
+
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "triggered"
+        attr_msgs = [m for m in mqtt.messages if m.topic == "texecom/alarm/attributes"]
+        assert attr_msgs
+        assert attr_msgs[-1].retain is True
+        attrs = json.loads(
+            attr_msgs[-1].payload
+            if isinstance(attr_msgs[-1].payload, str)
+            else attr_msgs[-1].payload.decode()
+        )
+        assert attrs["last_trigger_zone"] == 1
+        assert isinstance(attrs["last_trigger_time"], str)
+        assert "T" in attrs["last_trigger_time"]
+        attrs_payload = mqtt.payloads_for("texecom/alarm/attributes")[-1]
+
+        await panel.inject_area_message(area_number=1, state=0)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed":
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+        assert mqtt.payloads_for("texecom/alarm/attributes")[-1] == attrs_payload
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)

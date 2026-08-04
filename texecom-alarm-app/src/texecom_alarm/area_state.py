@@ -157,8 +157,11 @@ async def publish_area_state_snapshot(
     settings: Settings,
     topic_prefix: str,
     zone_count: int,
-) -> None:
-    """GetAreaFlags snapshot → retained MQTT for area 1 only (ADR-007)."""
+) -> str:
+    """GetAreaFlags snapshot → retained MQTT for area 1 only (ADR-007).
+
+    Returns the HA payload that was published.
+    """
     area_size = area_size_for_zones(zone_count)
     if area_size != 1:
         # Dual-request area_size==8 path is an ADR-007 open follow-on.
@@ -178,6 +181,7 @@ async def publish_area_state_snapshot(
     )
     await publish_alarm_state(mqtt, payload=payload, topic_prefix=topic_prefix)
     logger.debug("area_state_snapshot_done", extra={"payload": payload})
+    return payload
 
 
 async def handle_area_message(
@@ -186,17 +190,21 @@ async def handle_area_message(
     *,
     settings: Settings,
     topic_prefix: str,
-) -> None:
-    """Publish MQTT alarm state for an AREA push (body[0]==MSG_AREA) for area 1."""
+) -> str | None:
+    """Publish MQTT alarm state for an AREA push (body[0]==MSG_AREA) for area 1.
+
+    Returns the published HA payload string, or None if the message was ignored.
+    """
     if len(body) < 3:
         logger.debug("area_message_short", extra={"body": body.hex()})
-        return
+        return None
     if body[0] != MSG_AREA:
-        return
+        return None
     area_number = body[1]
     state = body[2]
     if area_number != HOUSE_AREA_NUMBER:
         logger.debug("area_message_unused_ignored", extra={"area": area_number})
-        return
+        return None
     payload = mqtt_payload_for_area_state(state, settings)
     await publish_alarm_state(mqtt, payload=payload, topic_prefix=topic_prefix)
+    return payload
