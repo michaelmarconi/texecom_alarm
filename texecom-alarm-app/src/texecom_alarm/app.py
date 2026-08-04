@@ -6,15 +6,17 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
+from texecom_alarm.area_state import handle_area_message, publish_area_state_snapshot
 from texecom_alarm.config import Settings, load_settings
 from texecom_alarm.mqtt.discovery import (
     AVAILABILITY_OFFLINE,
     availability_topic,
+    publish_alarm_discovery,
     publish_zone_discovery,
 )
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
 from texecom_alarm.protocol.client import PanelClient
-from texecom_alarm.protocol.frame import MSG_ZONE
+from texecom_alarm.protocol.frame import MSG_AREA, MSG_ZONE
 from texecom_alarm.zone_state import handle_zone_message, publish_zone_state_snapshot
 from texecom_alarm.zones import enumerate_zones
 
@@ -33,7 +35,7 @@ async def run(
     idle: Callable[[], Awaitable[None]] | None = None,
     login_delay: float | None = None,
 ) -> None:
-    """Connect, enumerate, discover, snapshot zone state, subscribe, then listen."""
+    """Connect, enumerate, discover, snapshot zone+alarm state, subscribe, listen."""
     cfg = settings if settings is not None else load_settings()
     owns_panel = panel is None
 
@@ -72,6 +74,7 @@ async def run(
         )
         mqtt_connected = True
         await publish_zone_discovery(mqtt_client, zones, topic_prefix=cfg.mqtt_topic_prefix)
+        await publish_alarm_discovery(mqtt_client, topic_prefix=cfg.mqtt_topic_prefix)
 
         await publish_zone_state_snapshot(
             panel_client,
@@ -80,18 +83,25 @@ async def run(
             topic_prefix=cfg.mqtt_topic_prefix,
             zone_count=zone_count,
         )
+        await publish_area_state_snapshot(
+            panel_client,
+            mqtt_client,
+            settings=cfg,
+            topic_prefix=cfg.mqtt_topic_prefix,
+            zone_count=zone_count,
+        )
         await panel_client.set_event_messages()
         logger.debug("app_event_messages_subscribed")
 
         in_use = {z.number for z in zones}
         listen_task = asyncio.create_task(
-            _listen_zone_messages(
+            _listen_panel_messages(
                 panel_client,
                 mqtt_client,
                 topic_prefix=cfg.mqtt_topic_prefix,
                 in_use_zones=in_use,
             ),
-            name="zone-listen",
+            name="panel-listen",
         )
 
         if idle is not None:
@@ -123,7 +133,7 @@ async def run(
         logger.debug("app_stop")
 
 
-async def _listen_zone_messages(
+async def _listen_panel_messages(
     panel: PanelClient,
     mqtt: object,
     *,
@@ -131,8 +141,8 @@ async def _listen_zone_messages(
     in_use_zones: set[int],
     idle_timeout: float = _KEEPALIVE_IDLE_TIMEOUT,
 ) -> None:
-    """Steady-state loop: ZONE pushes update MQTT; keepalive on idle timeout."""
-    logger.debug("zone_listen_start")
+    """Steady-state loop: ZONE/AREA pushes update MQTT; keepalive on idle timeout."""
+    logger.debug("panel_listen_start")
     while True:
         try:
             frame = await panel.recv_message(timeout=idle_timeout)
@@ -140,18 +150,29 @@ async def _listen_zone_messages(
             await panel.keepalive()
             continue
         body = frame.body
-        if not body or body[0] != MSG_ZONE:
-            logger.debug(
-                "panel_message_ignored",
-                extra={"subtype": body[0] if body else None},
-            )
+        if not body:
+            logger.debug("panel_message_empty")
             continue
-        await handle_zone_message(
-            mqtt,  # type: ignore[arg-type]
-            body,
-            topic_prefix=topic_prefix,
-            in_use_zones=in_use_zones,
-        )
+        subtype = body[0]
+        if subtype == MSG_ZONE:
+            await handle_zone_message(
+                mqtt,  # type: ignore[arg-type]
+                body,
+                topic_prefix=topic_prefix,
+                in_use_zones=in_use_zones,
+            )
+        elif subtype == MSG_AREA:
+            await handle_area_message(
+                mqtt,  # type: ignore[arg-type]
+                body,
+                topic_prefix=topic_prefix,
+            )
+        else:
+            logger.debug("panel_message_ignored", extra={"subtype": subtype})
+
+
+# Backward-compatible alias for tests that still import the old name.
+_listen_zone_messages = _listen_panel_messages
 
 
 async def _idle_forever() -> None:

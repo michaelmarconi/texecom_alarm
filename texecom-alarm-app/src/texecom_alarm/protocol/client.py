@@ -7,6 +7,8 @@ import logging
 
 from texecom_alarm.protocol.frame import (
     ACK,
+    AREA_FLAGS_COUNT,
+    CMD_GET_AREA_FLAGS,
     CMD_GET_ZONE_STATE,
     CMD_GETDATETIME,
     CMD_LOGIN,
@@ -127,6 +129,31 @@ class PanelClient:
             if len(payload) == 1 and payload[0] == NAK:
                 raise ProtocolError("GetZoneState NAK")
             raise ProtocolError(f"GetZoneState: expected {count} status bytes, got {len(payload)}")
+        return payload
+
+    async def get_area_flags(self, start: int, count: int, *, area_size: int = 1) -> bytes:
+        """GetAreaFlags (cmd 11): return exactly ``count * area_size`` flag bytes.
+
+        Elite 88 path (ADR-007 / SPIKE-007): ``area_size=1``, ``start=0``,
+        ``count=72`` (``AREA_FLAGS_COUNT``). Dual-request ``area_size==8`` panels
+        are out of scope for this task.
+        """
+        if count < 1 or count > AREA_FLAGS_COUNT:
+            raise ProtocolError(f"GetAreaFlags: count {count} out of range 1..{AREA_FLAGS_COUNT}")
+        if not (0 <= start <= 255):
+            raise ProtocolError(f"GetAreaFlags: start {start} out of 1-byte range")
+        if area_size < 1:
+            raise ProtocolError(f"GetAreaFlags: area_size {area_size} must be >= 1")
+        expected = count * area_size
+        logger.debug(
+            "panel_get_area_flags",
+            extra={"start": start, "count": count, "area_size": area_size},
+        )
+        payload = await self.send_command(CMD_GET_AREA_FLAGS, bytes([start, count]))
+        if len(payload) != expected:
+            if len(payload) == 1 and payload[0] == NAK:
+                raise ProtocolError("GetAreaFlags NAK")
+            raise ProtocolError(f"GetAreaFlags: expected {expected} flag bytes, got {len(payload)}")
         return payload
 
     async def set_event_messages(self) -> None:

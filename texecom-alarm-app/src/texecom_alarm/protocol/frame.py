@@ -15,9 +15,15 @@ HEADER_LEN = 4
 CMD_LOGIN = 1
 CMD_GET_ZONE_STATE = 2
 CMD_GETZONEDETAILS = 3
+CMD_GET_AREA_FLAGS = 11
 CMD_GETPANELIDENTIFICATION = 22
 CMD_GETDATETIME = 23
 CMD_SETEVENTMESSAGES = 37
+
+# GetAreaFlags: Elite 88 uses area_size=1 and requests this many flag indices.
+AREA_FLAGS_COUNT = 72
+# zone_count → number of areas (bits in the area bitmap); from the prior MQTT bridge areaMap.
+AREA_MAP = {12: 2, 24: 2, 48: 4, 64: 4, 88: 8, 168: 16, 640: 64}
 
 # Unsolicited 'M' frame subtypes (first body byte after SETEVENTMESSAGES).
 MSG_DEBUG = 0

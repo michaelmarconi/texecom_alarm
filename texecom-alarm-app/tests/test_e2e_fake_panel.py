@@ -144,7 +144,7 @@ async def _e2e_discovery_retained_and_lwt() -> None:
             FakeZone(number=2, zone_type=0, name=""),
             FakeZone(number=3, zone_type=3, name="KITCHEN PIR"),
         ],
-        zone_count=3,
+        zone_count=12,
     )
     await panel.start()
 
@@ -180,6 +180,7 @@ async def _e2e_discovery_retained_and_lwt() -> None:
             identifier="texecom-alarm-e2e-observer",
         ) as observer:
             await observer.subscribe("homeassistant/binary_sensor/+/config")
+            await observer.subscribe("homeassistant/alarm_control_panel/+/config")
             await observer.subscribe("texecom/status")
 
             app_task = asyncio.create_task(
@@ -187,8 +188,11 @@ async def _e2e_discovery_retained_and_lwt() -> None:
             )
             try:
                 deadline = asyncio.get_running_loop().time() + 15.0
+                alarm_cfg = "homeassistant/alarm_control_panel/texecom_alarm_arm_status/config"
                 while asyncio.get_running_loop().time() < deadline and not (
-                    len(discovered) == 2 and AVAILABILITY_ONLINE in status_payloads
+                    len(discovered) >= 3
+                    and alarm_cfg in discovered
+                    and AVAILABILITY_ONLINE in status_payloads
                 ):
                     if app_task.done():
                         exc = app_task.exception()
@@ -209,7 +213,7 @@ async def _e2e_discovery_retained_and_lwt() -> None:
                 assert (
                     "homeassistant/binary_sensor/texecom_alarm_kitchen_pir_3/config" in discovered
                 )
-                assert len(discovered) == 2
+                assert alarm_cfg in discovered
                 assert AVAILABILITY_ONLINE in status_payloads
 
                 front = discovered["homeassistant/binary_sensor/texecom_alarm_front_door_1/config"]
@@ -253,7 +257,7 @@ async def test_e2e_app_run_with_recording_mqtt() -> None:
             FakeZone(number=1, zone_type=1, name="FRONT DOOR"),
             FakeZone(number=2, zone_type=0, name=""),
         ],
-        zone_count=2,
+        zone_count=12,
     )
     await panel.start()
     try:
@@ -280,6 +284,7 @@ async def test_e2e_app_run_with_recording_mqtt() -> None:
 
         topics = [m.topic for m in mqtt.messages]
         assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in topics
+        assert "homeassistant/alarm_control_panel/texecom_alarm_arm_status/config" in topics
         assert "texecom/status" in topics
         assert mqtt.will_payload == AVAILABILITY_OFFLINE
         assert mqtt.payloads_for("texecom/status")[-1] == AVAILABILITY_OFFLINE
@@ -289,7 +294,7 @@ async def test_e2e_app_run_with_recording_mqtt() -> None:
 
 @pytest.mark.asyncio
 async def test_e2e_zone_state_snapshot_and_live_push() -> None:
-    """AC-1/AC-2/AC-3: snapshot MQTT state, live ZONE push, no arm/omit cmds."""
+    """Zone snapshot MQTT state, live ZONE push, no arm/omit cmds."""
     panel = FakePanel(
         udl_password="1234",
         zones=[
@@ -297,7 +302,7 @@ async def test_e2e_zone_state_snapshot_and_live_push() -> None:
             FakeZone(number=2, zone_type=0, name="", status=0x01),
             FakeZone(number=3, zone_type=3, name="KITCHEN PIR", status=0x01),
         ],
-        zone_count=3,
+        zone_count=12,
     )
     await panel.start()
     try:
@@ -340,6 +345,96 @@ async def test_e2e_zone_state_snapshot_and_live_push() -> None:
             await asyncio.sleep(0.02)
 
         assert mqtt.payloads_for("texecom/zone/1/state")[-1] == "1"
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_alarm_snapshot_live_area_and_discovery() -> None:
+    """TASK-6 AC-1/AC-2/AC-3: area-flags snapshot, AREA push, alarm discovery."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[
+            FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00),
+            FakeZone(number=2, zone_type=0, name=""),
+        ],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel, mqtt_port=1883)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        for _ in range(150):
+            if mqtt.payloads_for("texecom/alarm/state") and any(
+                m.topic.startswith("homeassistant/alarm_control_panel/") for m in mqtt.messages
+            ):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        # AC-1: quiet panel → retained disarmed; GetAreaFlags used; no arm/omit.
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+        assert 11 in panel.commands_seen  # CMD_GET_AREA_FLAGS
+        forbidden = {4, 5, 6, 8, 9}
+        assert forbidden.isdisjoint(panel.commands_seen)
+
+        # AC-3: discovery payload shape + shared availability (not panel-link).
+        disc_topic = "homeassistant/alarm_control_panel/texecom_alarm_arm_status/config"
+        disc_msgs = [m for m in mqtt.messages if m.topic == disc_topic]
+        assert disc_msgs
+        assert disc_msgs[0].retain is True
+        payload = json.loads(
+            disc_msgs[0].payload
+            if isinstance(disc_msgs[0].payload, str)
+            else disc_msgs[0].payload.decode()
+        )
+        assert payload["unique_id"] == "texecom_alarm_arm_status"
+        assert payload["object_id"] == "texecom_alarm_arm_status"
+        assert payload["availability_topic"] == "texecom/status"
+        assert "arm_home" in payload["supported_features"]
+        assert "arm_away" in payload["supported_features"]
+        assert "arm_night" in payload["supported_features"]
+        assert payload["command_topic"] == "texecom/alarm/command"
+
+        # AC-2: injected AREA push updates state (0/3/5 at minimum).
+        await panel.inject_area_message(area_number=1, state=3)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_away":
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_away"
+
+        await panel.inject_area_message(area_number=1, state=5)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/alarm/state")[-1] == "triggered":
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "triggered"
+
+        await panel.inject_area_message(area_number=1, state=0)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed":
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)
