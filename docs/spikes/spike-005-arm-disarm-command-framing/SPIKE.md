@@ -8,7 +8,7 @@
 ## Overview
 
 **Question:** Whether a safe, non-guessing way exists to determine the exact command needed to issue `arm_away`/`arm_night`/`arm_home`/`disarm` to this panel, ending with a concrete, ready-to-implement command sequence rather than just a research writeup.
-**Answer:** Yes, for all four actions. `cmd=6` is a single shared "set arm mode" command across Away/Night/Home, with the mode encoded in the body's first byte (`00`/`01`/`02` for this panel's own configuration); `cmd=8, body=01` disarms from any mode, mode-independent. Away and Night were confirmed via passive capture of `the prior MQTT bridge`'s real traffic (reproduced twice and three times respectively). `the prior MQTT bridge` doesn't support Home, so it was confirmed instead by directly testing the one remaining value in an already-validated command structure, corroborated three independent ways (clean ACK, an event sequence matching SPIKE-002's independent prior observation, and direct household confirmation via the app) rather than by blind guessing or a second repetition. A significant incidental finding: the mode-byte-to-slot mapping is engineer-configured per installation, not a protocol constant — this reshaped the project's own scope via a follow-on `/correction`.
+**Answer:** Yes, for all four actions. A single shared "arm" command works across all three arm modes, distinguished only by an installation-specific parameter in its body — meaning the three modes aren't separate commands, just different values of the same one. A separate, single "disarm" command works from any armed or arming state, regardless of mode. Away and Night were confirmed by passively capturing a real, already-in-use local client's genuine traffic, each reproduced multiple times. That client doesn't support Home mode, so its command was confirmed a different way: by directly testing the one remaining untested value of an already-proven-safe command against the live panel, then independently corroborating the result three ways (a clean acknowledgement, an event sequence matching an unrelated earlier spike's own prior observation, and direct household confirmation via the panel's own vendor app) rather than by blind guessing or a second repetition. A significant incidental finding: which mode maps to which underlying value is configured per panel installation by the security engineer, not a fixed protocol fact — this reshaped the project's own scope via a follow-on `/correction`.
 **Recommendation:** Adopt the confirmed command set for production, sourcing the mode-byte mapping from per-installation configuration rather than hardcoding this household's own values (Option A — see below).
 **Decisions this unlocks:** See `## Decisions required` — unblocks Phase 2 build on arm/disarm entirely; requires designing a configuration surface for the mode-byte mapping; surfaces a new spike candidate (`GETAREADETAILS`) for possible auto-detection.
 
@@ -261,6 +261,22 @@ manual configuration).
 
 ## Conclusion
 
+**Hypothesis partially validated.** The Hypothesis's core mechanical claim held completely: a
+first-party client's real traffic, captured passively, does reveal genuine, safe-to-replicate command
+bytes under the already-reverse-engineered Connect-protocol framing, with zero guessing needed for
+Away and Night (`cmd=6` bodies `0001`/`0101`, each reproduced multiple times with clean ACKs and the
+expected event sequences) or for the mode-independent Disarm (`cmd=8, body=01`, reproduced six times
+across every mode and every cancel-during-exit case). The Hypothesis's *specific* claim — that the
+**official Texecom Connect mobile app** would be the client whose Local Connection traffic supplied
+this — was refuted: three whole-network captures found zero evidence the app ever left cloud/remote
+mode on this household's setup (see Research/Results), so `the prior MQTT bridge` was substituted as the
+capture source instead, which is a different client than the Hypothesis named, even though it
+validated the same underlying mechanism. Home mode sits outside both versions of the Hypothesis
+entirely, since neither the app nor `the prior MQTT bridge` reliably supplied it; it was closed by directly
+testing the one remaining value of an already-proven-safe command, corroborated by three independent
+signals (a clean ACK, an event sequence matching SPIKE-002's own independent prior observation, and
+direct household confirmation via the app) rather than by capturing anyone's traffic.
+
 This spike set out to answer one question without guessing against a live, occupied security panel:
 what are the exact bytes needed to actively arm (in all three modes) and disarm this panel? That
 question is now fully answered. `cmd=6` is a single shared "set arm mode" command across all three
@@ -344,3 +360,10 @@ direct test already produced stronger evidence than continuing to wait on the ap
 - What do the still-undecoded LOG event types (`1`, `3`, `31`, `41`, `53`) and the `group` byte on
   every LOG event actually represent? None of these blocked this spike's core question, but a future
   incremental research pass could usefully fill in the rest of this panel's event vocabulary.
+
+## Review
+
+| # | Date | Verdict | Issues |
+|---|------|---------|--------|
+| 1 | 2026-08-04 | Issues found | 2 |
+| 2 | 2026-08-04 | Clear | — |
