@@ -1,10 +1,10 @@
 ---
 id: TASK-6
 title: Publish alarm_control_panel discovery and live arm state
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 16:21'
+updated_date: '2026-08-04 16:29'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
