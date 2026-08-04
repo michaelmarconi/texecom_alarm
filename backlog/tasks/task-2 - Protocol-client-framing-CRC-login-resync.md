@@ -57,5 +57,5 @@ Test strategy: TDD unit tests for CRC/framing; async client tests against FakePa
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->

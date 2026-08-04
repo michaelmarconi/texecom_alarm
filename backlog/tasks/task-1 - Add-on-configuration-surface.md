@@ -57,5 +57,5 @@ Test strategy: pytest unit tests for defaults, required fields, and Part-Arm map
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
