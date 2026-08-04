@@ -4,7 +4,7 @@ title: Persist and publish last-trigger snapshot
 status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 17:17'
+updated_date: '2026-08-04 17:20'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -89,7 +89,7 @@ Verification: `cd texecom-alarm-app && .venv/bin/python -m pytest tests/ -q --co
 Notes/assumptions: Seeded `last_alarm_payload` from the area-flags snapshot return so cold-start already-in-alarm does not invent a snapshot; MSG_LOG recorded as body[1]=type, body[2]=group per protocol-reference.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
