@@ -1,10 +1,10 @@
 ---
 id: TASK-9
 title: Asymmetric reconnect with connectivity binary_sensor
-status: awaiting-review
+status: attention
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 17:35'
+updated_date: '2026-08-04 17:37'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -84,6 +84,17 @@ Note: Reconnect timing defaults (~10s normal / ~90s trigger) rest on a single SP
 
 `cd texecom-alarm-app && python -m pytest tests/test_reconnect.py tests/test_config.py tests/test_mqtt_discovery.py tests/test_e2e_fake_panel.py -q` — FakePanel forced drop with/without prior `triggered`; connectivity OFF then ON; post-reconnect LOGIN + zone/area snapshots + SETEVENTMESSAGES; shortened budgets for speed; zone/alarm discovery still use app LWT only.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Attention
+## Attention
+Category: 1 mechanical
+Attempted: One debug-executor fix cycle for three Bugbot findings (I/O lock on panel close, preserve TriggerActivityBuffer + post-reconnect snapshot edge, panel-link OFF on non-recoverable listen failure); then required re-review of final HEAD.
+Failed: Required re-review still reports mechanical: `tests/test_reconnect.py` fails `ruff format --check` (assert any(...) wrapping around trigger-interval spies). Findings budget is exhausted — no second automated fix round.
+Decision needed: Apply the ruff format fix on the task-9 branch (or otherwise resolve) and reset TASK-9 out of attention so `/build` can re-review/merge; or discard the worktree. Worktree left at `.worktrees/task-9` on branch `task-9`.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
