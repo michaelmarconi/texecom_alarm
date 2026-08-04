@@ -1,10 +1,10 @@
 ---
 id: TASK-8
 title: Persist and publish last-trigger snapshot
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 17:09'
+updated_date: '2026-08-04 17:17'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -82,8 +82,14 @@ Test strategy: `cd texecom-alarm-app && python -m pytest tests/test_trigger_snap
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Implemented ADR-004 last-trigger snapshot — rolling ZONE/LOG buffer, retained MQTT attributes on enter-alarm, discovery `json_attributes_topic`, disarm leaves attributes intact.
+Changed files: texecom-alarm-app/src/texecom_alarm/trigger_snapshot.py, texecom-alarm-app/src/texecom_alarm/mqtt/discovery.py, texecom-alarm-app/src/texecom_alarm/area_state.py, texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/tests/test_trigger_snapshot.py, texecom-alarm-app/tests/test_mqtt_discovery.py, texecom-alarm-app/tests/test_area_state.py, texecom-alarm-app/tests/test_e2e_fake_panel.py
+Verification: `cd texecom-alarm-app && .venv/bin/python -m pytest tests/ -q --cov=texecom_alarm --cov-fail-under=90` → 140 passed, 92.68% coverage; ruff check/format clean; bandit + pip-audit clean
+Notes/assumptions: Seeded `last_alarm_payload` from the area-flags snapshot return so cold-start already-in-alarm does not invent a snapshot; MSG_LOG recorded as body[1]=type, body[2]=group per protocol-reference.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
