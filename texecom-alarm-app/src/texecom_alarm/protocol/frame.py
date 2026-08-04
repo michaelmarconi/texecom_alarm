@@ -13,12 +13,25 @@ TYPE_MESSAGE = ord("M")
 HEADER_LEN = 4
 
 CMD_LOGIN = 1
+CMD_GET_ZONE_STATE = 2
 CMD_GETZONEDETAILS = 3
 CMD_GETPANELIDENTIFICATION = 22
 CMD_GETDATETIME = 23
+CMD_SETEVENTMESSAGES = 37
+
+# Unsolicited 'M' frame subtypes (first body byte after SETEVENTMESSAGES).
+MSG_DEBUG = 0
+MSG_ZONE = 1
+MSG_AREA = 2
+MSG_OUTPUT = 3
+MSG_USER = 4
+MSG_LOG = 5
 
 ACK = 0x06
 NAK = 0x15
+
+# GetZoneState batches at most this many zones per request (observed add-on).
+MAX_ZONES_PER_STATE_REQUEST = 168
 
 
 @dataclass(frozen=True, slots=True)

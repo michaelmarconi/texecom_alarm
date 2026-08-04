@@ -285,3 +285,63 @@ async def test_e2e_app_run_with_recording_mqtt() -> None:
         assert mqtt.payloads_for("texecom/status")[-1] == AVAILABILITY_OFFLINE
     finally:
         await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_zone_state_snapshot_and_live_push() -> None:
+    """AC-1/AC-2/AC-3: snapshot MQTT state, live ZONE push, no arm/omit cmds."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[
+            FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00),
+            FakeZone(number=2, zone_type=0, name="", status=0x01),
+            FakeZone(number=3, zone_type=3, name="KITCHEN PIR", status=0x01),
+        ],
+        zone_count=3,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel, mqtt_port=1883)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/zone/1/state") and mqtt.payloads_for(
+                "texecom/zone/3/state"
+            ):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        assert mqtt.payloads_for("texecom/zone/1/state")[-1] == "0"
+        assert mqtt.payloads_for("texecom/zone/3/state")[-1] == "1"
+        assert mqtt.payloads_for("texecom/zone/2/state") == []
+        forbidden = {4, 5, 6, 8, 9}
+        assert forbidden.isdisjoint(panel.commands_seen)
+
+        await panel.inject_zone_message(zone_number=1, status=0x01)
+        for _ in range(100):
+            payloads = mqtt.payloads_for("texecom/zone/1/state")
+            if payloads and payloads[-1] == "1":
+                break
+            await asyncio.sleep(0.02)
+
+        assert mqtt.payloads_for("texecom/zone/1/state")[-1] == "1"
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()

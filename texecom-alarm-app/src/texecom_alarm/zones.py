@@ -67,8 +67,12 @@ def zone_slug(name: str, *, zone_number: int) -> str:
     return f"{base}_{zone_number}"
 
 
-async def enumerate_zones(client: PanelClient) -> list[Zone]:
-    """LOGIN must already have succeeded. Ask the panel for in-use zones only."""
+async def enumerate_zones(client: PanelClient) -> tuple[list[Zone], int]:
+    """LOGIN must already have succeeded. Ask the panel for in-use zones only.
+
+    Returns ``(in_use_zones, panel_zone_count)`` so callers can run a GetZoneState
+    snapshot over the full slot range (ADR-006) without a second identification query.
+    """
     logger.debug("zone_enumerate_start")
     ident = await client.send_command(CMD_GETPANELIDENTIFICATION)
     zone_count = parse_zone_count(ident)
@@ -88,4 +92,4 @@ async def enumerate_zones(client: PanelClient) -> list[Zone]:
         )
 
     logger.debug("zone_enumerate_done", extra={"in_use": len(in_use)})
-    return in_use
+    return in_use, zone_count
