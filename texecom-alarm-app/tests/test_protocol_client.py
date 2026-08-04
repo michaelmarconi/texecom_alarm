@@ -130,6 +130,46 @@ async def test_get_zone_state_rejects_invalid_count(panel: FakePanel) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_zone_state_accepts_status_byte_equal_to_nak() -> None:
+    """count=1 status 0x15 is a valid bitmap, not a GetZoneState NAK."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="A", status=0x15)],
+        zone_count=1,
+    )
+    await panel.start()
+    try:
+        client = await _logged_in_client(panel)
+        statuses = await client.get_zone_state(1, 1)
+        assert statuses == bytes([0x15])
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_zone_state_nak_when_length_mismatches() -> None:
+    """True NAK is a single 0x15 when the panel rejects the request (len != count)."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[
+            FakeZone(number=1, zone_type=1, name="A", status=0x00),
+            FakeZone(number=2, zone_type=1, name="B", status=0x00),
+        ],
+        zone_count=2,
+    )
+    await panel.start()
+    try:
+        client = await _logged_in_client(panel)
+        panel.zone_state_override = bytes([0x15])  # NAK-shaped, wrong length for count=2
+        with pytest.raises(ProtocolError, match="GetZoneState NAK"):
+            await client.get_zone_state(1, 2)
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
 async def test_get_zone_state_returns_status_bytes() -> None:
     panel = FakePanel(
         udl_password="1234",

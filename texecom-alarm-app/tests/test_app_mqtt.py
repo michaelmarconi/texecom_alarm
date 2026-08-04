@@ -9,11 +9,12 @@ import pytest
 from tests.fake_panel import FakePanel, FakeZone
 from tests.recording_mqtt import RecordingMqttPublisher
 
-from texecom_alarm.app import main, run
+from texecom_alarm.app import _listen_zone_messages, main, run
 from texecom_alarm.config import Settings
 from texecom_alarm.mqtt.discovery import AVAILABILITY_OFFLINE, AVAILABILITY_ONLINE
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
 from texecom_alarm.protocol.client import PanelClient
+from texecom_alarm.protocol.frame import CMD_GETDATETIME
 
 
 def _settings(panel: FakePanel) -> Settings:
@@ -30,6 +31,50 @@ def _settings(panel: FakePanel) -> Settings:
         part_arm_night=1,
         part_arm_home=2,
     )
+
+
+@pytest.mark.asyncio
+async def test_listen_loop_sends_keepalive_on_idle_timeout() -> None:
+    """Regression: passive listen must keepalive or the panel drops after ~60s."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=1,
+    )
+    await panel.start()
+    try:
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        before = panel.keepalive_attempts
+        task = asyncio.create_task(
+            _listen_zone_messages(
+                client,
+                mqtt,
+                topic_prefix="texecom",
+                in_use_zones={1},
+                idle_timeout=0.05,
+            )
+        )
+        for _ in range(50):
+            if panel.keepalive_attempts > before:
+                break
+            await asyncio.sleep(0.02)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        assert panel.keepalive_attempts > before
+        assert panel.last_command == CMD_GETDATETIME
+        await client.close()
+    finally:
+        await panel.stop()
 
 
 @pytest.mark.asyncio

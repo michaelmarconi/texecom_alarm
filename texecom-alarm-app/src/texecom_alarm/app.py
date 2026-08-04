@@ -20,6 +20,10 @@ from texecom_alarm.zones import enumerate_zones
 
 logger = logging.getLogger(__name__)
 
+# Panel drops passive listen-only sessions after ~60s; ~15s GETDATETIME keeps alive
+# (docs/protocol-reference.md). Used as recv_message idle timeout → keepalive.
+_KEEPALIVE_IDLE_TIMEOUT = 15.0
+
 
 async def run(
     settings: Settings | None = None,
@@ -125,13 +129,15 @@ async def _listen_zone_messages(
     *,
     topic_prefix: str,
     in_use_zones: set[int],
+    idle_timeout: float = _KEEPALIVE_IDLE_TIMEOUT,
 ) -> None:
-    """Steady-state loop: ZONE pushes update MQTT; other subtypes are ignored."""
+    """Steady-state loop: ZONE pushes update MQTT; keepalive on idle timeout."""
     logger.debug("zone_listen_start")
     while True:
         try:
-            frame = await panel.recv_message(timeout=1.0)
+            frame = await panel.recv_message(timeout=idle_timeout)
         except TimeoutError:
+            await panel.keepalive()
             continue
         body = frame.body
         if not body or body[0] != MSG_ZONE:
