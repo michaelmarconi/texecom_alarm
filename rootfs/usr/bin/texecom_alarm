@@ -1,3 +1,3 @@
-#!/bin/bash
-
-echo "All done! Replace this with the real Texecom <-> MQTT bridge."
+#!/usr/bin/env bash
+# Supervisor s6 service entry — run the asyncio bridge under the exported TEXECOM_* env.
+exec python3 -m texecom_alarm
