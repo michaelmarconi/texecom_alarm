@@ -63,5 +63,5 @@ Test strategy: TDD for enum skip-unused and discovery JSON shape via recording s
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
