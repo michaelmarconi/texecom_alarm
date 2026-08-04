@@ -4,7 +4,7 @@ title: Add-on configuration surface
 status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:51'
-updated_date: '2026-08-04 13:41'
+updated_date: '2026-08-04 13:44'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -63,5 +63,5 @@ Verification: `pytest --cov=texecom_alarm --cov-fail-under=90` → 21 passed, 10
 Notes/assumptions: Option keys chosen as `panel_host`/`panel_port`/`udl_password`/`mqtt_*`/`part_arm_{away,night,home}` (task listed fields, not exact names). Schema defaults for Part-Arm are `0`/`1`/`2` (overridable per ADR-005/architecture). Also updated `translations/en.yaml` so Supervisor UI labels match. Worktree had no usable venv (`ensurepip` missing); verified via primary checkout `.venv`.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
