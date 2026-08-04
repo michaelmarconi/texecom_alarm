@@ -155,14 +155,14 @@ async def _e2e_discovery_retained_and_lwt() -> None:
             elif topic == "texecom/status":
                 status_payloads.append(payload)
 
-        assert "homeassistant/binary_sensor/texecom_alarm_front_door/config" in discovered
-        assert "homeassistant/binary_sensor/texecom_alarm_kitchen_pir/config" in discovered
+        assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in discovered
+        assert "homeassistant/binary_sensor/texecom_alarm_kitchen_pir_3/config" in discovered
         assert len(discovered) == 2
         assert AVAILABILITY_ONLINE in status_payloads
 
-        front = discovered["homeassistant/binary_sensor/texecom_alarm_front_door/config"]
+        front = discovered["homeassistant/binary_sensor/texecom_alarm_front_door_1/config"]
         assert front["availability_topic"] == "texecom/status"
-        assert front["unique_id"] == "texecom_alarm_front_door"
+        assert front["unique_id"] == "texecom_alarm_front_door_1"
 
         # Simulate app-process crash: abort MQTT TCP without DISCONNECT → broker LWT.
         await mqtt.abort()
@@ -231,8 +231,9 @@ async def test_e2e_app_run_with_recording_mqtt() -> None:
         await asyncio.wait_for(task, timeout=2.0)
 
         topics = [m.topic for m in mqtt.messages]
-        assert "homeassistant/binary_sensor/texecom_alarm_front_door/config" in topics
+        assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in topics
         assert "texecom/status" in topics
         assert mqtt.will_payload == AVAILABILITY_OFFLINE
+        assert mqtt.payloads_for("texecom/status")[-1] == AVAILABILITY_OFFLINE
     finally:
         await panel.stop()

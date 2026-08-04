@@ -30,7 +30,7 @@ def availability_topic(topic_prefix: str) -> str:
 
 
 def zone_object_id(zone: Zone) -> str:
-    """Provisional object_id matching today's binary_sensor.texecom_alarm_* naming."""
+    """Provisional object_id: texecom_alarm_{slug}_{zone_number} (unique per zone)."""
     return f"texecom_alarm_{zone_slug(zone.name, zone_number=zone.number)}"
 
 
