@@ -84,5 +84,5 @@ Note: Physical open/close flip was not run in SPIKE-006; CI proves snapshot and 
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
