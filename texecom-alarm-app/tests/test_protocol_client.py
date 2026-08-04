@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import pytest
-from tests.fake_panel import FakePanel
+from tests.fake_panel import FakePanel, FakeZone
 
 from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient, ProtocolError
-from texecom_alarm.protocol.frame import CMD_GETDATETIME
+from texecom_alarm.protocol.frame import CMD_GETDATETIME, CMD_SETEVENTMESSAGES, MSG_ZONE
 
 
 @pytest.fixture
@@ -112,7 +112,109 @@ async def test_interleaved_message_then_response(panel: FakePanel) -> None:
     panel.interleave_message_before_response = b"\x01\x02\x01"
     payload = await client.keepalive()
     assert payload[0] == 0x18
+    queued = await client.recv_message(timeout=0.2)
+    assert queued.body == b"\x01\x02\x01"
     await client.close()
+
+
+@pytest.mark.asyncio
+async def test_get_zone_state_rejects_invalid_count(panel: FakePanel) -> None:
+    client = await _logged_in_client(panel)
+    with pytest.raises(ProtocolError, match="count"):
+        await client.get_zone_state(1, 0)
+    with pytest.raises(ProtocolError, match="count"):
+        await client.get_zone_state(1, 169)
+    with pytest.raises(ProtocolError, match="start"):
+        await client.get_zone_state(0, 1)
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_get_zone_state_returns_status_bytes() -> None:
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[
+            FakeZone(number=1, zone_type=1, name="A", status=0x00),
+            FakeZone(number=2, zone_type=1, name="B", status=0x01),
+            FakeZone(number=3, zone_type=0, name="", status=0x02),
+        ],
+        zone_count=3,
+    )
+    await panel.start()
+    try:
+        client = await _logged_in_client(panel)
+        statuses = await client.get_zone_state(1, 3)
+        assert statuses == bytes([0x00, 0x01, 0x02])
+        assert panel.last_command == 2  # CMD_GET_ZONE_STATE
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_zone_state_length_mismatch_raises() -> None:
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="A", status=0x00)],
+        zone_count=1,
+    )
+    await panel.start()
+    try:
+        client = await _logged_in_client(panel)
+        panel.zone_state_override = b"\x00\x00"  # wrong length for count=1
+        with pytest.raises(ProtocolError, match="GetZoneState"):
+            await client.get_zone_state(1, 1)
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_set_event_messages_sends_expected_bitmask() -> None:
+    panel = FakePanel(udl_password="1234")
+    await panel.start()
+    try:
+        client = await _logged_in_client(panel)
+        await client.set_event_messages()
+        assert panel.last_command == CMD_SETEVENTMESSAGES
+        assert panel.last_seteventmessages_body == bytes([0x3F, 0x00])
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_recv_message_receives_injected_zone_push() -> None:
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=1,
+    )
+    await panel.start()
+    try:
+        client = await _logged_in_client(panel)
+        await panel.inject_zone_message(zone_number=1, status=0x01)
+        msg = await client.recv_message(timeout=1.0)
+        assert msg.body[0] == MSG_ZONE
+        assert msg.body[1] == 1
+        assert msg.body[2] == 0x01
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_set_event_messages_ack_is_success() -> None:
+    panel = FakePanel(udl_password="1234")
+    await panel.start()
+    try:
+        client = await _logged_in_client(panel)
+        # Handler returns ACK; method should not raise.
+        await client.set_event_messages()
+        assert panel.seteventmessages_calls == 1
+        await client.close()
+    finally:
+        await panel.stop()
 
 
 @pytest.mark.asyncio

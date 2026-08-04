@@ -10,11 +10,15 @@ from dataclasses import dataclass
 from texecom_alarm.protocol.crc import crc8
 from texecom_alarm.protocol.frame import (
     ACK,
+    CMD_GET_ZONE_STATE,
     CMD_GETDATETIME,
     CMD_GETPANELIDENTIFICATION,
     CMD_GETZONEDETAILS,
     CMD_LOGIN,
+    CMD_SETEVENTMESSAGES,
     HEADER_START,
+    MSG_ZONE,
+    NAK,
     TYPE_COMMAND,
     TYPE_MESSAGE,
     TYPE_RESPONSE,
@@ -33,6 +37,7 @@ class FakeZone:
     number: int
     zone_type: int
     name: str
+    status: int = 0
 
 
 class FakePanel:
@@ -54,6 +59,7 @@ class FakePanel:
         self.inject_bytes: bytes = b""
         self.drop_next_command_responses = 0
         self.last_command: int | None = None
+        self.commands_seen: list[int] = []
         self.keepalive_attempts = 0
         self.keepalive_sequences: list[int] = []
         self.resync_survivals = 0
@@ -71,11 +77,16 @@ class FakePanel:
         else:
             self.zone_count = 0
         self.zone_detail_queries: list[int] = []
+        self.zone_state_override: bytes | None = None
+        self.last_seteventmessages_body: bytes | None = None
+        self.seteventmessages_calls = 0
         self._handlers: dict[int, Callable[[Frame], bytes]] = {
             CMD_LOGIN: self._handle_login,
             CMD_GETDATETIME: self._handle_getdatetime,
             CMD_GETPANELIDENTIFICATION: self._handle_get_panel_identification,
             CMD_GETZONEDETAILS: self._handle_get_zone_details,
+            CMD_GET_ZONE_STATE: self._handle_get_zone_state,
+            CMD_SETEVENTMESSAGES: self._handle_set_event_messages,
         }
 
     async def start(self) -> None:
@@ -98,6 +109,15 @@ class FakePanel:
 
     def inject_before_next_response(self, junk: bytes) -> None:
         self.inject_bytes = junk
+
+    async def inject_zone_message(self, zone_number: int, status: int) -> None:
+        """Push an unsolicited ZONE ``'M'`` frame to the connected client."""
+        writer = self._writer
+        if writer is None or writer.is_closing():
+            raise RuntimeError("FakePanel has no connected client")
+        body = bytes([MSG_ZONE, zone_number, status])
+        writer.write(encode_frame(TYPE_MESSAGE, 0, body))
+        await writer.drain()
 
     def connect(self) -> None:
         """Sync stub retained for older e2e smoke shape."""
@@ -135,6 +155,7 @@ class FakePanel:
             return
         cmd = frame.body[0]
         self.last_command = cmd
+        self.commands_seen.append(cmd)
         if cmd == CMD_GETDATETIME:
             self.keepalive_attempts += 1
             self.keepalive_sequences.append(frame.sequence)
@@ -226,3 +247,23 @@ class FakePanel:
         name_bytes = zone.name.encode("ascii", errors="replace")[:32].ljust(32, b"\x00")
         payload = bytes([zone.zone_type, 0x01]) + name_bytes
         return bytes([CMD_GETZONEDETAILS]) + payload
+
+    def _handle_get_zone_state(self, frame: Frame) -> bytes:
+        if self.zone_state_override is not None:
+            override = self.zone_state_override
+            self.zone_state_override = None
+            return bytes([CMD_GET_ZONE_STATE]) + override
+        if len(frame.body) < 3:
+            return bytes([CMD_GET_ZONE_STATE, NAK])
+        start = frame.body[1]
+        count = frame.body[2]
+        statuses = bytearray()
+        for number in range(start, start + count):
+            zone = self._zones.get(number)
+            statuses.append(0 if zone is None else zone.status)
+        return bytes([CMD_GET_ZONE_STATE]) + bytes(statuses)
+
+    def _handle_set_event_messages(self, frame: Frame) -> bytes:
+        self.seteventmessages_calls += 1
+        self.last_seteventmessages_body = frame.body[1:]
+        return bytes([CMD_SETEVENTMESSAGES, ACK])
