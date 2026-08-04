@@ -1,10 +1,10 @@
 ---
 id: TASK-9
 title: Asymmetric reconnect with connectivity binary_sensor
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 17:03'
+updated_date: '2026-08-04 17:21'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
