@@ -9,6 +9,26 @@ arch:
   - amd64
 init: false
 options:
-  message: "Hello world..."
+  panel_host: ""
+  panel_port: 10001
+  udl_password: ""
+  mqtt_host: ""
+  mqtt_port: 1883
+  mqtt_username: ""
+  mqtt_password: ""
+  mqtt_topic_prefix: texecom
+  part_arm_away: 0
+  part_arm_night: 1
+  part_arm_home: 2
 schema:
-  message: "str?"
+  panel_host: str
+  panel_port: port
+  udl_password: password
+  mqtt_host: str
+  mqtt_port: port
+  mqtt_username: str?
+  mqtt_password: password?
+  mqtt_topic_prefix: str
+  part_arm_away: int(0,255)
+  part_arm_night: int(0,255)
+  part_arm_home: int(0,255)
