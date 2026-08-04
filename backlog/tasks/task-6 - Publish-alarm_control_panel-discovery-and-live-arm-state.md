@@ -4,7 +4,7 @@ title: Publish alarm_control_panel discovery and live arm state
 status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 16:40'
+updated_date: '2026-08-04 16:46'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -95,11 +95,11 @@ Note: Exit/entry (arming/pending) come from live AREA pushes only; the area-flag
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build result
-Summary: MQTT alarm_control_panel discovery plus GetAreaFlags startup snapshot and live AREA state updates for area 1.
+Summary: MQTT alarm_control_panel discovery plus GetAreaFlags snapshot and live AREA updates; live Part-Arm bytes 6/7 now use Settings.part_arm_* (Bugbot mechanical fix).
 Changed files: texecom-alarm-app/src/texecom_alarm/protocol/frame.py, texecom-alarm-app/src/texecom_alarm/protocol/client.py, texecom-alarm-app/src/texecom_alarm/area_state.py, texecom-alarm-app/src/texecom_alarm/mqtt/discovery.py, texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/tests/fake_panel.py, texecom-alarm-app/tests/test_area_state.py, texecom-alarm-app/tests/test_mqtt_discovery.py, texecom-alarm-app/tests/test_protocol_client.py, texecom-alarm-app/tests/test_e2e_fake_panel.py, texecom-alarm-app/tests/test_app_mqtt.py
-Verification: pytest --cov=texecom_alarm --cov-fail-under=90 — 115 passing, 93% coverage; ruff check/format clean; bandit -r src -ll clean
-Notes/assumptions: FakePanel app-path fixtures use zone_count=12 (smallest AREA_MAP entry) so area_size derivation works in CI without inventing map keys; Elite 88 path (start=0, count=72, area_size=1) is implemented; area_size==8 dual-request raises ProtocolError (ADR-007 follow-on); PartArm slot → HA mode via inverted Settings.part_arm_*; command_topic published with no subscriber (DRAFT-3).
+Verification: pytest --cov=texecom_alarm --cov-fail-under=90 — 117 passing, 93% coverage (one intermittent e2e flake on first post-fix run, green on re-run)
+Notes/assumptions: FakePanel fixtures use zone_count=12; Elite 88 path implemented; area_size==8 dual-request raises ProtocolError; command_topic published with no subscriber (DRAFT-3); AREA byte 6→slot 1, 7→slot 2; Part Arm 3 / state 8 left unmapped (untested). Residual Bugbot note addressed in fix commit.
 
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
