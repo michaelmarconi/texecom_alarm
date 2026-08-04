@@ -1,4 +1,4 @@
-"""HA MQTT discovery payload builders for zone binary_sensors."""
+"""HA MQTT discovery payload builders for zone binary_sensors and alarm panel."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 AVAILABILITY_ONLINE = "online"
 AVAILABILITY_OFFLINE = "offline"
+
+ALARM_OBJECT_ID = "texecom_alarm_arm_status"
 
 
 class MqttPublisher(Protocol):
@@ -42,6 +44,18 @@ def zone_discovery_topic(object_id: str) -> str:
     return f"homeassistant/binary_sensor/{object_id}/config"
 
 
+def alarm_state_topic(topic_prefix: str) -> str:
+    return f"{topic_prefix}/alarm/state"
+
+
+def alarm_command_topic(topic_prefix: str) -> str:
+    return f"{topic_prefix}/alarm/command"
+
+
+def alarm_discovery_topic(object_id: str = ALARM_OBJECT_ID) -> str:
+    return f"homeassistant/alarm_control_panel/{object_id}/config"
+
+
 def zone_discovery_payload(zone: Zone, *, topic_prefix: str) -> dict[str, object]:
     object_id = zone_object_id(zone)
     return {
@@ -54,6 +68,22 @@ def zone_discovery_payload(zone: Zone, *, topic_prefix: str) -> dict[str, object
         "payload_not_available": AVAILABILITY_OFFLINE,
         "payload_on": "1",
         "payload_off": "0",
+    }
+
+
+def alarm_discovery_payload(*, topic_prefix: str) -> dict[str, object]:
+    return {
+        "name": "Arm Status",
+        "unique_id": ALARM_OBJECT_ID,
+        "object_id": ALARM_OBJECT_ID,
+        "state_topic": alarm_state_topic(topic_prefix),
+        "command_topic": alarm_command_topic(topic_prefix),
+        "availability_topic": availability_topic(topic_prefix),
+        "payload_available": AVAILABILITY_ONLINE,
+        "payload_not_available": AVAILABILITY_OFFLINE,
+        "code_arm_required": False,
+        "code_disarm_required": False,
+        "supported_features": ["arm_home", "arm_away", "arm_night"],
     }
 
 
@@ -78,3 +108,19 @@ async def publish_zone_discovery(
             "mqtt_discovery_published",
             extra={"topic": topic, "zone": zone.number, "object_id": object_id},
         )
+
+
+async def publish_alarm_discovery(
+    mqtt: MqttPublisher,
+    *,
+    topic_prefix: str,
+) -> None:
+    """Publish retained alarm_control_panel discovery (ADR-003)."""
+    topic = alarm_discovery_topic()
+    payload = alarm_discovery_payload(topic_prefix=topic_prefix)
+    body = json.dumps(payload, separators=(",", ":"))
+    await mqtt.publish(topic, body, retain=True)
+    logger.debug(
+        "mqtt_alarm_discovery_published",
+        extra={"topic": topic, "object_id": ALARM_OBJECT_ID},
+    )
