@@ -1,10 +1,10 @@
 ---
 id: TASK-1
 title: Add-on configuration surface
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:51'
-updated_date: '2026-08-04 13:37'
+updated_date: '2026-08-04 13:41'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -56,6 +56,12 @@ Test strategy: pytest unit tests for defaults, required fields, and Part-Arm map
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Replaced placeholder `message` with panel/MQTT/Part-Arm options, typed `Settings` loader, tests, DOCS, and bashio wiring.
+Changed files: config.yaml, DOCS.md, rootfs/etc/services.d/texecom_alarm/run, translations/en.yaml, texecom-alarm-app/src/texecom_alarm/config.py, texecom-alarm-app/tests/test_config.py
+Verification: `pytest --cov=texecom_alarm --cov-fail-under=90` → 21 passed, 100% coverage; `ruff check` + `ruff format --check` pass; `bandit -r src -ll` + `pip-audit` pass
+Notes/assumptions: Option keys chosen as `panel_host`/`panel_port`/`udl_password`/`mqtt_*`/`part_arm_{away,night,home}` (task listed fields, not exact names). Schema defaults for Part-Arm are `0`/`1`/`2` (overridable per ADR-005/architecture). Also updated `translations/en.yaml` so Supervisor UI labels match. Worktree had no usable venv (`ensurepip` missing); verified via primary checkout `.venv`.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
