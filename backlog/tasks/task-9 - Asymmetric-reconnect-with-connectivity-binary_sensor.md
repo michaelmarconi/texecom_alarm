@@ -1,10 +1,10 @@
 ---
 id: TASK-9
 title: Asymmetric reconnect with connectivity binary_sensor
-status: attention
+status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 17:37'
+updated_date: '2026-08-04 17:50'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -100,10 +100,10 @@ Decision needed: Apply the ruff format fix on the task-9 branch (or otherwise re
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build result
-Summary: Fixed reconnect/command I/O race, preserved trigger buffer + post-reconnect snapshot edge, and panel-link OFF on non-recoverable listen failure.
-Changed files: texecom-alarm-app/src/texecom_alarm/protocol/client.py, texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/tests/test_protocol_client.py, texecom-alarm-app/tests/test_reconnect.py (plus prior TASK-9 files on branch)
-Verification: `uv run pytest --cov=texecom_alarm --cov-fail-under=90 -q` → 160 passed, 93.28% coverage; ruff clean
-Notes/assumptions: Finding 1 fixed at PanelClient.close()/send_command via _io_lock. Finding 2: buffer survives reconnect; maybe_publish_trigger_snapshot after resume — already-triggered→triggered still does not invent. Finding 3: except Exception publishes panel-link OFF then re-raises. Initial Bugbot notes addressed in one fix cycle; re-review required (no re-Bugbot).
+Summary: Practitioner cleared attention; only remaining re-review finding was ruff-format on test_reconnect.py — verified clean under project pre-commit ruff 0.8.4 (uv/venv ruff 0.16.1 disagreed; no code change needed).
+Changed files: (branch tip unchanged from fix commit 3bde3c2) texecom-alarm-app reconnect feature + I/O/buffer/panel-link fix
+Verification: pre-commit ruff 0.8.4 `ruff format --check tests/test_reconnect.py` → already formatted; proceeding to required re-review
+Notes/assumptions: Do not treat uv ruff 0.16 format prefs as gate; CI/DoD use pre-commit rev v0.8.4.
 
 ## Build phase
 phase: awaiting-review
