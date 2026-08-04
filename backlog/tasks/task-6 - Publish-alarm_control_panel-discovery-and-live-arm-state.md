@@ -4,7 +4,7 @@ title: Publish alarm_control_panel discovery and live arm state
 status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 16:46'
+updated_date: '2026-08-04 16:48'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -101,5 +101,5 @@ Verification: pytest --cov=texecom_alarm --cov-fail-under=90 — 117 passing, 93
 Notes/assumptions: FakePanel fixtures use zone_count=12; Elite 88 path implemented; area_size==8 dual-request raises ProtocolError; command_topic published with no subscriber (DRAFT-3); AREA byte 6→slot 1, 7→slot 2; Part Arm 3 / state 8 left unmapped (untested). Residual Bugbot note addressed in fix commit.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
