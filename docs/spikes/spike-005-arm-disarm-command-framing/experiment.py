@@ -158,10 +158,16 @@ PCAP_MAGIC_BE = 0xD4C3B2A1
 PCAP_MAGIC_BE_NS = 0x4D3CB2A1
 
 
+LINKTYPE_ETHERNET = 1
+LINKTYPE_LINUX_SLL = 113   # "Linux cooked capture" v1
+LINKTYPE_LINUX_SLL2 = 276  # "Linux cooked capture" v2
+SUPPORTED_LINKTYPES = {LINKTYPE_ETHERNET, LINKTYPE_LINUX_SLL, LINKTYPE_LINUX_SLL2}
+
+
 def read_pcap_packets(path):
-    """Yield (timestamp, raw_packet_bytes) for every packet in a classic
-    libpcap file. Does not support pcapng - see module docstring for the
-    conversion command if your capture tool produced pcapng instead."""
+    """Yield (timestamp, raw_packet_bytes, linktype) for every packet in a
+    classic libpcap file. Does not support pcapng - see module docstring for
+    the conversion command if your capture tool produced pcapng instead."""
     with open(path, "rb") as f:
         magic_raw = f.read(4)
         if len(magic_raw) < 4:
@@ -183,10 +189,12 @@ def read_pcap_packets(path):
         _ver_major, _ver_minor, _thiszone, _sigfigs, _snaplen, linktype = struct.unpack(
             endian + "HHiIII", header
         )
-        if linktype != 1:  # LINKTYPE_ETHERNET
+        if linktype not in SUPPORTED_LINKTYPES:
             raise ValueError(
-                f"{path}: link type {linktype} is not Ethernet (1) - this script "
-                "only decodes Ethernet-framed captures."
+                f"{path}: link type {linktype} is not one of the supported types "
+                f"{sorted(SUPPORTED_LINKTYPES)} (Ethernet / Linux cooked v1 / Linux cooked "
+                "v2) - e.g. `tcpdump -i any` produces Linux cooked framing, which is now "
+                "supported; other link types are not."
             )
         while True:
             rec_header = f.read(16)
@@ -196,21 +204,41 @@ def read_pcap_packets(path):
             packet = f.read(incl_len)
             if len(packet) < incl_len:
                 return
-            yield ts_sec + ts_usec / 1_000_000.0, packet
+            yield ts_sec + ts_usec / 1_000_000.0, packet, linktype
 
 
-def parse_ipv4_tcp(packet: bytes):
+def parse_ipv4_tcp(packet: bytes, linktype: int = LINKTYPE_ETHERNET):
     """Return (src_ip, src_port, dst_ip, dst_port, seq, payload) for an
-    Ethernet-framed IPv4/TCP packet, or None if it isn't one."""
-    if len(packet) < 14:
-        return None
-    eth_type = struct.unpack(">H", packet[12:14])[0]
-    offset = 14
-    if eth_type == 0x8100:  # 802.1Q VLAN tag
-        if len(packet) < 18:
+    IPv4/TCP packet framed per `linktype`, or None if it isn't one.
+
+    Supports Ethernet (linktype 1) and both "Linux cooked capture" variants
+    (linktype 113/276) produced by `tcpdump -i any`, since the pseudo-`any`
+    device has no single, consistent L2 header to use real Ethernet framing."""
+    if linktype == LINKTYPE_LINUX_SLL2:
+        # 20-byte SLL2 header: protocol_type(2) reserved(2) if_index(4)
+        # link_layer_type(2) packet_type(1) addr_len(1) addr(8).
+        if len(packet) < 20:
             return None
-        eth_type = struct.unpack(">H", packet[16:18])[0]
-        offset = 18
+        eth_type = struct.unpack(">H", packet[0:2])[0]
+        offset = 20
+    elif linktype == LINKTYPE_LINUX_SLL:
+        # 16-byte SLL header: packet_type(2) addr_type(2) addr_len(2) addr(8)
+        # protocol_type(2).
+        if len(packet) < 16:
+            return None
+        eth_type = struct.unpack(">H", packet[14:16])[0]
+        offset = 16
+    else:
+        if len(packet) < 14:
+            return None
+        eth_type = struct.unpack(">H", packet[12:14])[0]
+        offset = 14
+        if eth_type == 0x8100:  # 802.1Q VLAN tag
+            if len(packet) < 18:
+                return None
+            eth_type = struct.unpack(">H", packet[16:18])[0]
+            offset = 18
+
     if eth_type != 0x0800:  # IPv4
         return None
 
@@ -245,9 +273,9 @@ def reassemble_streams(pcap_path, host, port):
     packet_count = 0
     matched_count = 0
 
-    for _ts, packet in read_pcap_packets(pcap_path):
+    for _ts, packet, linktype in read_pcap_packets(pcap_path):
         packet_count += 1
-        parsed = parse_ipv4_tcp(packet)
+        parsed = parse_ipv4_tcp(packet, linktype)
         if parsed is None:
             continue
         src_ip, src_port, dst_ip, dst_port, seq, payload = parsed
