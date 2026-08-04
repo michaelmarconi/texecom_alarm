@@ -1,7 +1,7 @@
 ---
 id: TASK-1
 title: Add-on configuration surface
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-04 12:51'
 updated_date: '2026-08-04 13:44'
@@ -37,9 +37,9 @@ Part-Arm mapping uses three discrete mode-byte fields (configurable per install,
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Typed settings expose panel, MQTT, and three Part-Arm mode-byte fields from options/schema
-- [ ] #2 DOCS.md describes every option and the the prior MQTT bridge stop-before-start cutover note
-- [ ] #3 Invalid or missing required options fail with a clear error in tests
+- [x] #1 Typed settings expose panel, MQTT, and three Part-Arm mode-byte fields from options/schema
+- [x] #2 DOCS.md describes every option and the the prior MQTT bridge stop-before-start cutover note
+- [x] #3 Invalid or missing required options fail with a clear error in tests
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -63,5 +63,5 @@ Verification: `pytest --cov=texecom_alarm --cov-fail-under=90` → 21 passed, 10
 Notes/assumptions: Option keys chosen as `panel_host`/`panel_port`/`udl_password`/`mqtt_*`/`part_arm_{away,night,home}` (task listed fields, not exact names). Schema defaults for Part-Arm are `0`/`1`/`2` (overridable per ADR-005/architecture). Also updated `translations/en.yaml` so Supervisor UI labels match. Worktree had no usable venv (`ensurepip` missing); verified via primary checkout `.venv`.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
