@@ -7,9 +7,11 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from texecom_alarm.area_state import handle_area_message, publish_area_state_snapshot
+from texecom_alarm.arm_commands import handle_alarm_command
 from texecom_alarm.config import Settings, load_settings
 from texecom_alarm.mqtt.discovery import (
     AVAILABILITY_OFFLINE,
+    alarm_command_topic,
     availability_topic,
     publish_alarm_discovery,
     publish_zone_discovery,
@@ -57,6 +59,7 @@ async def run(
     # Hard crash / abort() still relies on LWT (no clean DISCONNECT).
     mqtt_connected = False
     listen_task: asyncio.Task[None] | None = None
+    command_task: asyncio.Task[None] | None = None
     try:
         logger.debug("app_start")
         if owns_panel:
@@ -93,6 +96,10 @@ async def run(
         await panel_client.set_event_messages()
         logger.debug("app_event_messages_subscribed")
 
+        command_topic = alarm_command_topic(cfg.mqtt_topic_prefix)
+        await mqtt_client.subscribe(command_topic)  # type: ignore[attr-defined]
+        logger.debug("mqtt_alarm_command_subscribed", extra={"topic": command_topic})
+
         in_use = {z.number for z in zones}
         listen_task = asyncio.create_task(
             _listen_panel_messages(
@@ -104,15 +111,25 @@ async def run(
             ),
             name="panel-listen",
         )
+        command_task = asyncio.create_task(
+            _listen_alarm_commands(
+                panel_client,
+                mqtt_client,
+                settings=cfg,
+                command_topic=command_topic,
+            ),
+            name="mqtt-alarm-commands",
+        )
 
         if idle is not None:
             await idle()
         else:
             await _idle_forever()
     finally:
-        if listen_task is not None and not listen_task.done():
-            listen_task.cancel()
-            await asyncio.gather(listen_task, return_exceptions=True)
+        for task in (command_task, listen_task):
+            if task is not None and not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
         if mqtt_connected:
             try:
                 await mqtt_client.publish(
@@ -132,6 +149,27 @@ async def run(
             except Exception:
                 logger.exception("panel_close_failed")
         logger.debug("app_stop")
+
+
+async def _listen_alarm_commands(
+    panel: PanelClient,
+    mqtt: object,
+    *,
+    settings: Settings,
+    command_topic: str,
+) -> None:
+    """Subscribe loop: MQTT ARM_*/DISARM → shared panel arm/disarm (ADR-005)."""
+    inbound = mqtt.inbound_messages  # type: ignore[attr-defined]
+    logger.debug("mqtt_alarm_command_listen_start", extra={"topic": command_topic})
+    async for message in inbound:
+        topic = str(getattr(message, "topic", ""))
+        if topic != command_topic:
+            continue
+        payload = getattr(message, "payload", b"")
+        try:
+            await handle_alarm_command(panel, settings, payload)
+        except Exception:
+            logger.exception("alarm_command_failed", extra={"topic": topic})
 
 
 async def _listen_panel_messages(
