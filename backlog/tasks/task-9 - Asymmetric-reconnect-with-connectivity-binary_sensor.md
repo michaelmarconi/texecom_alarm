@@ -1,10 +1,10 @@
 ---
 id: TASK-9
 title: Asymmetric reconnect with connectivity binary_sensor
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 17:21'
+updated_date: '2026-08-04 17:28'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -88,8 +88,14 @@ Note: Reconnect timing defaults (~10s normal / ~90s trigger) rest on a single SP
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Asymmetric reconnect (tunable normal/trigger budgets) and panel-link connectivity `binary_sensor` implemented per ADR-002/ADR-004; alarm/zone stay on app LWT only.
+Changed files: texecom-alarm-app/src/texecom_alarm/reconnect.py, texecom-alarm-app/src/texecom_alarm/config.py, texecom-alarm-app/src/texecom_alarm/mqtt/discovery.py, texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/tests/fake_panel.py, texecom-alarm-app/tests/test_reconnect.py, texecom-alarm-app/tests/test_config.py, texecom-alarm-app/tests/test_mqtt_discovery.py, texecom-alarm-app/tests/test_e2e_fake_panel.py, config.yaml, DOCS.md, translations/en.yaml
+Verification: `cd texecom-alarm-app && uv run ruff check src tests && uv run ruff format --check src tests && uv run pytest -q --cov=texecom_alarm --cov-fail-under=90` → 156 passed, coverage 93.23%, ruff clean
+Notes/assumptions: Reconnect defaults (4×2.5s normal / 18×5s trigger) are install-time Settings, not final hardcodes; after the named attempt budget the app keeps retrying at that interval indefinitely so process exit never fires MQTT LWT. Reconnect reuses the already-enumerated zone list (LOGIN + snapshots + SETEVENTMESSAGES only).
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
