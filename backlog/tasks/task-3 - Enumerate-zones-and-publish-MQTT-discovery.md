@@ -1,9 +1,10 @@
 ---
 id: TASK-3
 title: Enumerate zones and publish MQTT discovery
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-04 12:51'
+updated_date: '2026-08-04 13:52'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
