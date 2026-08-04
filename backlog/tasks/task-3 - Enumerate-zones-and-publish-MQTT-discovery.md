@@ -58,3 +58,10 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/zones.py (create), te
 4. Thin asyncio entrypoint (app.py / __main__) loads config, connects protocol client, enumerates, publishes discovery, then idles cleanly for s6.
 Test strategy: TDD for enum skip-unused and discovery JSON shape via recording stub; E2E FakePanel + in-process broker asserts retained discovery and LWT availability semantics.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
