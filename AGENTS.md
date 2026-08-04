@@ -1,6 +1,6 @@
 # Agent Instructions
 
-<!-- Synthesised by /constitute on 2026-08-03 from: ADR-001, ADR-002, ADR-003, ADR-004 -->
+<!-- Synthesised by /constitute on 2026-08-04 from: ADR-001, ADR-002, ADR-003, ADR-004, ADR-005 -->
 <!-- Re-run /constitute after any new ADR is accepted. -->
 
 ## Project
@@ -55,6 +55,17 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - The app must keep a short rolling memory of recent zone/panel activity so it can produce a "what happened right before this trigger" snapshot that survives a subsequent outage.
 - Anything consuming the alarm/zone entity state (dashboards, automations) can be shown a stale value for as long as an outage lasts, with currency only communicated via the separate connectivity signal — this should be documented/exposed prominently rather than assumed to be obvious.
 
+### ADR-005: Use confirmed shared arm/disarm commands with configurable Part-Arm mapping for panel control
+
+**Decision:** Use the empirically confirmed shared arm and disarm commands for production, and treat which arm mode maps to which underlying Part-Arm slot as a per-installation configuration value rather than a hardcoded constant.
+
+**Constraints:**
+- The app must issue arm and disarm using the confirmed shared command mechanism, not invent per-mode command families or leave Home unimplemented pending further capture work.
+- The mapping from Home Assistant's Home/Night (and Away) labels to the panel's physical Part-Arm slots must be a documented, install-time configuration value — never baked to this household's own engineer layout.
+- The app must not assume the panel can auto-report each Part-Arm slot's Night/Home role at startup via the area-details query already tested — that path was ruled out; mapping remains manual configuration unless a future decision finds another source.
+- Disarm is mode-independent: one confirmed disarm command covers fully armed states and cancelling an in-progress exit for every arm mode.
+- The exact shape of the add-on configuration surface for that mapping (e.g. three fields vs a single ordered list) is not decided by this ADR — only that the mapping must be configurable.
+
 ## Stop conditions
 
 - **[ADR-001]** Before implementing a hybrid or cached last-known-good zone list for when the panel can't be reached at startup: stop and ask a human — that path was left open and not validated by this ADR.
@@ -66,3 +77,7 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - **[ADR-004]** Before marking the `alarm_control_panel` or any zone `binary_sensor` entity "unavailable" due to a panel-link/reconnect problem: stop and ask a human — availability must be governed solely by whether the app process itself is running (via MQTT Last-Will), never by panel connection health.
 - **[ADR-004]** Before adding a fixed-timeout auto-escalation to "unavailable" for stale panel-link data: stop and ask a human — this ADR explicitly rejected that approach as reintroducing the same problem on a delay; the exact staleness bound (if any) is left open, not decided.
 - **[ADR-004]** Before assuming Com Port isolation shortens or eliminates the trigger-time forced disconnect: stop and ask a human — this remains an untested, open follow-on question, not resolved by any ADR.
+- **[ADR-005]** Before hardcoding this household's Part-Arm slot layout (Away/Night/Home mode values) into the app: stop and ask a human — that would violate this decision; the mapping must be install-time configuration.
+- **[ADR-005]** Before implementing auto-detection of Part-Arm slot roles via the area-details query already tested, or treating that query as a source of Night/Home names: stop and ask a human — that path was ruled out by this ADR.
+- **[ADR-005]** Before inventing a different per-mode arm command family, or shipping without Home arm because further capture work is pending: stop and ask a human — this ADR requires the confirmed shared command mechanism including Home.
+- **[ADR-005]** Before treating a specific add-on option shape for the mode-to-slot mapping (e.g. three fields vs one ordered list) as already decided by this ADR: stop and ask a human — only configurability was decided; the concrete surface is still open.

@@ -10,7 +10,7 @@
 **Question:** Whether a safe, non-guessing way exists to determine the exact command needed to issue `arm_away`/`arm_night`/`arm_home`/`disarm` to this panel, ending with a concrete, ready-to-implement command sequence rather than just a research writeup.
 **Answer:** Yes, for all four actions. A single shared "arm" command works across all three arm modes, distinguished only by an installation-specific parameter in its body — meaning the three modes aren't separate commands, just different values of the same one. A separate, single "disarm" command works from any armed or arming state, regardless of mode. Away and Night were confirmed by passively capturing a real, already-in-use local client's genuine traffic, each reproduced multiple times. That client doesn't support Home mode, so its command was confirmed a different way: by directly testing the one remaining untested value of an already-proven-safe command against the live panel, then independently corroborating the result three ways (a clean acknowledgement, an event sequence matching an unrelated earlier spike's own prior observation, and direct household confirmation via the panel's own vendor app) rather than by blind guessing or a second repetition. A significant incidental finding: which mode maps to which underlying value is configured per panel installation by the security engineer, not a fixed protocol fact — this reshaped the project's own scope via a follow-on `/correction`.
 **Recommendation:** Adopt the confirmed command set for production, sourcing the mode-byte mapping from per-installation configuration rather than hardcoding this household's own values (Option A — see below).
-**Decisions this unlocks:** See `## Decisions required` — unblocks Phase 2 build on arm/disarm entirely; requires designing a configuration surface for the mode-byte mapping; surfaces a new spike candidate (`GETAREADETAILS`) for possible auto-detection.
+**Decisions this unlocks:** See `## Decisions required` — unblocks Phase 2 build on arm/disarm entirely; requires designing a configuration surface for the mode-byte mapping (`GETAREADETAILS` ruled out as an auto-detect path on 2026-08-04).
 
 ## Question
 
@@ -345,21 +345,21 @@ direct test already produced stronger evidence than continuing to wait on the ap
 2. **Design the add-on configuration surface for the mode-byte mapping** (e.g. three config fields, or
    a single ordered list) — not yet decided; a candidate for `/adr` once a mechanism is chosen (see
    `docs/specs/spec-alarm-control.md`'s new Constraint and Open Question).
-3. **A new spike is needed for `GETAREADETAILS` (`cmd=35`, never yet exercised)** to determine whether
-   the panel can self-report each Part-Arm slot's configured role, which would allow auto-detection
-   instead of manual configuration — already logged as a Spike Candidate in `spec-alarm-control.md`.
+3. **`GETAREADETAILS` (`cmd=35`) does not auto-detect Part-Arm slot roles** — exercised live
+   2026-08-04; it returns area identity (`HOUSE` / `Not used B`/`C`/`D`), not Night/Home slot
+   names. The Home/Night-to-slot mapping therefore remains a manual per-installation config value
+   unless some other unexercised command is later found to expose it. Already reflected in
+   `docs/protocol-reference.md`.
 
 ## Open questions
 
-- Does `GETAREADETAILS` or any other unexercised command expose each Part-Arm slot's configured
-  name/role? (See Decisions required #3 — needs a dedicated spike.)
 - Is the AREA-state-6/7 "settled per-submode" hypothesis correct, and does a hypothetical Part-Arm-3
   slot settle at state `8`, following the same pattern? Untestable on this household's panel (slot 3
-  is unused here) — would need a different installation, or confirmation from `GETAREADETAILS` /
-  documentation.
-- What do the still-undecoded LOG event types (`1`, `3`, `31`, `41`, `53`) and the `group` byte on
-  every LOG event actually represent? None of these blocked this spike's core question, but a future
-  incremental research pass could usefully fill in the rest of this panel's event vocabulary.
+  is unused here) — would need a different installation.
+- What do the still-undecoded LOG event types (`1`, `3`, `31`, `41`) and the `group` byte on every
+  LOG event actually represent? Type `53` now looks like a periodic remote-session marker (observed
+  during idle subscribed sessions, not only app-originated arms) — still not formally named.
+  None of these blocked this spike's core question.
 
 ## Review
 

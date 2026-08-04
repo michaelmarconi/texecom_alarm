@@ -139,11 +139,12 @@ normal arm/disarm cycles or an actual alarm trigger.
   `alarm_control_panel.texecom_alarm_arm_status` naming, or is a documented
   rename/migration (updating `house_alarm.yaml`'s target) acceptable? (Owner:
   household/spec author — resolve before Phase 2 build starts on this capability.)
-- Can the panel's own protocol (e.g. `GETAREADETAILS`, `cmd=35`, never yet
-  exercised) report each Part-Arm slot's configured role/name, allowing the
-  Home/Night-to-slot mapping to be auto-detected — or must it always be a
-  manually-specified add-on config value? (Owner: needs a dedicated spike —
-  see Spike Candidates below.)
+- ~~Can the panel's own protocol (e.g. `GETAREADETAILS`, `cmd=35`) report each
+  Part-Arm slot's configured role/name?~~ **Answered 2026-08-04:** `GETAREADETAILS`
+  returns area identity only (`HOUSE` / unused areas), not Part-Arm slot roles —
+  see `docs/protocol-reference.md`. Auto-detection via this command is not
+  available; the Home/Night-to-slot mapping remains a manual add-on config value
+  unless a different unexercised command is later found to expose it.
 
 ## Spike Candidates
 
@@ -160,11 +161,9 @@ normal arm/disarm cycles or an actual alarm trigger.
   `docs/protocol-reference.md`) also shortens or eliminates the trigger-time forced
   disconnect itself, distinct from the ordinary arm/disarm collision noise SPIKE-002
   tested it against.
-- Whether `GETAREADETAILS` (`cmd=35`) or any other unexercised command exposes each
-  Part-Arm slot's configured name/role, enabling the Home/Night-to-slot mapping to
-  be auto-detected at startup instead of requiring manual add-on configuration.
-  (Raised 2026-08-04, following SPIKE-005's finding that this mapping is
-  engineer-configured per installation, not a protocol constant.)
+- ~~Whether `GETAREADETAILS` (`cmd=35`) exposes each Part-Arm slot's configured
+  name/role~~ — **resolved 2026-08-04 without a dedicated spike:** it does not;
+  see Open Questions above and `docs/protocol-reference.md`.
 
 ## Review
 
