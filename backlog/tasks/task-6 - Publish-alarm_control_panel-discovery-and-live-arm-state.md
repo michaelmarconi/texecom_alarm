@@ -1,7 +1,7 @@
 ---
 id: TASK-6
 title: Publish alarm_control_panel discovery and live arm state
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-04 12:52'
 updated_date: '2026-08-04 16:48'
@@ -45,9 +45,9 @@ Note: Exit/entry (arming/pending) come from live AREA pushes only; the area-flag
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 After FakePanel login + enumeration, GetAreaFlags drives a retained MQTT alarm state matching the decoded flags for area 1 (quiet panel → disarmed); unused areas get no entity.
-- [ ] #2 An injected AREA push updates {prefix}/alarm/state to the matching HA payload (0→disarmed, 3→armed_away, 5→triggered at minimum).
-- [ ] #3 Retained MQTT discovery creates alarm_control_panel with unique_id/object_id texecom_alarm_arm_status, shared availability topic, and arm_home/away/night features — without marking the entity unavailable due to panel-link health.
+- [x] #1 After FakePanel login + enumeration, GetAreaFlags drives a retained MQTT alarm state matching the decoded flags for area 1 (quiet panel → disarmed); unused areas get no entity.
+- [x] #2 An injected AREA push updates {prefix}/alarm/state to the matching HA payload (0→disarmed, 3→armed_away, 5→triggered at minimum).
+- [x] #3 Retained MQTT discovery creates alarm_control_panel with unique_id/object_id texecom_alarm_arm_status, shared availability topic, and arm_home/away/night features — without marking the entity unavailable due to panel-link health.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -101,5 +101,5 @@ Verification: pytest --cov=texecom_alarm --cov-fail-under=90 — 117 passing, 93
 Notes/assumptions: FakePanel fixtures use zone_count=12; Elite 88 path implemented; area_size==8 dual-request raises ProtocolError; command_topic published with no subscriber (DRAFT-3); AREA byte 6→slot 1, 7→slot 2; Part Arm 3 / state 8 left unmapped (untested). Residual Bugbot note addressed in fix commit.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
