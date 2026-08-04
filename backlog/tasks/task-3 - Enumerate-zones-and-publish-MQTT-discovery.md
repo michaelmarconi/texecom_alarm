@@ -1,7 +1,7 @@
 ---
 id: TASK-3
 title: Enumerate zones and publish MQTT discovery
-status: awaiting-review
+status: attention
 assignee: []
 created_date: '2026-08-04 12:51'
 updated_date: '2026-08-04 15:09'
@@ -58,6 +58,17 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/zones.py (create), te
 4. Thin asyncio entrypoint (app.py / __main__) loads config, connects protocol client, enumerates, publishes discovery, then idles cleanly for s6.
 Test strategy: TDD for enum skip-unused and discovery JSON shape via recording stub; E2E FakePanel + in-process broker asserts retained discovery and LWT availability semantics.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Attention
+## Attention
+Category: 1 mechanical
+Attempted: Merged TASK-3 after clean required review (plus one pre-merge Bugbot fix cycle); ran full post-merge suite (ruff, pytest+cov, bandit, pip-audit)
+Failed: pip-audit exits 1 — click 8.1.8 has PYSEC-2026-2132 (fix Versions: 8.3.3). click is pulled transitively via amqtt (dev E2E broker) → typer. pytest/ruff/bandit were green (70 passed, 96% cov). One mechanical fix cycle for TASK-3 was already used before merge.
+Decision needed: Pin click>=8.3.3 (or otherwise resolve the audit finding) on main and then mark-done + continue to TASK-4 checkpoint, or choose a different mitigation?
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
