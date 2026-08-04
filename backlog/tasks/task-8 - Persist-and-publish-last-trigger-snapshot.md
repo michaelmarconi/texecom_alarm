@@ -1,10 +1,10 @@
 ---
 id: TASK-8
 title: Persist and publish last-trigger snapshot
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 17:02'
+updated_date: '2026-08-04 17:09'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
