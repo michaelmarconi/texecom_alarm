@@ -1,6 +1,6 @@
 # Architecture
 
-<!-- Synthesised by /architecture on 2026-08-04 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-002-use-frame-resync-and-asymmetric-reconnect-for-panel-protocol-collisions.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-005-use-confirmed-shared-arm-disarm-commands-with-configurable-part-arm-mapping.md -->
+<!-- Synthesised by /architecture on 2026-08-04 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-002-use-frame-resync-and-asymmetric-reconnect-for-panel-protocol-collisions.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-005-use-confirmed-shared-arm-disarm-commands-with-configurable-part-arm-mapping.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md -->
 
 **Date:** 2026-08-04
 **State:** Accepted ✅
@@ -37,6 +37,10 @@ Building this commits the project to:
 
 - Discovering the zone list from the panel itself at every startup, rather than
   hand-maintaining one in configuration.
+- After login (and again after a reconnect re-login), reading a full current-state
+  snapshot of every zone from the panel and publishing that for in-use zones before
+  treating entities as current — live change events then keep them updated, rather
+  than waiting for the next physical change or relying on retained MQTT alone.
 - Treating any unrecognised byte on the wire as recoverable rather than fatal, and
   reconnecting with a budget that is deliberately longer after a real alarm trigger
   than after an ordinary arm or disarm.
@@ -82,8 +86,8 @@ broker) and its internal shape are detailed under `## Components` below.
 ### When things go wrong
 
 - **Panel unreachable at startup** — the app cannot build any zone/alarm entities
-  without first reaching and logging into the panel (ADR-001); there is currently no
-  offline or cached fallback (see Open questions).
+  until panel login succeeds; there is no offline or cached fallback in this
+  architecture.
 - **Unexpected byte on the wire** — the app scans forward for the next valid frame
   header instead of tearing down the connection (ADR-002).
 - **Connection dropped** — the app reconnects with a budget sized to what dropped it
@@ -121,7 +125,7 @@ flowchart LR
     Client --> Decoder
     Decoder --> Publisher
     Client -.->|on drop| Reconnect
-    Reconnect -.->|re-LOGIN, re-subscribe| Client
+    Reconnect -.->|re-LOGIN, snapshot, resubscribe| Client
     Publisher <-->|discovery / state / command topics| Broker
 
     classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
@@ -144,7 +148,7 @@ alarm entity (ADR-004). No HTTP API, no HA config-flow, no entity-registry prese
 beyond what HA's own MQTT integration creates from these discovery payloads (ADR-003).
 **Consumes:**
 - Texecom Connect protocol over TCP to the panel's ComIP module (ADR-001, ADR-002,
-  ADR-005).
+  ADR-005, ADR-006).
 - The household's MQTT broker, as a standing runtime dependency (ADR-003) — the same
   broker `the prior MQTT bridge` already uses today.
 - App configuration (panel host/port, UDL password, MQTT broker settings, and the
@@ -160,10 +164,19 @@ Key behaviours:
   blank), sends `GETPANELIDENTIFICATION` for the zone count, then loops
   `GETZONEDETAILS` across every zone number and discards any slot the panel reports as
   `zoneType=0` (unused) rather than creating an entity for it.
+- **Startup / reconnect zone-state snapshot** (ADR-006): after LOGIN (and again after
+  a reconnect re-LOGIN), sends `GetZoneState` (cmd `2`) with body
+  `[startZone][zoneCount]` (1-byte `startZone` when panel zone count ≤ 256; batches of
+  up to 168 zones per request) and receives one status byte per requested zone. Low
+  two bits decode as Secure / Active / Tamper / Short — the same map used for
+  unsolicited ZONE push events. Publishes MQTT state for in-use zones from that
+  snapshot before treating entities as current. Not a substitute for push updates;
+  FakePanel (or equivalent) must speak the same read for CI.
 - **Event subscription and steady-state decode**: sends `SETEVENTMESSAGES` to
   subscribe to `ZONE`/`AREA`/`OUTPUT`/`USER`/`LOG` push messages, then decodes each
   unsolicited message into the corresponding zone/alarm state and publishes it as an
-  MQTT state update — no polling.
+  MQTT state update — no steady-state polling (the ADR-006 snapshot is startup /
+  reconnect only).
 - **Idle keepalive and ordinary collision recovery**: sends a safe read-only command
   (e.g. `GETDATETIME`) periodically; on a 2–3s timeout, resends with the same sequence
   number, matching the panel's own documented and empirically-confirmed recovery
@@ -212,11 +225,12 @@ flowchart LR
     Open["App opens TCP,<br/>LOGIN"]:::owned
     Ident["GETPANELIDENTIFICATION<br/>zone count"]:::owned
     Loop["GETZONEDETAILS x N<br/>type + name"]:::owned
+    Snap["GetZoneState<br/>current snapshot"]:::owned
+    Pub["Publish MQTT<br/>discovery + zone state"]:::owned
     Sub["SETEVENTMESSAGES<br/>subscribe"]:::owned
-    Pub["Publish MQTT<br/>discovery configs"]:::owned
     HAEnt["HA creates<br/>entities"]:::external
 
-    Stop --> Open --> Ident --> Loop --> Sub --> Pub --> HAEnt
+    Stop --> Open --> Ident --> Loop --> Snap --> Pub --> Sub --> HAEnt
 
     classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
@@ -224,7 +238,9 @@ flowchart LR
 
 Zone slots the panel reports as unused are dropped during the `GETZONEDETAILS` loop
 and never reach the discovery-publish step, so Home Assistant never sees a dead entity
-for them.
+for them. The `GetZoneState` snapshot (ADR-006) supplies correct initial open/closed
+values for in-use zones on every start (and after reconnect), so entities do not wait
+for the next physical change or rely on retained MQTT alone.
 
 ### Steady-state zone and alarm reporting
 
@@ -245,10 +261,10 @@ flowchart LR
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
 ```
 
-There is no client-tunable poll cadence here — state changes arrive as unsolicited
-pushes only once `SETEVENTMESSAGES` has been sent, and the panel's own reporting
-latency was observed to fall within the same wall-clock second as the physical action
-in SPIKE-002.
+There is no client-tunable steady-state poll cadence here — after the ADR-006 startup /
+reconnect snapshot, ongoing state changes arrive as unsolicited pushes only once
+`SETEVENTMESSAGES` has been sent, and the panel's own reporting latency was observed
+to fall within the same wall-clock second as the physical action in SPIKE-002.
 
 ### Protocol collision recovery
 
@@ -265,7 +281,7 @@ flowchart LR
     Short["Short reconnect<br/>budget (~10s)"]:::owned
     Long["Long reconnect<br/>budget (60s+)"]:::owned
     Degrade["Flip connectivity<br/>sensor degraded"]:::owned
-    Resume["Re-LOGIN, resubscribe,<br/>resume reporting"]:::owned
+    Resume["Re-LOGIN, zone snapshot,<br/>resubscribe, resume"]:::owned
 
     Trigger --> Snap
     Trigger --> Multiplex
@@ -281,9 +297,11 @@ flowchart LR
 Most collisions never reach the "forced disconnect" branch at all — resync alone
 keeps the session alive through an ordinary arm/disarm's corrupted-byte burst, as
 SPIKE-002 demonstrated twice. Only a real trigger has been confirmed to force a full
-disconnect. The `alarm_control_panel` entity itself is unaffected by this whole flow —
-it keeps reporting `triggered` throughout; only the dedicated connectivity
-`binary_sensor` reflects the degraded/recovering link (ADR-004).
+disconnect. After a forced disconnect recovers, Resume re-runs LOGIN, the ADR-006
+zone-state snapshot, and `SETEVENTMESSAGES` before live reporting continues. The
+`alarm_control_panel` entity itself is unaffected by this whole flow — it keeps
+reporting `triggered` throughout; only the dedicated connectivity `binary_sensor`
+reflects the degraded/recovering link (ADR-004).
 
 ### Arm/disarm command
 
@@ -374,6 +392,9 @@ module accepts only one TCP client at a time (ADR-001).
 - **Whether to add a last-known-good cached zone list fallback** for when the panel
   can't be reached at startup (ADR-001's Option C) is an explicit open follow-on, not
   part of this architecture — there is currently no offline/static fallback at all.
+- **Whether area / alarm arm-state needs a similar startup snapshot** is not decided
+  by ADR-006 (that ADR covers zone open/closed only). → park for alarm-state drafts /
+  a future spike or ADR if restart leaves the `alarm_control_panel` wrong.
 - **Concrete shape of the Part-Arm mapping add-on options** (ADR-005 follow-on) —
   e.g. three discrete fields versus a single ordered list — is not decided; only that
   the mapping must be configurable is fixed. → design during `/plan` / build of the
@@ -391,3 +412,5 @@ module accepts only one TCP client at a time (ADR-001).
 | 1 | 2026-08-03 | Issues found | 1 |
 | 2 | 2026-08-03 | Clear | — |
 | 3 | 2026-08-04 | Clear | — |
+| 4 | 2026-08-04 | Issues found | 1 |
+| 5 | 2026-08-04 | Clear | — |
