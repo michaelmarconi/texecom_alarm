@@ -10,6 +10,9 @@ from dataclasses import dataclass
 from texecom_alarm.protocol.crc import crc8
 from texecom_alarm.protocol.frame import (
     ACK,
+    AREA_FLAGS_COUNT,
+    AREA_MAP,
+    CMD_GET_AREA_FLAGS,
     CMD_GET_ZONE_STATE,
     CMD_GETDATETIME,
     CMD_GETPANELIDENTIFICATION,
@@ -17,6 +20,7 @@ from texecom_alarm.protocol.frame import (
     CMD_LOGIN,
     CMD_SETEVENTMESSAGES,
     HEADER_START,
+    MSG_AREA,
     MSG_ZONE,
     NAK,
     TYPE_COMMAND,
@@ -78,6 +82,7 @@ class FakePanel:
             self.zone_count = 0
         self.zone_detail_queries: list[int] = []
         self.zone_state_override: bytes | None = None
+        self.area_flags_override: bytes | None = None
         self.last_seteventmessages_body: bytes | None = None
         self.seteventmessages_calls = 0
         self._handlers: dict[int, Callable[[Frame], bytes]] = {
@@ -86,6 +91,7 @@ class FakePanel:
             CMD_GETPANELIDENTIFICATION: self._handle_get_panel_identification,
             CMD_GETZONEDETAILS: self._handle_get_zone_details,
             CMD_GET_ZONE_STATE: self._handle_get_zone_state,
+            CMD_GET_AREA_FLAGS: self._handle_get_area_flags,
             CMD_SETEVENTMESSAGES: self._handle_set_event_messages,
         }
 
@@ -116,6 +122,15 @@ class FakePanel:
         if writer is None or writer.is_closing():
             raise RuntimeError("FakePanel has no connected client")
         body = bytes([MSG_ZONE, zone_number, status])
+        writer.write(encode_frame(TYPE_MESSAGE, 0, body))
+        await writer.drain()
+
+    async def inject_area_message(self, area_number: int, state: int) -> None:
+        """Push an unsolicited AREA ``'M'`` frame to the connected client."""
+        writer = self._writer
+        if writer is None or writer.is_closing():
+            raise RuntimeError("FakePanel has no connected client")
+        body = bytes([MSG_AREA, area_number, state])
         writer.write(encode_frame(TYPE_MESSAGE, 0, body))
         await writer.drain()
 
@@ -262,6 +277,25 @@ class FakePanel:
             zone = self._zones.get(number)
             statuses.append(0 if zone is None else zone.status)
         return bytes([CMD_GET_ZONE_STATE]) + bytes(statuses)
+
+    def _handle_get_area_flags(self, frame: Frame) -> bytes:
+        if self.area_flags_override is not None:
+            override = self.area_flags_override
+            self.area_flags_override = None
+            return bytes([CMD_GET_AREA_FLAGS]) + override
+        if len(frame.body) < 3:
+            return bytes([CMD_GET_AREA_FLAGS, NAK])
+        start = frame.body[1]
+        count = frame.body[2]
+        areas = AREA_MAP.get(self.zone_count, 8)
+        area_size = (areas + 7) // 8
+        # Quiet panel: all flag bytes zero (Disarmed for every area).
+        payload = bytes(count * area_size)
+        # start is ignored for the quiet default; override covers non-zero cases.
+        _ = start
+        if count > AREA_FLAGS_COUNT and area_size == 1:
+            return bytes([CMD_GET_AREA_FLAGS, NAK])
+        return bytes([CMD_GET_AREA_FLAGS]) + payload
 
     def _handle_set_event_messages(self, frame: Frame) -> bytes:
         self.seteventmessages_calls += 1

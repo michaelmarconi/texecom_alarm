@@ -6,7 +6,13 @@ import pytest
 from tests.fake_panel import FakePanel, FakeZone
 
 from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient, ProtocolError
-from texecom_alarm.protocol.frame import CMD_GETDATETIME, CMD_SETEVENTMESSAGES, MSG_ZONE
+from texecom_alarm.protocol.frame import (
+    CMD_GET_AREA_FLAGS,
+    CMD_GETDATETIME,
+    CMD_SETEVENTMESSAGES,
+    MSG_AREA,
+    MSG_ZONE,
+)
 
 
 @pytest.fixture
@@ -238,6 +244,52 @@ async def test_recv_message_receives_injected_zone_push() -> None:
         assert msg.body[0] == MSG_ZONE
         assert msg.body[1] == 1
         assert msg.body[2] == 0x01
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_area_flags_returns_count_times_area_size_bytes() -> None:
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR")],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = await _logged_in_client(panel)
+        flags = await client.get_area_flags(0, 72)
+        assert len(flags) == 72
+        assert panel.last_command == CMD_GET_AREA_FLAGS
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_area_flags_rejects_bad_count(panel: FakePanel) -> None:
+    client = await _logged_in_client(panel)
+    with pytest.raises(ProtocolError, match="count"):
+        await client.get_area_flags(0, 0)
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_recv_message_receives_injected_area_push() -> None:
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR")],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = await _logged_in_client(panel)
+        await panel.inject_area_message(area_number=1, state=3)
+        msg = await client.recv_message(timeout=1.0)
+        assert msg.body[0] == MSG_AREA
+        assert msg.body[1] == 1
+        assert msg.body[2] == 3
         await client.close()
     finally:
         await panel.stop()

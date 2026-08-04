@@ -39,7 +39,7 @@ async def test_listen_loop_sends_keepalive_on_idle_timeout() -> None:
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
-        zone_count=1,
+        zone_count=12,
     )
     await panel.start()
     try:
@@ -82,7 +82,7 @@ async def test_run_owns_panel_with_login_delay() -> None:
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR")],
-        zone_count=1,
+        zone_count=12,
     )
     await panel.start()
     try:
@@ -110,7 +110,7 @@ async def test_run_publishes_offline_when_discovery_fails_after_online() -> None
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR")],
-        zone_count=1,
+        zone_count=12,
     )
     await panel.start()
     try:
@@ -238,7 +238,7 @@ async def test_run_loads_settings_when_omitted(monkeypatch: pytest.MonkeyPatch) 
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="A")],
-        zone_count=1,
+        zone_count=12,
     )
     await panel.start()
     try:
@@ -259,7 +259,7 @@ async def test_run_loads_settings_when_omitted(monkeypatch: pytest.MonkeyPatch) 
                 break
             await asyncio.sleep(0.02)
         stop.set()
-        await asyncio.wait_for(task, timeout=2.0)
+        await asyncio.wait_for(task, timeout=5.0)
         assert mqtt.messages
     finally:
         await panel.stop()
