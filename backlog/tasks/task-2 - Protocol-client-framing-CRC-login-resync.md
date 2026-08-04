@@ -1,9 +1,10 @@
 ---
 id: TASK-2
 title: 'Protocol client: framing, CRC, login, resync'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-04 12:51'
+updated_date: '2026-08-04 13:37'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
