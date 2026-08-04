@@ -1,10 +1,10 @@
 ---
 id: TASK-5
 title: Publish live zone state from panel push events
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 16:15'
+updated_date: '2026-08-04 16:16'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -39,9 +39,9 @@ Note: Physical open/close flip was not run in SPIKE-006; CI proves snapshot and 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 After login + enumeration against FakePanel, GetZoneState drives retained MQTT state for every in-use zone matching the panel status bytes (Secure→"0", Active→"1"); unused slots get no state publish.
-- [ ] #2 An injected ZONE push updates that zone's MQTT state topic to the matching "0"/"1" payload.
-- [ ] #3 During the snapshot exchange, the client sends only GetZoneState (cmd 2) for zone status — not omit/arm/disarm command bytes 4/5/6/8/9.
+- [x] #1 After login + enumeration against FakePanel, GetZoneState drives retained MQTT state for every in-use zone matching the panel status bytes (Secure→"0", Active→"1"); unused slots get no state publish.
+- [x] #2 An injected ZONE push updates that zone's MQTT state topic to the matching "0"/"1" payload.
+- [x] #3 During the snapshot exchange, the client sends only GetZoneState (cmd 2) for zone status — not omit/arm/disarm command bytes 4/5/6/8/9.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -90,5 +90,5 @@ Verification: python -m pytest tests/test_zone_state.py tests/test_protocol_clie
 Notes/assumptions: enumerate_zones now returns (zones, zone_count) so the snapshot can cover the full panel slot range without a second identification query; GetZoneState uses 1-byte start (panels ≤256 zones) per ADR-006/SPIKE-006.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
