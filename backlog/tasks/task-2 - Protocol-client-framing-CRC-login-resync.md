@@ -4,7 +4,7 @@ title: 'Protocol client: framing, CRC, login, resync'
 status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:51'
-updated_date: '2026-08-04 13:44'
+updated_date: '2026-08-04 13:52'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -63,5 +63,5 @@ Verification: `uv run pytest --cov=texecom_alarm --cov-fail-under=90` → 27 pas
 Notes/assumptions: Production defaults are `login_delay=0.5` and `response_timeout=2.0`; tests inject shorter values. Keepalive uses exactly one same-sequence retry (`keepalive_retries=1`). CRC-8 matches SPIKE-001 (`poly=0x185` / working `0x85`, init `0xff`). Never targeted the live panel. Left `uv.lock` untracked (not in task scope).
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
