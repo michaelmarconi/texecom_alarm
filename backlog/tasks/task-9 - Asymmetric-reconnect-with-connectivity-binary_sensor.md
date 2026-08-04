@@ -4,7 +4,7 @@ title: Asymmetric reconnect with connectivity binary_sensor
 status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 17:50'
+updated_date: '2026-08-04 17:51'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -106,7 +106,7 @@ Verification: pre-commit ruff 0.8.4 `ruff format --check tests/test_reconnect.py
 Notes/assumptions: Do not treat uv ruff 0.16 format prefs as gate; CI/DoD use pre-commit rev v0.8.4.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
