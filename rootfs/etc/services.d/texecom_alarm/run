@@ -4,14 +4,24 @@
 # s6-overlay docs: https://github.com/just-containers/s6-overlay
 # ==============================================================================
 
-# Declare variables
-declare message
+# Panel connection
+export TEXECOM_PANEL_HOST="$(bashio::config 'panel_host')"
+export TEXECOM_PANEL_PORT="$(bashio::config 'panel_port')"
+export TEXECOM_UDL_PASSWORD="$(bashio::config 'udl_password')"
 
-## Get the 'message' key from the user config options.
-message=$(bashio::config 'message')
+# MQTT broker
+export TEXECOM_MQTT_HOST="$(bashio::config 'mqtt_host')"
+export TEXECOM_MQTT_PORT="$(bashio::config 'mqtt_port')"
+export TEXECOM_MQTT_USERNAME="$(bashio::config 'mqtt_username')"
+export TEXECOM_MQTT_PASSWORD="$(bashio::config 'mqtt_password')"
+export TEXECOM_MQTT_TOPIC_PREFIX="$(bashio::config 'mqtt_topic_prefix')"
 
-## Print the message the user supplied, defaults to "Hello World..."
-bashio::log.info "${message:="Hello World..."}"
+# Part-Arm mode bytes (install-specific Away / Night / Home mapping)
+export TEXECOM_PART_ARM_AWAY="$(bashio::config 'part_arm_away')"
+export TEXECOM_PART_ARM_NIGHT="$(bashio::config 'part_arm_night')"
+export TEXECOM_PART_ARM_HOME="$(bashio::config 'part_arm_home')"
+
+bashio::log.info "Starting Texecom Alarm (panel=${TEXECOM_PANEL_HOST}:${TEXECOM_PANEL_PORT})"
 
 ## Run your program
 exec /usr/bin/texecom_alarm

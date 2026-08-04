@@ -1,10 +1,10 @@
 ---
 id: TASK-2
 title: 'Protocol client: framing, CRC, login, resync'
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:51'
-updated_date: '2026-08-04 13:37'
+updated_date: '2026-08-04 13:44'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -56,6 +56,12 @@ Test strategy: TDD unit tests for CRC/framing; async client tests against FakePa
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Asyncio Connect-protocol client with CRC-8 framing, login, ADR-002 resync, and GETDATETIME keepalive retry — verified against FakePanel.
+Changed files: texecom-alarm-app/src/texecom_alarm/protocol/__init__.py, texecom-alarm-app/src/texecom_alarm/protocol/crc.py, texecom-alarm-app/src/texecom_alarm/protocol/frame.py, texecom-alarm-app/src/texecom_alarm/protocol/client.py, texecom-alarm-app/tests/fake_panel.py, texecom-alarm-app/tests/test_protocol_frame.py, texecom-alarm-app/tests/test_protocol_client.py, texecom-alarm-app/tests/test_e2e_fake_panel.py, texecom-alarm-app/pyproject.toml
+Verification: `uv run pytest --cov=texecom_alarm --cov-fail-under=90` → 27 passed, 97% coverage; `ruff check` + `ruff format --check` → clean; `bandit -r src` → clean
+Notes/assumptions: Production defaults are `login_delay=0.5` and `response_timeout=2.0`; tests inject shorter values. Keepalive uses exactly one same-sequence retry (`keepalive_retries=1`). CRC-8 matches SPIKE-001 (`poly=0x185` / working `0x85`, init `0xff`). Never targeted the live panel. Left `uv.lock` untracked (not in task scope).
+
 ## Build phase
-phase: claimed
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
