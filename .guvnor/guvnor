@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+# guvnor — thin launcher over the agentdef-delivered CLI.
+# The runtime lives in the gitignored .agentdef/parent/ cache, and the pinned
+# `backlog` binary lives in node_modules — both exist only in the PRIMARY
+# checkout, never in a nested plan/refine/task worktree. `git rev-parse
+# --git-common-dir` always resolves to the primary checkout's `.git` (shared
+# across every worktree via `.git` file redirection), so its parent is the
+# right root even when this launcher runs from inside `.worktrees/<kind>-<slug>`.
+set -e
+common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+if [ -n "$common_dir" ]; then
+  root="$(cd "$(dirname "$common_dir")" && pwd)"
+else
+  root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
+cli="$root/.agentdef/parent/tools/guvnor/dist/cli.js"
+# The pinned `backlog` binary lives in the PRIMARY root's local node_modules,
+# not globally on PATH and not duplicated in a nested worktree — make it
+# resolvable for the CLI's execFile calls regardless of invocation cwd.
+export PATH="$root/node_modules/.bin:$PATH"
+if [ ! -f "$cli" ]; then
+  echo "guvnor: CLI not found at $cli — run 'agentdef sync' to refresh the parent cache." >&2
+  exit 1
+fi
+exec node "$cli" "$@"

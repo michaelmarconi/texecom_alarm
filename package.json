@@ -1,0 +1,8 @@
+{
+  "name": "texecom-alarm",
+  "private": true,
+  "description": "Tooling-only package to pin backlog.md for the Guv'nor task ledger",
+  "devDependencies": {
+    "backlog.md": "1.47.1"
+  }
+}

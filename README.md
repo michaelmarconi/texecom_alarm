@@ -1,28 +1,69 @@
-# Home Assistant App: Texecom Alarm
+# Texecom Alarm — HA Integration Replacement
 
-_Bootstrap skeleton for a from-scratch Texecom Premier Elite <-> MQTT bridge, intended
-as a replacement for [`the prior MQTT bridge`](a prior MQTT bridge)._
+A ground-up, self-built Home Assistant Add-on for a Texecom Premier Elite alarm
+panel (via ComIP/Texecom Connect), replacing `the prior MQTT bridge` with something that
+doesn't crash and finally supports Home arm mode — published for other Premier
+Elite households to install and configure.
 
 ![Supports aarch64 Architecture][aarch64-shield]
 ![Supports amd64 Architecture][amd64-shield]
 
-This is currently just the minimum viable app skeleton, bootstrapped from the
-official [`home-assistant/apps-example`](https://github.com/home-assistant/apps-example)
-template (see `developers.home-assistant.io/docs/apps/`). It doesn't talk to the
-alarm panel yet — see `/config/docs/texecom_replacement_addon_brief.md` in the main
-Home Assistant config repo for the background and plan.
+## Project structure
 
-## Local development
+- `texecom-alarm-app/` — Texecom Alarm App: Python 3 process that speaks Texecom
+  Connect to the panel and publishes MQTT discovery/state to Home Assistant
+  (ADR-003). Packaged for HA OS via the repo-root `Dockerfile` / `rootfs/` /
+  `config.yaml` Add-on shell.
+- **Technology:** Python 3 (HA App / Docker + s6-overlay).
+- **Delivery:** run as a Home Assistant Add-on (Supervisor Local Apps or Add-on
+  Store); local CI via `pytest` / `ruff` in `texecom-alarm-app/`.
+- **Consumes:** panel ComIP TCP session; MQTT broker; Supervisor
+  `options.json` (panel host/port, UDL password, MQTT settings, Part-Arm
+  mode mapping).
+- **Exposes:** MQTT discovery + state/command topics for
+  `alarm_control_panel`, per-zone `binary_sensor`s, connectivity sensor, and
+  last-trigger snapshot (ADR-004).
 
-This repo is set up for the official Home Assistant apps devcontainer:
+## Documentation
 
-1. Open this folder in VS Code / Cursor.
-2. Reopen in container when prompted (or Command Palette -> "Rebuild and Reopen in
-   Container").
-3. Run the "Start Home Assistant" task (Terminal -> Run Task) to boot a local
-   Supervisor + Home Assistant with this app mounted as a Local App.
-4. Access the instance at `http://localhost:7123/` and install/start the app from
-   Settings -> Add-ons -> Local Add-ons.
+- [Brief](docs/brief.md)
+- [Architecture](docs/architecture.md)
+- [Protocol reference](docs/protocol-reference.md)
+- [Definition of Done](docs/definition-of-done.md)
+- Add-on docs tab: [DOCS.md](DOCS.md) (Home Assistant Supervisor convention)
+
+## Getting started
+
+### Local development (HA apps devcontainer)
+
+1. Open this folder in VS Code / Cursor and reopen in the Home Assistant apps
+   devcontainer.
+2. Run the "Start Home Assistant" task to boot Supervisor + Home Assistant with
+   this app mounted as a Local App.
+3. Open `http://localhost:7123/` and install/start the app from
+   Settings → Add-ons → Local Add-ons.
+
+### App package (unit / E2E tests)
+
+```bash
+cd texecom-alarm-app
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest --cov=texecom_alarm --cov-fail-under=90
+ruff check . && ruff format --check .
+```
+
+Panel traffic in tests must use a mock — never the live household panel in CI.
+
+## Configuration
+
+Install-time options (Supervisor `config.yaml` / `options.json`) will include
+panel host/port, UDL password, MQTT broker settings, and the Part-Arm
+slot-to-HA-mode mapping (ADR-005). See [DOCS.md](DOCS.md) as options land.
+
+## License
+
+TODO: Add licence (required before public Add-on Store distribution).
 
 [aarch64-shield]: https://img.shields.io/badge/aarch64-yes-green.svg
 [amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
