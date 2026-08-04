@@ -1,10 +1,10 @@
 ---
 id: TASK-5
 title: Publish live zone state from panel push events
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 15:38'
+updated_date: '2026-08-04 16:00'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
