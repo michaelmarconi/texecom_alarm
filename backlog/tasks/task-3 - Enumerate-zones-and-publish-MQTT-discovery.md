@@ -4,7 +4,7 @@ title: Enumerate zones and publish MQTT discovery
 status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:51'
-updated_date: '2026-08-04 14:54'
+updated_date: '2026-08-04 15:09'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -69,5 +69,5 @@ Verification: `pip install -e ".[dev]" && pytest --cov=texecom_alarm --cov-fail-
 Notes/assumptions: Provisional object_ids are `texecom_alarm_<slugified panel name>` (RISK-005 still open). Shared availability topic is `{mqtt_topic_prefix}/status` with LWT `offline` / online `online` (ADR-004). Zone state topics are published in discovery only — no SETEVENTMESSAGES/live state updates in this task. Panel-link connectivity sensor not included (separate ADR-004 follow-on).
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
