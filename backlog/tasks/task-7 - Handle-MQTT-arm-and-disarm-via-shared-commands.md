@@ -1,10 +1,10 @@
 ---
 id: TASK-7
 title: Handle MQTT arm and disarm via shared commands
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 16:55'
+updated_date: '2026-08-04 16:56'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -43,9 +43,9 @@ Note: Depends on TASK-6 (ready, not built): command topic, discovery, and live A
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 MQTT payloads ARM_AWAY, ARM_NIGHT, and ARM_HOME on {prefix}/alarm/command cause FakePanel to receive cmd=6 with body [settings.part_arm_*, 0x01] for the matching Settings field.
-- [ ] #2 MQTT payload DISARM causes FakePanel to receive cmd=8 with body [0x01] (including when used as cancel-during-exit — same bytes).
-- [ ] #3 Changing Settings.part_arm_away/night/home changes the mode byte sent without a code change; unknown command payloads are ignored (no panel command).
+- [x] #1 MQTT payloads ARM_AWAY, ARM_NIGHT, and ARM_HOME on {prefix}/alarm/command cause FakePanel to receive cmd=6 with body [settings.part_arm_*, 0x01] for the matching Settings field.
+- [x] #2 MQTT payload DISARM causes FakePanel to receive cmd=8 with body [0x01] (including when used as cancel-during-exit — same bytes).
+- [x] #3 Changing Settings.part_arm_away/night/home changes the mode byte sent without a code change; unknown command payloads are ignored (no panel command).
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -92,5 +92,5 @@ Verification: pytest --cov=texecom_alarm --cov-fail-under=90 -q — 128 passed, 
 Notes/assumptions: PanelClient gained an _io_lock with short-poll recv_message so concurrent MQTT command handler and panel listen loop can share the TCP session safely. Shared MQTT inbound surface is subscribe() + inbound_messages (RecordingMqtt keeps messages for outbound; tests inject via push_inbound). Command path does not publish alarm state (AREA/snapshot only).
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
