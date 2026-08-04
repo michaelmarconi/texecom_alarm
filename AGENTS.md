@@ -1,6 +1,6 @@
 # Agent Instructions
 
-<!-- Synthesised by /constitute on 2026-08-04 from: ADR-001, ADR-002, ADR-003, ADR-004, ADR-005 -->
+<!-- Synthesised by /constitute on 2026-08-04 from: ADR-001, ADR-002, ADR-003, ADR-004, ADR-005, ADR-006 -->
 <!-- Re-run /constitute after any new ADR is accepted. -->
 
 ## Project
@@ -66,6 +66,17 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - Disarm is mode-independent: one confirmed disarm command covers fully armed states and cancelling an in-progress exit for every arm mode.
 - The exact shape of the add-on configuration surface for that mapping (e.g. three fields vs a single ordered list) is not decided by this ADR — only that the mapping must be configurable.
 
+### ADR-006: Use panel zone-state snapshot for startup re-sync
+
+**Decision:** After login (and again after a reconnect re-login), the app must ask the panel for a full current-state snapshot of every zone slot and publish that to MQTT for in-use zones before relying on entity state; live change events then keep those entities updated.
+
+**Constraints:**
+- Startup and post-reconnect flows must include a panel zone-state snapshot after login — not push-only and not MQTT-retain-only for correctness.
+- Snapshot status encoding must stay aligned with live zone-change event encoding so open/closed meaning does not diverge.
+- Test doubles used in CI must speak the same snapshot read so startup re-sync is verifiable without the live panel.
+- Client, FakePanel, and tests must implement this snapshot command family (extra round-trip at startup is required).
+- Whether a similar startup snapshot is required for area/alarm arm state is not decided by this ADR — that remains a separate alarm-state decision.
+
 ## Stop conditions
 
 - **[ADR-001]** Before implementing a hybrid or cached last-known-good zone list for when the panel can't be reached at startup: stop and ask a human — that path was left open and not validated by this ADR.
@@ -81,3 +92,7 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - **[ADR-005]** Before implementing auto-detection of Part-Arm slot roles via the area-details query already tested, or treating that query as a source of Night/Home names: stop and ask a human — that path was ruled out by this ADR.
 - **[ADR-005]** Before inventing a different per-mode arm command family, or shipping without Home arm because further capture work is pending: stop and ask a human — this ADR requires the confirmed shared command mechanism including Home.
 - **[ADR-005]** Before treating a specific add-on option shape for the mode-to-slot mapping (e.g. three fields vs one ordered list) as already decided by this ADR: stop and ask a human — only configurability was decided; the concrete surface is still open.
+- **[ADR-006]** Before shipping zone state on restart via push-only updates or MQTT retain alone, without a panel zone-state snapshot after login: stop and ask a human — that would violate this decision.
+- **[ADR-006]** Before inventing a different open/closed encoding for the startup snapshot than for live zone-change events: stop and ask a human — this ADR requires one shared status encoding.
+- **[ADR-006]** Before treating area/alarm arm-state startup snapshot as required or settled by this ADR: stop and ask a human — that was left as a separate alarm-state decision.
+- **[ADR-006]** Before treating physical open/close flip corroboration as already proven by this ADR: stop and ask a human — the spike skipped that optional check; residual confidence is a separate acceptance call if needed.
