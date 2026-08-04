@@ -16,7 +16,7 @@ ordinal: 4000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 All tests pass (pytest in texecom-alarm-app/ exits 0), including FakePanel + in-process broker E2E — never live panel or household broker
+- [ ] #1 All tests pass (pytest in texecom-alarm-app/ exits 0), including FakePanel + Mosquitto (Docker) E2E — never live panel or household broker
 - [ ] #2 Build and lint clean (pip install -e ".[dev]", ruff check, ruff format --check)
 <!-- AC:END -->
 
