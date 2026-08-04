@@ -14,6 +14,10 @@ from texecom_alarm.config import (
     DEFAULT_PART_ARM_AWAY,
     DEFAULT_PART_ARM_HOME,
     DEFAULT_PART_ARM_NIGHT,
+    DEFAULT_RECONNECT_NORMAL_ATTEMPTS,
+    DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
+    DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
+    DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
     ConfigError,
     Settings,
     load_settings,
@@ -33,6 +37,10 @@ def _valid_options(**overrides: object) -> dict[str, object]:
         "part_arm_away": DEFAULT_PART_ARM_AWAY,
         "part_arm_night": DEFAULT_PART_ARM_NIGHT,
         "part_arm_home": DEFAULT_PART_ARM_HOME,
+        "reconnect_normal_attempts": DEFAULT_RECONNECT_NORMAL_ATTEMPTS,
+        "reconnect_normal_interval_seconds": DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
+        "reconnect_trigger_attempts": DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
+        "reconnect_trigger_interval_seconds": DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
     }
     data.update(overrides)
     return data
@@ -59,7 +67,67 @@ def test_load_settings_applies_schema_defaults() -> None:
         part_arm_away=DEFAULT_PART_ARM_AWAY,
         part_arm_night=DEFAULT_PART_ARM_NIGHT,
         part_arm_home=DEFAULT_PART_ARM_HOME,
+        reconnect_normal_attempts=DEFAULT_RECONNECT_NORMAL_ATTEMPTS,
+        reconnect_normal_interval_seconds=DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
+        reconnect_trigger_attempts=DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
+        reconnect_trigger_interval_seconds=DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
     )
+
+
+def test_reconnect_settings_defaults_and_overrides() -> None:
+    defaults = load_settings(
+        {
+            "panel_host": "10.0.0.2",
+            "udl_password": "udl",
+            "mqtt_host": "mqtt.local",
+        }
+    )
+    assert defaults.reconnect_normal_attempts == 4
+    assert defaults.reconnect_normal_interval_seconds == 2.5
+    assert defaults.reconnect_trigger_attempts == 18
+    assert defaults.reconnect_trigger_interval_seconds == 5.0
+
+    tuned = load_settings(
+        _valid_options(
+            reconnect_normal_attempts=2,
+            reconnect_normal_interval_seconds=0.5,
+            reconnect_trigger_attempts=6,
+            reconnect_trigger_interval_seconds=1.25,
+        )
+    )
+    assert tuned.reconnect_normal_attempts == 2
+    assert tuned.reconnect_normal_interval_seconds == 0.5
+    assert tuned.reconnect_trigger_attempts == 6
+    assert tuned.reconnect_trigger_interval_seconds == 1.25
+
+
+def test_invalid_reconnect_interval_raises_clear_error() -> None:
+    with pytest.raises(ConfigError, match="reconnect_normal_interval_seconds"):
+        load_settings(_valid_options(reconnect_normal_interval_seconds=-1))
+
+
+def test_invalid_reconnect_interval_string_raises_clear_error() -> None:
+    with pytest.raises(ConfigError, match="reconnect_trigger_interval_seconds"):
+        load_settings(_valid_options(reconnect_trigger_interval_seconds="nope"))
+
+
+def test_reconnect_settings_from_environ() -> None:
+    settings = load_settings(
+        environ={
+            "TEXECOM_PANEL_HOST": "panel.env",
+            "TEXECOM_UDL_PASSWORD": "udl",
+            "TEXECOM_MQTT_HOST": "broker.env",
+            "TEXECOM_RECONNECT_NORMAL_ATTEMPTS": "3",
+            "TEXECOM_RECONNECT_NORMAL_INTERVAL_SECONDS": "1.5",
+            "TEXECOM_RECONNECT_TRIGGER_ATTEMPTS": "9",
+            "TEXECOM_RECONNECT_TRIGGER_INTERVAL_SECONDS": "3.0",
+        },
+        options_path="/nonexistent/options.json",
+    )
+    assert settings.reconnect_normal_attempts == 3
+    assert settings.reconnect_normal_interval_seconds == 1.5
+    assert settings.reconnect_trigger_attempts == 9
+    assert settings.reconnect_trigger_interval_seconds == 3.0
 
 
 def test_part_arm_mapping_parses_mode_bytes() -> None:

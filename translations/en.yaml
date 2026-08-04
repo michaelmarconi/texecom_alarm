@@ -32,3 +32,15 @@ configuration:
   part_arm_home:
     name: Part-Arm mode byte (Home)
     description: Mode byte for Home Assistant Home — must match this installation's Part-Arm layout.
+  reconnect_normal_attempts:
+    name: Reconnect attempts (normal)
+    description: Named retry budget after an ordinary panel disconnect (default 4). Tunable; the add-on keeps retrying after the budget rather than exiting.
+  reconnect_normal_interval_seconds:
+    name: Reconnect interval seconds (normal)
+    description: Wait between normal-budget reconnect attempts (default 2.5).
+  reconnect_trigger_attempts:
+    name: Reconnect attempts (after trigger)
+    description: Named retry budget when the last alarm state was triggered (default 18). Tunable.
+  reconnect_trigger_interval_seconds:
+    name: Reconnect interval seconds (after trigger)
+    description: Wait between trigger-budget reconnect attempts (default 5).
