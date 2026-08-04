@@ -21,6 +21,13 @@ ordinal: 4000
 - [ ] #2 Build and lint clean (pip install -e ".[dev]", ruff check, ruff format --check)
 <!-- AC:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 Unused zones are not published; discovery is MQTT-only (ADR-001, ADR-003)
