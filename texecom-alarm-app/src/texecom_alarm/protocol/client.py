@@ -79,12 +79,18 @@ class PanelClient:
             await asyncio.sleep(self.login_delay)
 
     async def close(self) -> None:
+        """Tear down the TCP session after any in-flight ``send_command`` finishes.
+
+        Acquires ``_io_lock`` so reconnect teardown cannot null reader/writer
+        under a concurrent arm/disarm or keepalive command.
+        """
         logger.debug("panel_close")
-        self._authenticated = False
-        writer = self._writer
-        self._reader = None
-        self._writer = None
-        self._buf.clear()
+        async with self._io_lock:
+            self._authenticated = False
+            writer = self._writer
+            self._reader = None
+            self._writer = None
+            self._buf.clear()
         if writer is not None:
             writer.close()
             await writer.wait_closed()
@@ -224,10 +230,9 @@ class PanelClient:
         *,
         retries: int = 1,
     ) -> bytes:
-        if self._writer is None or self._reader is None:
-            raise ProtocolError("not connected")
-
         async with self._io_lock:
+            if self._writer is None or self._reader is None:
+                raise ProtocolError("not connected")
             seq = self._next_seq()
             frame = encode_command(cmd, body, sequence=seq)
             attempt = 0

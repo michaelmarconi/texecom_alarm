@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from tests.fake_panel import FakePanel, FakeZone
 from tests.recording_mqtt import RecordingMqttPublisher
 
-from texecom_alarm.app import run
+from texecom_alarm.app import _listen_with_reconnect, run
+from texecom_alarm.area_state import AREA_FLAGS_COUNT
 from texecom_alarm.config import Settings
 from texecom_alarm.mqtt.discovery import AVAILABILITY_ONLINE, availability_topic
 from texecom_alarm.protocol.client import PanelClient
@@ -20,6 +23,17 @@ from texecom_alarm.protocol.frame import (
 )
 from texecom_alarm.reconnect import ReconnectProfile, select_reconnect_profile
 from texecom_alarm.zones import Zone
+
+
+def _quiet_flags(area_size: int = 1) -> bytes:
+    return bytes(AREA_FLAGS_COUNT * area_size)
+
+
+def _set_flag(flags: bytearray, flag_index: int, area_number: int, *, area_size: int = 1) -> None:
+    offset = flag_index * area_size
+    value = int.from_bytes(flags[offset : offset + area_size], "little")
+    value |= 1 << (area_number - 1)
+    flags[offset : offset + area_size] = value.to_bytes(area_size, "little")
 
 
 def _settings(panel: FakePanel, **overrides: object) -> Settings:
@@ -362,3 +376,175 @@ async def test_reconnect_helper_retries_after_failed_attempt() -> None:
         await client.close()
     finally:
         await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_reconnect_publishes_trigger_snapshot_from_preserved_buffer() -> None:
+    """After reconnect, enter-triggered snapshot uses pre-outage zone activity (ADR-004)."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[
+            FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00),
+            FakeZone(number=2, zone_type=0, name=""),
+        ],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        for _ in range(150):
+            if mqtt.payloads_for("texecom/alarm/state"):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        await panel.inject_zone_message(zone_number=1, status=0x01)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/zone/1/state")[-1:] == ["1"]:
+                break
+            await asyncio.sleep(0.02)
+
+        # Next GetAreaFlags (post-reconnect snapshot) reports Alarm for area 1.
+        triggered_flags = bytearray(_quiet_flags())
+        _set_flag(triggered_flags, 0, 1)
+        panel.area_flags_override = bytes(triggered_flags)
+
+        await panel.force_disconnect()
+
+        for _ in range(200):
+            link = mqtt.payloads_for("texecom/panel_link/state")
+            attrs = mqtt.payloads_for("texecom/alarm/attributes")
+            if link.count("OFF") >= 1 and link[-1] == "ON" and attrs:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "triggered"
+        attrs = json.loads(mqtt.payloads_for("texecom/alarm/attributes")[-1])
+        assert attrs["last_trigger_zone"] == 1
+        assert isinstance(attrs["last_trigger_time"], str)
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_reconnect_already_triggered_does_not_invent_snapshot() -> None:
+    """Already-triggered across reconnect must not invent a second snapshot (TASK-8)."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[
+            FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00),
+            FakeZone(number=2, zone_type=0, name=""),
+        ],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        for _ in range(150):
+            if mqtt.payloads_for("texecom/alarm/state"):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        await panel.inject_area_message(area_number=1, state=5)  # triggered, empty buffer
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/alarm/state")[-1] == "triggered":
+                break
+            await asyncio.sleep(0.02)
+        attrs_before = list(mqtt.payloads_for("texecom/alarm/attributes"))
+
+        triggered_flags = bytearray(_quiet_flags())
+        _set_flag(triggered_flags, 0, 1)
+        panel.area_flags_override = bytes(triggered_flags)
+
+        await panel.force_disconnect()
+
+        for _ in range(200):
+            link = mqtt.payloads_for("texecom/panel_link/state")
+            if link.count("OFF") >= 1 and link[-1] == "ON":
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "triggered"
+        # No additional invent on already-triggered → already-triggered edge.
+        assert mqtt.payloads_for("texecom/alarm/attributes") == attrs_before
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_non_recoverable_listen_failure_publishes_panel_link_off() -> None:
+    """Listen crash must flip panel-link OFF; must not touch alarm/zone availability."""
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_link/state", "ON", retain=True)
+    await mqtt.publish(availability_topic("texecom"), AVAILABILITY_ONLINE, retain=True)
+    settings = _static_settings()
+    zones = [Zone(number=1, zone_type=1, name="DOOR")]
+
+    with patch(
+        "texecom_alarm.app._listen_panel_messages",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("listen boom"),
+    ):
+        with pytest.raises(RuntimeError, match="listen boom"):
+            await _listen_with_reconnect(
+                AsyncMock(),
+                mqtt,
+                settings=settings,
+                zones=zones,
+                zone_count=12,
+                topic_prefix="texecom",
+                in_use_zones={1},
+                initial_alarm_payload="disarmed",
+            )
+
+    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+    # Availability unchanged — only app LWT / clean shutdown may flip it (ADR-004).
+    assert mqtt.payloads_for(availability_topic("texecom")) == [AVAILABILITY_ONLINE]

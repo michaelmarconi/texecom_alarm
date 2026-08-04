@@ -198,20 +198,35 @@ async def _listen_with_reconnect(
 ) -> None:
     """Listen for panel pushes; on ForcedDisconnect, asymmetric reconnect then resume."""
     last_alarm_payload = initial_alarm_payload
+    # Survive outages: one rolling buffer across reconnect cycles (ADR-004).
+    activity = TriggerActivityBuffer()
     while True:
-        last_alarm_payload = await _listen_panel_messages(
-            panel,
-            mqtt,
-            settings=settings,
-            topic_prefix=topic_prefix,
-            in_use_zones=in_use_zones,
-            idle_timeout=idle_timeout,
-            initial_alarm_payload=last_alarm_payload,
-        )
+        try:
+            last_alarm_payload = await _listen_panel_messages(
+                panel,
+                mqtt,
+                settings=settings,
+                topic_prefix=topic_prefix,
+                in_use_zones=in_use_zones,
+                idle_timeout=idle_timeout,
+                initial_alarm_payload=last_alarm_payload,
+                activity=activity,
+            )
+        except Exception:
+            # Non-recoverable listen failure: mark panel-link degraded, never
+            # alarm/zone availability (ADR-004). Cancellation is BaseException.
+            logger.exception("panel_listen_failed")
+            await publish_panel_link_state(
+                mqtt,  # type: ignore[arg-type]
+                topic_prefix=topic_prefix,
+                live=False,
+            )
+            raise
         logger.info(
             "panel_forced_disconnect",
             extra={"last_alarm_payload": last_alarm_payload},
         )
+        previous_payload = last_alarm_payload
         last_alarm_payload = await reconnect_after_disconnect(
             panel,
             mqtt,  # type: ignore[arg-type]
@@ -219,6 +234,14 @@ async def _listen_with_reconnect(
             zones=zones,
             zone_count=zone_count,
             last_alarm_payload=last_alarm_payload,
+        )
+        # Snapshot may edge into triggered during the outage; use preserved buffer.
+        await maybe_publish_trigger_snapshot(
+            mqtt,  # type: ignore[arg-type]
+            previous_payload=previous_payload,
+            new_payload=last_alarm_payload,
+            topic_prefix=topic_prefix,
+            buffer=activity,
         )
 
 
@@ -231,13 +254,14 @@ async def _listen_panel_messages(
     in_use_zones: set[int],
     idle_timeout: float = _KEEPALIVE_IDLE_TIMEOUT,
     initial_alarm_payload: str | None = None,
+    activity: TriggerActivityBuffer | None = None,
 ) -> str | None:
     """Steady-state loop until ForcedDisconnect; returns last HOUSE alarm payload.
 
     Keepalive on idle timeout. Cancellation still propagates.
     """
     logger.debug("panel_listen_start")
-    activity = TriggerActivityBuffer()
+    buffer = activity if activity is not None else TriggerActivityBuffer()
     # Seed from area-flags snapshot so cold-start already-in-alarm does not invent.
     last_alarm_payload: str | None = initial_alarm_payload
     try:
@@ -254,7 +278,7 @@ async def _listen_panel_messages(
             subtype = body[0]
             if subtype == MSG_ZONE:
                 if len(body) >= 3:
-                    activity.record_zone(body[1], body[2])
+                    buffer.record_zone(body[1], body[2])
                 await handle_zone_message(
                     mqtt,  # type: ignore[arg-type]
                     body,
@@ -264,7 +288,7 @@ async def _listen_panel_messages(
             elif subtype == MSG_LOG:
                 # Record type/group when present; LOG never publishes MQTT state.
                 if len(body) >= 3:
-                    activity.record_log(body[1], body[2])
+                    buffer.record_log(body[1], body[2])
                 else:
                     logger.debug("log_message_short", extra={"body": body.hex()})
             elif subtype == MSG_AREA:
@@ -280,7 +304,7 @@ async def _listen_panel_messages(
                         previous_payload=last_alarm_payload,
                         new_payload=new_payload,
                         topic_prefix=topic_prefix,
-                        buffer=activity,
+                        buffer=buffer,
                     )
                     last_alarm_payload = new_payload
             else:
