@@ -1,0 +1,181 @@
+"""Asyncio FakePanel test double — Connect-protocol login, keepalive, garbage."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from collections.abc import Callable
+
+from texecom_alarm.protocol.crc import crc8
+from texecom_alarm.protocol.frame import (
+    ACK,
+    CMD_GETDATETIME,
+    CMD_LOGIN,
+    HEADER_START,
+    TYPE_COMMAND,
+    TYPE_MESSAGE,
+    TYPE_RESPONSE,
+    Frame,
+    encode_frame,
+    try_decode_frame,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class FakePanel:
+    """Minimal asyncio TCP panel double for protocol-client tests."""
+
+    def __init__(self, udl_password: str = "1234") -> None:
+        self.udl_password = udl_password
+        self.host = "127.0.0.1"
+        self.port = 0
+        self._server: asyncio.Server | None = None
+        self._writer: asyncio.StreamWriter | None = None
+        self.authenticated = False
+        self.inject_bytes: bytes = b""
+        self.drop_next_command_responses = 0
+        self.last_command: int | None = None
+        self.keepalive_attempts = 0
+        self.keepalive_sequences: list[int] = []
+        self.resync_survivals = 0
+        self.interleave_message_before_response: bytes | None = None
+        self.stale_sequence_before_response = False
+        self.wrong_cmd_before_response = False
+        self.close_on_next_command = False
+        self.plusplusplus_on_next_command = False
+        self.command_frame_before_response = False
+        self._handlers: dict[int, Callable[[Frame], bytes]] = {
+            CMD_LOGIN: self._handle_login,
+            CMD_GETDATETIME: self._handle_getdatetime,
+        }
+
+    async def start(self) -> None:
+        self._server = await asyncio.start_server(self._on_client, self.host, 0)
+        sockets = self._server.sockets
+        if not sockets:
+            raise RuntimeError("FakePanel failed to bind")
+        self.port = sockets[0].getsockname()[1]
+        logger.debug("fake_panel_started", extra={"port": self.port})
+
+    async def stop(self) -> None:
+        if self._writer is not None and not self._writer.is_closing():
+            self._writer.close()
+            await self._writer.wait_closed()
+            self._writer = None
+        if self._server is not None:
+            self._server.close()
+            await self._server.wait_closed()
+            self._server = None
+
+    def inject_before_next_response(self, junk: bytes) -> None:
+        self.inject_bytes = junk
+
+    def connect(self) -> None:
+        """Sync stub retained for older e2e smoke shape."""
+        self.authenticated = False
+
+    def close(self) -> None:
+        """Sync stub retained for older e2e smoke shape."""
+        self.authenticated = False
+
+    async def _on_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self._writer = writer
+        buf = bytearray()
+        try:
+            while True:
+                chunk = await reader.read(4096)
+                if not chunk:
+                    break
+                buf.extend(chunk)
+                while True:
+                    frame, consumed = try_decode_frame(buf)
+                    if consumed == 0:
+                        break
+                    del buf[:consumed]
+                    if frame is None:
+                        continue
+                    await self._handle_frame(frame, writer)
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            if self._writer is writer:
+                self._writer = None
+
+    async def _handle_frame(self, frame: Frame, writer: asyncio.StreamWriter) -> None:
+        if frame.msg_type != TYPE_COMMAND or not frame.body:
+            return
+        cmd = frame.body[0]
+        self.last_command = cmd
+        if cmd == CMD_GETDATETIME:
+            self.keepalive_attempts += 1
+            self.keepalive_sequences.append(frame.sequence)
+
+        handler = self._handlers.get(cmd)
+        if handler is None:
+            return
+        resp_body = handler(frame)
+
+        if cmd != CMD_LOGIN and self.close_on_next_command:
+            self.close_on_next_command = False
+            writer.close()
+            return
+
+        if cmd != CMD_LOGIN and self.plusplusplus_on_next_command:
+            self.plusplusplus_on_next_command = False
+            writer.write(b"+++")
+            await writer.drain()
+            return
+
+        if cmd != CMD_LOGIN and self.drop_next_command_responses > 0:
+            self.drop_next_command_responses -= 1
+            logger.debug("fake_panel_dropped_response", extra={"cmd": cmd})
+            return
+
+        if self.inject_bytes:
+            junk = self.inject_bytes
+            self.inject_bytes = b""
+            writer.write(junk)
+            await writer.drain()
+            self.resync_survivals += 1
+            logger.debug("fake_panel_injected_garbage", extra={"bytes": junk.hex()})
+
+        if self.interleave_message_before_response is not None:
+            msg_body = self.interleave_message_before_response
+            self.interleave_message_before_response = None
+            writer.write(encode_frame(TYPE_MESSAGE, 0, msg_body))
+            await writer.drain()
+
+        if self.command_frame_before_response:
+            self.command_frame_before_response = False
+            writer.write(encode_frame(TYPE_COMMAND, frame.sequence, bytes([CMD_GETDATETIME])))
+            await writer.drain()
+
+        if self.stale_sequence_before_response:
+            self.stale_sequence_before_response = False
+            writer.write(encode_frame(TYPE_RESPONSE, (frame.sequence + 1) % 256, resp_body))
+            await writer.drain()
+
+        if self.wrong_cmd_before_response:
+            self.wrong_cmd_before_response = False
+            writer.write(encode_frame(TYPE_RESPONSE, frame.sequence, bytes([0xFF, ACK])))
+            await writer.drain()
+            return
+
+        response = encode_frame(TYPE_RESPONSE, frame.sequence, resp_body)
+        # Sanity: CRC must be valid on the wire we emit.
+        assert response[-1] == crc8(response[:-1])
+        assert response[0] == HEADER_START
+        writer.write(response)
+        await writer.drain()
+
+    def _handle_login(self, frame: Frame) -> bytes:
+        password = frame.body[1:].decode("ascii", errors="replace")
+        if password == self.udl_password:
+            self.authenticated = True
+            return bytes([CMD_LOGIN, ACK])
+        return bytes([CMD_LOGIN, 0x15])
+
+    def _handle_getdatetime(self, frame: Frame) -> bytes:
+        # Minimal opaque datetime payload after the command echo byte.
+        return bytes([CMD_GETDATETIME, 0x18, 0x08, 0x04, 0x0E, 0x25, 0x00])
