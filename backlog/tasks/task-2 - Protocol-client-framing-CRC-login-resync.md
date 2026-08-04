@@ -1,7 +1,7 @@
 ---
 id: TASK-2
 title: 'Protocol client: framing, CRC, login, resync'
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-04 12:51'
 updated_date: '2026-08-04 13:52'
@@ -36,9 +36,9 @@ Asyncio is the chosen runtime for TCP and later MQTT.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 FakePanel login completes successfully and yields an authenticated session in tests
-- [ ] #2 Injected non-protocol bytes are skipped via frame resync without closing the session
-- [ ] #3 Idle keepalive sends a safe read-only command and retries once on short timeout with the same sequence number
+- [x] #1 FakePanel login completes successfully and yields an authenticated session in tests
+- [x] #2 Injected non-protocol bytes are skipped via frame resync without closing the session
+- [x] #3 Idle keepalive sends a safe read-only command and retries once on short timeout with the same sequence number
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -63,5 +63,5 @@ Verification: `uv run pytest --cov=texecom_alarm --cov-fail-under=90` → 27 pas
 Notes/assumptions: Production defaults are `login_delay=0.5` and `response_timeout=2.0`; tests inject shorter values. Keepalive uses exactly one same-sequence retry (`keepalive_retries=1`). CRC-8 matches SPIKE-001 (`poly=0x185` / working `0x85`, init `0xff`). Never targeted the live panel. Left `uv.lock` untracked (not in task scope).
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
