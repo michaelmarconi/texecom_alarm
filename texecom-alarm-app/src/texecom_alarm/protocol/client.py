@@ -12,6 +12,8 @@ from texecom_alarm.protocol.frame import (
     CMD_GET_ZONE_STATE,
     CMD_GETDATETIME,
     CMD_LOGIN,
+    CMD_SET_AREA_ARM,
+    CMD_SET_AREA_DISARM,
     CMD_SETEVENTMESSAGES,
     MAX_ZONES_PER_STATE_REQUEST,
     NAK,
@@ -58,6 +60,7 @@ class PanelClient:
         self._seq = 0
         self._authenticated = False
         self._message_queue: asyncio.Queue[Frame] = asyncio.Queue()
+        self._io_lock = asyncio.Lock()
 
     @property
     def authenticated(self) -> bool:
@@ -166,6 +169,23 @@ class PanelClient:
             raise ProtocolError("SETEVENTMESSAGES NAK")
         logger.debug("panel_set_event_messages_ok")
 
+    async def set_area_arm(self, mode: int) -> None:
+        """SETAREAARM (cmd 6): shared arm command; mode byte from Settings mapping."""
+        body = bytes([mode & 0xFF, 0x01])
+        logger.debug("panel_set_area_arm", extra={"mode": mode & 0xFF})
+        payload = await self.send_command(CMD_SET_AREA_ARM, body)
+        if len(payload) >= 1 and payload[0] == NAK:
+            raise ProtocolError("SETAREAARM NAK")
+        logger.debug("panel_set_area_arm_ok", extra={"mode": mode & 0xFF})
+
+    async def set_area_disarm(self) -> None:
+        """SETAREADISARM (cmd 8): mode-independent disarm / cancel-during-exit."""
+        logger.debug("panel_set_area_disarm")
+        payload = await self.send_command(CMD_SET_AREA_DISARM, bytes([0x01]))
+        if len(payload) >= 1 and payload[0] == NAK:
+            raise ProtocolError("SETAREADISARM NAK")
+        logger.debug("panel_set_area_disarm_ok")
+
     async def recv_message(self, *, timeout: float | None = None) -> Frame:
         """Return the next queued unsolicited ``'M'`` frame, or wait for one."""
         if not self._message_queue.empty():
@@ -174,13 +194,22 @@ class PanelClient:
             raise ProtocolError("not connected")
         wait_timeout = self.response_timeout if timeout is None else timeout
         deadline = asyncio.get_running_loop().time() + wait_timeout
+        # Poll in short slices so MQTT-driven send_command can acquire _io_lock.
+        _poll = 0.05
         while True:
             if not self._message_queue.empty():
                 return self._message_queue.get_nowait()
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
                 raise TimeoutError("timed out waiting for message")
-            frame = await self._recv_frame(timeout=remaining)
+            slice_timeout = min(remaining, _poll)
+            async with self._io_lock:
+                if not self._message_queue.empty():
+                    return self._message_queue.get_nowait()
+                try:
+                    frame = await self._recv_frame(timeout=slice_timeout)
+                except TimeoutError:
+                    continue
             if frame.msg_type == TYPE_MESSAGE:
                 return frame
             logger.debug(
@@ -198,26 +227,27 @@ class PanelClient:
         if self._writer is None or self._reader is None:
             raise ProtocolError("not connected")
 
-        seq = self._next_seq()
-        frame = encode_command(cmd, body, sequence=seq)
-        attempt = 0
-        while True:
-            self._writer.write(frame)
-            await self._writer.drain()
-            logger.debug(
-                "panel_command_sent",
-                extra={"cmd": cmd, "seq": seq, "attempt": attempt},
-            )
-            try:
-                return await self._await_response(cmd, seq)
-            except TimeoutError:
-                attempt += 1
-                if attempt > retries:
-                    raise
+        async with self._io_lock:
+            seq = self._next_seq()
+            frame = encode_command(cmd, body, sequence=seq)
+            attempt = 0
+            while True:
+                self._writer.write(frame)
+                await self._writer.drain()
                 logger.debug(
-                    "panel_command_retry",
+                    "panel_command_sent",
                     extra={"cmd": cmd, "seq": seq, "attempt": attempt},
                 )
+                try:
+                    return await self._await_response(cmd, seq)
+                except TimeoutError:
+                    attempt += 1
+                    if attempt > retries:
+                        raise
+                    logger.debug(
+                        "panel_command_retry",
+                        extra={"cmd": cmd, "seq": seq, "attempt": attempt},
+                    )
 
     def _next_seq(self) -> int:
         seq = self._seq

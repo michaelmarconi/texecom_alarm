@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
 import aiomqtt
@@ -80,6 +81,19 @@ class AiomqttPublisher:
         data = payload.encode("utf-8") if isinstance(payload, str) else payload
         await self._client.publish(topic, data, qos=qos, retain=retain)
         logger.debug("mqtt_publish", extra={"topic": topic, "retain": retain})
+
+    async def subscribe(self, topic: str) -> None:
+        if self._client is None:
+            raise RuntimeError("MQTT publisher not connected")
+        await self._client.subscribe(topic)
+        logger.debug("mqtt_subscribed", extra={"topic": topic})
+
+    @property
+    def inbound_messages(self) -> AsyncIterator[Any]:
+        """Async iterator of inbound MQTT messages (aiomqtt ``Message`` objects)."""
+        if self._client is None:
+            raise RuntimeError("MQTT publisher not connected")
+        return self._client.messages
 
     async def disconnect(self) -> None:
         client = self._client
