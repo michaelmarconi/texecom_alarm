@@ -85,6 +85,13 @@ Note: Reconnect timing defaults (~10s normal / ~90s trigger) rest on a single SP
 `cd texecom-alarm-app && python -m pytest tests/test_reconnect.py tests/test_config.py tests/test_mqtt_discovery.py tests/test_e2e_fake_panel.py -q` — FakePanel forced drop with/without prior `triggered`; connectivity OFF then ON; post-reconnect LOGIN + zone/area snapshots + SETEVENTMESSAGES; shortened budgets for speed; zone/alarm discovery still use app LWT only.
 <!-- SECTION:PLAN:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 docs/definition-of-done.md
