@@ -3,9 +3,9 @@
 Bridge a Texecom Premier Elite panel (ComIP / Texecom Connect) to Home Assistant
 over MQTT discovery — with reliable reconnect behaviour and Home arm mode support.
 
-> **Status:** under active development. The Add-on shell runs; panel protocol and
-> MQTT entity publishing land via the implementation plan. Configuration options
-> below mark **available now** vs **planned**.
+> **Status:** under active development. The Add-on shell and configuration surface
+> are wired; panel protocol and MQTT entity publishing land via the implementation
+> plan.
 
 ## Installation
 
@@ -22,24 +22,62 @@ fail.
 
 ## Configuration
 
-### Option: `message` _(temporary bootstrap)_
+All options below are Supervisor `config.yaml` / `options.json` keys. Required
+fields must be non-empty before the bridge can start.
 
-Placeholder string written to the log on start to prove the Supervisor
-`options.json` → `bashio::config` path. Removed once real options are wired.
+### Option: `panel_host`
 
-### Planned options
+Hostname or IP address of the panel's ComIP / Texecom Connect module on the LAN.
+**Required.**
 
-These will replace `message` and are required for a working install (exact keys
-may shift slightly before first public release — this section stays the source of
-truth for the Supervisor docs tab):
+### Option: `panel_port`
 
-| Option | Purpose |
-| --- | --- |
-| Panel host / port | ComIP / Connect TCP endpoint on the LAN |
-| UDL password | Panel login credential (change from the factory default) |
-| MQTT broker host, port, credentials, topic prefix | Standing runtime dependency for discovery and state |
-| Part-Arm slot → HA mode map | Which panel Part-Arm slot means Away / Night / Home for this installation (required — slot roles are install-specific and cannot be auto-detected from `GETAREADETAILS`) |
-| Log level | Prefer `debug` while validating stability so every connect / login / enumerate / subscribe / arm / disarm / resync / reconnect step is traceable from Add-on logs alone |
+TCP port for the ComIP / Connect session. Default: `10001`.
+
+### Option: `udl_password`
+
+Panel UDL login password. Change this from the factory default on any panel still
+using it. **Required.** Treated as a secret in the Supervisor UI.
+
+### Option: `mqtt_host`
+
+MQTT broker hostname or IP. Standing runtime dependency for discovery and state
+publishing. **Required.**
+
+### Option: `mqtt_port`
+
+MQTT broker port. Default: `1883`.
+
+### Option: `mqtt_username`
+
+Optional MQTT username. Leave empty when the broker allows anonymous clients.
+
+### Option: `mqtt_password`
+
+Optional MQTT password. Leave empty when unused. Treated as a secret in the
+Supervisor UI.
+
+### Option: `mqtt_topic_prefix`
+
+Root prefix for discovery and state topics this Add-on publishes. Default:
+`texecom`.
+
+### Option: `part_arm_away`
+
+Mode byte sent with the shared arm command for Home Assistant **Away**. Integer
+`0`–`255`. Default: `0`. Must match this installation's engineer Part-Arm layout
+— do not assume another household's mapping.
+
+### Option: `part_arm_night`
+
+Mode byte for Home Assistant **Night**. Integer `0`–`255`. Default: `1`.
+
+### Option: `part_arm_home`
+
+Mode byte for Home Assistant **Home**. Integer `0`–`255`. Default: `2`.
+
+Part-Arm slot roles are install-specific and cannot be auto-detected from
+`GETAREADETAILS`; set these three fields to the mode bytes your panel expects.
 
 ## What it publishes (MQTT discovery)
 
