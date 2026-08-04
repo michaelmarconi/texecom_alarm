@@ -1,8 +1,8 @@
 # Architecture
 
-<!-- Synthesised by /architecture on 2026-08-03 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-002-use-frame-resync-and-asymmetric-reconnect-for-panel-protocol-collisions.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md -->
+<!-- Synthesised by /architecture on 2026-08-04 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-002-use-frame-resync-and-asymmetric-reconnect-for-panel-protocol-collisions.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-005-use-confirmed-shared-arm-disarm-commands-with-configurable-part-arm-mapping.md -->
 
-**Date:** 2026-08-03
+**Date:** 2026-08-04
 **State:** Accepted ✅
 
 ## Overview
@@ -12,7 +12,9 @@ specific behaviours motivate this project: arming to Home mode has never complet
 without an add-on crash, and crashes/restarts happen occasionally under other
 conditions too — both empirically confirmed against the live panel in this project's
 own spikes. Every day, several times a day, the household's automations, dashboard,
-and HomeKit bridges all depend on `the prior MQTT bridge` staying up.
+and HomeKit bridges all depend on `the prior MQTT bridge` staying up. The same app is also
+intended for other Premier Elite households, published as a public Home Assistant
+Add-on with install-time options for facts that differ per panel.
 
 The Texecom Alarm App takes over that role: a self-built Home Assistant App (add-on)
 that lives on the same Home Assistant OS host, takes over the alarm panel's single
@@ -40,6 +42,9 @@ Building this commits the project to:
   than after an ordinary arm or disarm.
 - Publishing to Home Assistant purely via MQTT discovery, with all household-specific
   arming and notification logic staying entirely outside this app.
+- Issuing arm and disarm with the empirically confirmed shared command mechanism, and
+  sourcing which Part-Arm slot means Home/Night/Away from per-installation
+  configuration rather than hardcoding this household's engineer layout.
 
 **Diagram colours:** blue = this system (authored components and local storage); grey =
 external people and systems.
@@ -127,10 +132,10 @@ flowchart LR
 Home Assistant, taking over the role `the prior MQTT bridge` plays today.
 **Technology:** Python 3, packaged as a Home Assistant App (Docker image on
 `ghcr.io/home-assistant/base`, s6-overlay-supervised process) — the App-not-integration
-shape is ADR-003; the language itself was decided directly during this architecture
-session (2026-08-03), building on the framing/CRC/resync/decode code already validated
-live against the panel in SPIKE-001 and SPIKE-002 — it is not yet backed by its own ADR
-(see Open questions).
+shape is ADR-003; the language itself was decided directly during the original
+architecture session (2026-08-03), building on the framing/CRC/resync/decode and
+arm/disarm command work validated live against the panel in SPIKE-001, SPIKE-002, and
+SPIKE-005 — it is not yet backed by its own ADR (see Open questions).
 **Exposes:** Home Assistant MQTT discovery topics and their paired state/command
 topics for: one `alarm_control_panel` entity; one `binary_sensor` entity per in-use
 zone; one dedicated connectivity/freshness `binary_sensor` reporting panel-link health
@@ -138,12 +143,15 @@ zone; one dedicated connectivity/freshness `binary_sensor` reporting panel-link 
 alarm entity (ADR-004). No HTTP API, no HA config-flow, no entity-registry presence
 beyond what HA's own MQTT integration creates from these discovery payloads (ADR-003).
 **Consumes:**
-- Texecom Connect protocol over TCP to the panel's ComIP module (ADR-001, ADR-002).
+- Texecom Connect protocol over TCP to the panel's ComIP module (ADR-001, ADR-002,
+  ADR-005).
 - The household's MQTT broker, as a standing runtime dependency (ADR-003) — the same
   broker `the prior MQTT bridge` already uses today.
-- App configuration (panel host/port, UDL password, MQTT broker settings) via the HA
-  Supervisor's `config.yaml`/`options.json`/`bashio::config` mechanism, already
-  scaffolded in this repo.
+- App configuration (panel host/port, UDL password, MQTT broker settings, and the
+  Part-Arm slot-to-HA-mode mapping) via the HA Supervisor's
+  `config.yaml`/`options.json`/`bashio::config` mechanism, already scaffolded in this
+  repo (ADR-005 requires the mapping to be install-time configuration; the exact option
+  shape is still open — see Open questions).
 
 Key behaviours:
 
@@ -181,15 +189,14 @@ Key behaviours:
 - **Cutover dependency** (ADR-001): because the panel's ComIP module accepts only one
   TCP client at a time, `the prior MQTT bridge` must be fully stopped — not merely idle —
   before this app's first connection attempt.
-- **Arm/disarm command handling — unresolved.** The app is expected to eventually
-  accept `arm_away` / `arm_night` / `arm_home` / `disarm` over its `alarm_control_panel`
-  MQTT command topic and issue the matching Texecom Connect command to the panel. **No
-  spike or prior art has determined the byte-level command/body needed to actively
-  arm or disarm this panel** — SPIKE-002 only decoded the panel's own observation-side
-  events (`Part Arm 2`/`part armed`, etc.), not the send side, and guessing an
-  undocumented command against a live, occupied household security panel was
-  explicitly ruled unsafe during that spike. This is a hard gap, not an implementation
-  detail — see Open questions.
+- **Arm/disarm command handling** (ADR-005): accepts `arm_away` / `arm_night` /
+  `arm_home` / `disarm` on the `alarm_control_panel` MQTT command topic and issues the
+  confirmed shared Connect-protocol commands — `cmd=6` with a configurable mode byte
+  for arm (this household's defaults are `00`/`01`/`02` = Away/Night/Home, overridable
+  per install), and `cmd=8, body=01` for mode-independent disarm (including
+  cancel-during-exit). The mode-byte mapping is never hardcoded to this household's
+  Part-Arm layout; `GETAREADETAILS` cannot auto-detect Night/Home slot roles and must
+  not be treated as a source for that mapping.
 
 ## Key flows
 
@@ -278,11 +285,11 @@ disconnect. The `alarm_control_panel` entity itself is unaffected by this whole 
 it keeps reporting `triggered` throughout; only the dedicated connectivity
 `binary_sensor` reflects the degraded/recovering link (ADR-004).
 
-### Arm/disarm command — open gap
+### Arm/disarm command
 
-Shown for completeness, but the final step is not yet implementable: the wire-level
-command this app would need to send does not exist in any inspected prior art or
-spike.
+Household arm/disarm arrives via the unchanged `house_alarm_panel` wrapper onto this
+app's MQTT command topic; the app maps the HA arm mode through install-time Part-Arm
+configuration and issues the confirmed Connect-protocol command (ADR-005).
 
 ```mermaid
 flowchart LR
@@ -290,18 +297,19 @@ flowchart LR
     Wrapper["house_alarm_panel<br/>wrapper (unchanged)"]:::external
     MqttCmd["MQTT command<br/>topic"]:::external
     Recv["App receives<br/>command"]:::owned
-    Unknown["? unresolved: no known<br/>Connect-protocol send command"]:::owned
+    Map["Map HA mode via<br/>install-time config"]:::owned
+    Send["Issue confirmed<br/>arm or disarm cmd"]:::owned
+    Panel["Panel ACKs +<br/>AREA/LOG events"]:::external
 
-    Cmd --> Wrapper --> MqttCmd --> Recv --> Unknown
+    Cmd --> Wrapper --> MqttCmd --> Recv --> Map --> Send --> Panel
 
     classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
 ```
 
-Closing this gap safely requires a new, dedicated investigation against the live
-panel — not a guess shipped into a household security system — before
-`spec-alarm-control.md`'s arm/disarm acceptance criteria can be built at all. See Open
-questions.
+Away, Night, Home, and Disarm are all implementable from SPIKE-005 / ADR-005. The
+only install-specific input is which mode byte corresponds to which HA arm mode —
+documented add-on options, not code.
 
 ## Security, operations, scope, and open questions
 
@@ -331,24 +339,19 @@ module accepts only one TCP client at a time (ADR-001).
 - Reimplementing the arm guard-condition or notification logic that lives in
   `configuration/templates/house_alarm.yaml` / `script.notify_actor` — stays entirely
   in the household's own Home Assistant configuration (ADR-003).
-- Support for the older UDL/Wintex serial protocol, or any panel model other than the
-  one this project was built against.
-- Publishing or packaging this app for other households — a possible future stretch
-  goal that isn't shaping this architecture.
+- Support for the older UDL/Wintex serial protocol, or panel families other than
+  Premier Elite.
+- A guided config-flow/setup-wizard UI, HACS packaging, or a natively-registered
+  `custom_components` integration — distribution is a public Add-on repository with
+  documented options (ADR-003; brief non-goals).
 
 **Open questions.**
 
-- **Send-side arm/disarm framing is completely unknown** — no spike or prior art has
-  issued a real arm/disarm command over Connect protocol; SPIKE-002 only decoded the
-  panel's own observation-side events. This blocks `spec-alarm-control.md`'s core
-  arm/disarm acceptance criteria outright. → run `/spike` to investigate this safely
-  before planning the arm-control capability's command-issuing path.
-- **Python 3 was decided directly in this session**, not by a standing ADR. → run
-  `/adr` if this should be formally, immutably recorded before build begins. (Docker
-  packaging and the s6-overlay-supervised process are not a comparable decision point —
-  both are inherited, platform-mandated requirements of building any Home Assistant
-  App/add-on at all, fixed by this repo's pre-existing scaffold rather than chosen
-  among alternatives.)
+- **Python 3 was decided directly in the original architecture session**, not by a
+  standing ADR. → run `/adr` if this should be formally, immutably recorded before
+  build begins. (Docker packaging and the s6-overlay-supervised process are not a
+  comparable decision point — both are inherited, platform-mandated requirements of
+  building any Home Assistant App/add-on at all.)
 - **Entity ID/naming migration** (RISK-005): should new entity IDs exactly match
   today's `alarm_control_panel.texecom_alarm_arm_status` /
   `binary_sensor.texecom_alarm_*` naming, or is a documented rename acceptable? Both
@@ -371,13 +374,15 @@ module accepts only one TCP client at a time (ADR-001).
 - **Whether to add a last-known-good cached zone list fallback** for when the panel
   can't be reached at startup (ADR-001's Option C) is an explicit open follow-on, not
   part of this architecture — there is currently no offline/static fallback at all.
-- **The panel's Com Port / UDL-Digi-Options configuration has not yet been checked or
-  recorded** (ADR-002's secondary mitigation) — a one-time operational task,
-  independent of this app's own resync/reconnect logic. Separately, whether this
-  isolation would also shorten or eliminate the trigger-time forced disconnect itself
-  (rather than just the ordinary arm/disarm collision noise SPIKE-002 tested it
-  against) is an explicit new Spike Candidate in `spec-alarm-control.md`, not yet
-  investigated. → run `/spike`.
+- **Concrete shape of the Part-Arm mapping add-on options** (ADR-005 follow-on) —
+  e.g. three discrete fields versus a single ordered list — is not decided; only that
+  the mapping must be configurable is fixed. → design during `/plan` / build of the
+  app's config surface; do not treat any one shape as already mandated.
+- **Com Port / reporting isolation** (RISK-011 / ADR-002 secondary mitigation) remains
+  an optional installer-level probe: it has not been checked on this panel, and must
+  not be assumed to shorten or eliminate the trigger-time forced disconnect
+  (ADR-004). No advance spike is required unless residual outage pain after shipping
+  resilient reconnect warrants one.
 
 ## Review
 
@@ -385,3 +390,4 @@ module accepts only one TCP client at a time (ADR-001).
 |---|------|---------|--------|
 | 1 | 2026-08-03 | Issues found | 1 |
 | 2 | 2026-08-03 | Clear | — |
+| 3 | 2026-08-04 | Clear | — |
