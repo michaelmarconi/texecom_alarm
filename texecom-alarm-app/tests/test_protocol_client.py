@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from tests.fake_panel import FakePanel, FakeZone
 
@@ -336,6 +338,27 @@ async def test_wrong_response_cmd_raises(panel: FakePanel) -> None:
     with pytest.raises(ProtocolError, match="response cmd"):
         await client.keepalive()
     await client.close()
+
+
+@pytest.mark.asyncio
+async def test_close_waits_for_in_flight_io_lock(panel: FakePanel) -> None:
+    """Reconnect teardown must not null streams under an in-flight send_command."""
+    client = await _logged_in_client(panel)
+    await client._io_lock.acquire()
+    close_done = asyncio.Event()
+
+    async def do_close() -> None:
+        await client.close()
+        close_done.set()
+
+    task = asyncio.create_task(do_close())
+    await asyncio.sleep(0.05)
+    assert not close_done.is_set()
+    assert client._writer is not None
+    client._io_lock.release()
+    await asyncio.wait_for(task, timeout=1.0)
+    assert close_done.is_set()
+    assert client._writer is None
 
 
 @pytest.mark.asyncio

@@ -11,12 +11,18 @@ from texecom_alarm.mqtt.discovery import (
     ALARM_OBJECT_ID,
     AVAILABILITY_OFFLINE,
     AVAILABILITY_ONLINE,
+    CONNECTIVITY_OBJECT_ID,
     alarm_attributes_topic,
     alarm_discovery_payload,
     alarm_discovery_topic,
     availability_topic,
+    connectivity_discovery_payload,
+    connectivity_discovery_topic,
+    connectivity_state_topic,
     publish_alarm_discovery,
+    publish_connectivity_discovery,
     publish_zone_discovery,
+    zone_discovery_payload,
     zone_discovery_topic,
     zone_object_id,
 )
@@ -54,6 +60,66 @@ def test_alarm_discovery_payload_shape() -> None:
     assert "arm_home" in features
     assert "arm_away" in features
     assert "arm_night" in features
+
+
+def test_connectivity_object_id_is_panel_link() -> None:
+    assert CONNECTIVITY_OBJECT_ID == "texecom_alarm_panel_link"
+
+
+def test_connectivity_discovery_topic() -> None:
+    assert (
+        connectivity_discovery_topic()
+        == "homeassistant/binary_sensor/texecom_alarm_panel_link/config"
+    )
+
+
+def test_connectivity_state_topic() -> None:
+    assert connectivity_state_topic("texecom") == "texecom/panel_link/state"
+
+
+def test_connectivity_discovery_payload_shape() -> None:
+    payload = connectivity_discovery_payload(topic_prefix="texecom")
+    assert payload["unique_id"] == CONNECTIVITY_OBJECT_ID
+    assert payload["object_id"] == CONNECTIVITY_OBJECT_ID
+    assert payload["state_topic"] == "texecom/panel_link/state"
+    assert payload["device_class"] == "connectivity"
+    assert payload["payload_on"] == "ON"
+    assert payload["payload_off"] == "OFF"
+    assert payload["availability_topic"] == "texecom/status"
+    assert payload["payload_available"] == AVAILABILITY_ONLINE
+    assert payload["payload_not_available"] == AVAILABILITY_OFFLINE
+
+
+def test_zone_and_alarm_discovery_use_app_lwt_only() -> None:
+    """AC-3: zone/alarm availability is app LWT — not panel-link state."""
+    zone = Zone(number=1, zone_type=1, name="FRONT DOOR")
+    zone_payload = zone_discovery_payload(zone, topic_prefix="texecom")
+    alarm_payload = alarm_discovery_payload(topic_prefix="texecom")
+    assert zone_payload["availability_topic"] == "texecom/status"
+    assert alarm_payload["availability_topic"] == "texecom/status"
+    assert zone_payload["availability_topic"] != connectivity_state_topic("texecom")
+    assert alarm_payload["availability_topic"] != connectivity_state_topic("texecom")
+
+
+@pytest.mark.asyncio
+async def test_publish_connectivity_discovery_retained() -> None:
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect(
+        will_topic=availability_topic("texecom"),
+        will_payload=AVAILABILITY_OFFLINE,
+        will_retain=True,
+    )
+    await publish_connectivity_discovery(mqtt, topic_prefix="texecom")
+    topic = "homeassistant/binary_sensor/texecom_alarm_panel_link/config"
+    msgs = [m for m in mqtt.messages if m.topic == topic]
+    assert len(msgs) == 1
+    assert msgs[0].retain is True
+    payload = json.loads(
+        msgs[0].payload if isinstance(msgs[0].payload, str) else msgs[0].payload.decode()
+    )
+    assert payload["unique_id"] == CONNECTIVITY_OBJECT_ID
+    assert payload["device_class"] == "connectivity"
+    assert payload["availability_topic"] == "texecom/status"
 
 
 @pytest.mark.asyncio

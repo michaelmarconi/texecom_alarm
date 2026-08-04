@@ -79,6 +79,29 @@ Mode byte for Home Assistant **Home**. Integer `0`–`255`. Default: `2`.
 Part-Arm slot roles are install-specific and cannot be auto-detected from
 `GETAREADETAILS`; set these three fields to the mode bytes your panel expects.
 
+### Option: `reconnect_normal_attempts`
+
+How many reconnect tries are treated as the "normal" budget after an ordinary
+panel disconnect (for example around arm/disarm). Integer ≥ `1`. Default: `4`.
+Tunable — not a final hardcoded value (ADR-002). After this many attempts the
+Add-on keeps retrying at the same interval rather than exiting.
+
+### Option: `reconnect_normal_interval_seconds`
+
+Seconds to wait between normal-budget reconnect attempts. Default: `2.5`
+(about 10s for the default attempt count). May be a fraction.
+
+### Option: `reconnect_trigger_attempts`
+
+Reconnect try count for the longer budget used when the last decoded alarm
+state was `triggered` before the disconnect. Integer ≥ `1`. Default: `18`.
+Tunable — based on a single observed trigger recovery window.
+
+### Option: `reconnect_trigger_interval_seconds`
+
+Seconds between trigger-budget reconnect attempts. Default: `5` (about 90s for
+the default attempt count).
+
 ## What it publishes (MQTT discovery)
 
 Once implemented, the Add-on will create entities that behave like any other
