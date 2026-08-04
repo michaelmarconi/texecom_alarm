@@ -17,6 +17,11 @@ RUN \
   && curl -sSLf -o /usr/bin/tempio \
     "https://github.com/home-assistant/tempio/releases/download/${TEMPIO_VERSION}/tempio_${tempio_arch}"
 
+# Python runtime + install the bridge package (aiomqtt pulled in via pyproject)
+RUN apk add --no-cache python3 py3-pip
+COPY texecom-alarm-app /usr/src/texecom-alarm-app
+RUN pip3 install --no-cache-dir --break-system-packages /usr/src/texecom-alarm-app
+
 # Copy root filesystem
 COPY rootfs /
 
