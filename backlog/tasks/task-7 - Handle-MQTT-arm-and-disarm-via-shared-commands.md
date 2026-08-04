@@ -1,10 +1,10 @@
 ---
 id: TASK-7
 title: Handle MQTT arm and disarm via shared commands
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 16:48'
+updated_date: '2026-08-04 16:53'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -85,6 +85,12 @@ Note: Depends on TASK-6 (ready, not built): command topic, discovery, and live A
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: MQTT ARM_*/DISARM on {prefix}/alarm/command now drive shared panel cmd 6/8 via configurable part_arm_* mapping (ADR-005).
+Changed files: texecom-alarm-app/src/texecom_alarm/protocol/frame.py, texecom-alarm-app/src/texecom_alarm/protocol/client.py, texecom-alarm-app/src/texecom_alarm/arm_commands.py, texecom-alarm-app/src/texecom_alarm/mqtt/publisher.py, texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/tests/fake_panel.py, texecom-alarm-app/tests/recording_mqtt.py, texecom-alarm-app/tests/test_arm_commands.py, texecom-alarm-app/tests/test_protocol_client.py, texecom-alarm-app/tests/test_e2e_fake_panel.py
+Verification: pytest --cov=texecom_alarm --cov-fail-under=90 -q — 128 passed, 92.90% coverage; ruff check + format --check clean
+Notes/assumptions: PanelClient gained an _io_lock with short-poll recv_message so concurrent MQTT command handler and panel listen loop can share the TCP session safely. Shared MQTT inbound surface is subscribe() + inbound_messages (RecordingMqtt keeps messages for outbound; tests inject via push_inbound). Command path does not publish alarm state (AREA/snapshot only).
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
