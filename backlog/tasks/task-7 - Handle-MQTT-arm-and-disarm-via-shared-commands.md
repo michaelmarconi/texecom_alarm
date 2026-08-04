@@ -4,7 +4,7 @@ title: Handle MQTT arm and disarm via shared commands
 status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 16:53'
+updated_date: '2026-08-04 16:55'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -92,5 +92,5 @@ Verification: pytest --cov=texecom_alarm --cov-fail-under=90 -q — 128 passed, 
 Notes/assumptions: PanelClient gained an _io_lock with short-poll recv_message so concurrent MQTT command handler and panel listen loop can share the TCP session safely. Shared MQTT inbound surface is subscribe() + inbound_messages (RecordingMqtt keeps messages for outbound; tests inject via push_inbound). Command path does not publish alarm state (AREA/snapshot only).
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
