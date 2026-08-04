@@ -172,15 +172,24 @@ async def test_handle_area_message_publishes_mapped_states() -> None:
     await mqtt.connect()
     settings = _settings()
     # MSG_AREA, area 1, state 3 → armed_away
-    await handle_area_message(mqtt, bytes([2, 1, 3]), settings=settings, topic_prefix="texecom")
+    published = await handle_area_message(
+        mqtt, bytes([2, 1, 3]), settings=settings, topic_prefix="texecom"
+    )
+    assert published == "armed_away"
     assert mqtt.payloads_for("texecom/alarm/state") == ["armed_away"]
 
-    await handle_area_message(mqtt, bytes([2, 1, 5]), settings=settings, topic_prefix="texecom")
+    published = await handle_area_message(
+        mqtt, bytes([2, 1, 5]), settings=settings, topic_prefix="texecom"
+    )
+    assert published == "triggered"
     assert mqtt.payloads_for("texecom/alarm/state")[-1] == "triggered"
 
     # Unused area 2 — no publish.
     before = len(mqtt.messages)
-    await handle_area_message(mqtt, bytes([2, 2, 3]), settings=settings, topic_prefix="texecom")
+    published = await handle_area_message(
+        mqtt, bytes([2, 2, 3]), settings=settings, topic_prefix="texecom"
+    )
+    assert published is None
     assert len(mqtt.messages) == before
 
 
@@ -191,10 +200,16 @@ async def test_handle_area_message_remapped_part_arm_publishes_correct_ha_mode()
     # Swap Night/Home slots vs defaults: slot 1 → Home, slot 2 → Night.
     settings = _settings(part_arm_night=2, part_arm_home=1, part_arm_away=0)
     # AREA state 6 = Part Arm 1 → armed_home under remapped Settings.
-    await handle_area_message(mqtt, bytes([2, 1, 6]), settings=settings, topic_prefix="texecom")
+    published = await handle_area_message(
+        mqtt, bytes([2, 1, 6]), settings=settings, topic_prefix="texecom"
+    )
+    assert published == "armed_home"
     assert mqtt.payloads_for("texecom/alarm/state") == ["armed_home"]
     # AREA state 7 = Part Arm 2 → armed_night.
-    await handle_area_message(mqtt, bytes([2, 1, 7]), settings=settings, topic_prefix="texecom")
+    published = await handle_area_message(
+        mqtt, bytes([2, 1, 7]), settings=settings, topic_prefix="texecom"
+    )
+    assert published == "armed_night"
     assert mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_night"
 
 
@@ -202,5 +217,8 @@ async def test_handle_area_message_remapped_part_arm_publishes_correct_ha_mode()
 async def test_handle_area_message_ignores_short_body() -> None:
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
-    await handle_area_message(mqtt, bytes([2, 1]), settings=_settings(), topic_prefix="texecom")
+    published = await handle_area_message(
+        mqtt, bytes([2, 1]), settings=_settings(), topic_prefix="texecom"
+    )
+    assert published is None
     assert mqtt.payloads_for("texecom/alarm/state") == []
