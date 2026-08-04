@@ -4,7 +4,7 @@ title: Publish alarm_control_panel discovery and live arm state
 status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 16:37'
+updated_date: '2026-08-04 16:40'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -101,5 +101,5 @@ Verification: pytest --cov=texecom_alarm --cov-fail-under=90 — 115 passing, 93
 Notes/assumptions: FakePanel app-path fixtures use zone_count=12 (smallest AREA_MAP entry) so area_size derivation works in CI without inventing map keys; Elite 88 path (start=0, count=72, area_size=1) is implemented; area_size==8 dual-request raises ProtocolError (ADR-007 follow-on); PartArm slot → HA mode via inverted Settings.part_arm_*; command_topic published with no subscriber (DRAFT-3).
 
 ## Build phase
-phase: awaiting-review
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
