@@ -8,14 +8,66 @@ import pytest
 from tests.recording_mqtt import RecordingMqttPublisher
 
 from texecom_alarm.mqtt.discovery import (
+    ALARM_OBJECT_ID,
     AVAILABILITY_OFFLINE,
     AVAILABILITY_ONLINE,
+    alarm_discovery_payload,
+    alarm_discovery_topic,
     availability_topic,
+    publish_alarm_discovery,
     publish_zone_discovery,
     zone_discovery_topic,
     zone_object_id,
 )
 from texecom_alarm.zones import Zone
+
+
+def test_alarm_object_id_is_texecom_alarm_arm_status() -> None:
+    assert ALARM_OBJECT_ID == "texecom_alarm_arm_status"
+
+
+def test_alarm_discovery_topic() -> None:
+    assert (
+        alarm_discovery_topic(ALARM_OBJECT_ID)
+        == "homeassistant/alarm_control_panel/texecom_alarm_arm_status/config"
+    )
+
+
+def test_alarm_discovery_payload_shape() -> None:
+    payload = alarm_discovery_payload(topic_prefix="texecom")
+    assert payload["unique_id"] == "texecom_alarm_arm_status"
+    assert payload["object_id"] == "texecom_alarm_arm_status"
+    assert payload["state_topic"] == "texecom/alarm/state"
+    assert payload["command_topic"] == "texecom/alarm/command"
+    assert payload["availability_topic"] == "texecom/status"
+    assert payload["payload_available"] == AVAILABILITY_ONLINE
+    assert payload["payload_not_available"] == AVAILABILITY_OFFLINE
+    assert payload["code_arm_required"] is False
+    assert payload["code_disarm_required"] is False
+    features = payload["supported_features"]
+    assert "arm_home" in features
+    assert "arm_away" in features
+    assert "arm_night" in features
+
+
+@pytest.mark.asyncio
+async def test_publish_alarm_discovery_retained() -> None:
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect(
+        will_topic=availability_topic("texecom"),
+        will_payload=AVAILABILITY_OFFLINE,
+        will_retain=True,
+    )
+    await publish_alarm_discovery(mqtt, topic_prefix="texecom")
+    topic = "homeassistant/alarm_control_panel/texecom_alarm_arm_status/config"
+    msgs = [m for m in mqtt.messages if m.topic == topic]
+    assert len(msgs) == 1
+    assert msgs[0].retain is True
+    payload = json.loads(
+        msgs[0].payload if isinstance(msgs[0].payload, str) else msgs[0].payload.decode()
+    )
+    assert payload["unique_id"] == ALARM_OBJECT_ID
+    assert payload["availability_topic"] == "texecom/status"
 
 
 def test_zone_object_id_matches_provisional_texecom_alarm_naming() -> None:
