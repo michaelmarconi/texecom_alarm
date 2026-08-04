@@ -11,6 +11,8 @@ Behaviour may differ on other panel models/firmware.
 **Sources so far:**
 - [SPIKE-001](spikes/spike-001-zone-enumeration/SPIKE.md) — zone enumeration
 - [SPIKE-002](spikes/spike-002-arm-home-triggered-framing/SPIKE.md) — arm_home / triggered-event framing and the collision crash
+- [SPIKE-005](spikes/spike-005-arm-disarm-command-framing/SPIKE.md) — send-side arm/disarm command framing
+- Live panel probes 2026-08-04 — `GETAREADETAILS`, multi-class ZONE event mission (door / window contact / shock / sliding door / garage), idle-session behaviour
 - `davidMbrooke/texecom-connect` (`texecomConnect.py`, MIT/Apache-2.0) — prior-art source inspection, cited where it informed a finding
 - Community report: `the prior MQTT bridge` HA thread, user Ben.S, 2020 — cited where it corroborates a finding
 
@@ -68,8 +70,8 @@ requirement (resync + asymmetric reconnect budget).
 ## Commands (client → panel)
 
 Only commands actually confirmed safe/working against the live panel or directly sourced from
-prior-art inspection are listed. **The send-side Arm Away and Disarm commands are now confirmed
-(SPIKE-005, reproduced twice)** — Home and Night remain unresolved; see the notes below the table.
+prior-art inspection are listed. **Send-side Arm Away, Arm Night, Arm Home, and Disarm are all
+confirmed (SPIKE-005)** — see the notes below the table.
 
 | Byte | Name | Body | Notes |
 |---|---|---|---|
@@ -80,10 +82,10 @@ prior-art inspection are listed. **The send-side Arm Away and Disarm commands ar
 | 13 | `GETLCDDISPLAY` | — | Not yet exercised against this panel. |
 | 15 | `GETLOGPOINTER` | — | Not yet exercised against this panel. |
 | 22 | `GETPANELIDENTIFICATION` | — | Returns a 32-byte string: panel type, zone count, unknown field, firmware version. This panel: `'Elite 88     ENG->SW V6.02.02LS1'` → 88 zones. |
-| 23 | `GETDATETIME` | — | Used as a safe idle/keepalive probe in SPIKE-002; read-only. |
+| 23 | `GETDATETIME` | — | Used as a safe idle/keepalive probe in SPIKE-002 and again 2026-08-04; read-only. A ~15s cadence kept a subscribed session alive for minutes; without it the panel closed the socket after ~1 minute of passive listen-only. |
 | 25 | `GETSYSTEMPOWER` | — | Confirmed live (SPIKE-005 dry run) — `the prior MQTT bridge` uses this as its own idle/keepalive probe (this project's own client instead uses `GETDATETIME` for the same purpose, per SPIKE-002). Response body not yet decoded field-by-field (raw example: `b0b0ad5300`). |
 | 27 | `GETUSER` | — | Not yet exercised against this panel. |
-| 35 | `GETAREADETAILS` | — | Not yet exercised against this panel. |
+| 35 | `GETAREADETAILS` | area number (1 byte; `0` NAK'd) | **Exercised live 2026-08-04.** Area `1` returns name `HOUSE` plus trailing timer-ish bytes; areas `2`–`4` return `Not used B`/`C`/`D`. This is **area** identity, not Part-Arm slot role/name — it does **not** expose which engineer-configured Part-Arm slot is Night vs Home. Empty body and area `0` both NAK (`0x15`). |
 | 37 | `SETEVENTMESSAGES` | 2-byte bitmask: `DEBUG \| ZONE_EVENT \| AREA_EVENT \| OUTPUT_EVENT \| USER_EVENT \| LOG_FLAG` | Subscribes the session to unsolicited `'M'`-type push messages. Confirmed safe and working. |
 
 **Send-side Arm Away, Arm Night, Arm Home, and Disarm — all confirmed.**
@@ -120,6 +122,15 @@ All arrive as `'M'`-type frames. First payload byte is a sub-type:
 | `0x03` | OUTPUT event | output/relay number + state — bookkeeping only, not yet decoded in detail |
 | `0x04` | USER event | fires on every keypad code entry (arm, disarm, or clearing an alarm-memory indicator) — does **not** by itself distinguish which action occurred |
 | `0x05` | LOG event | event type byte + group byte + timestamp-ish trailing bytes (see LOG event table below) |
+
+**ZONE events are sensor-class-agnostic (confirmed 2026-08-04).** The same framing carries
+door contacts, window contacts, shock sensors, sliding-door contacts, ordinary PIRs, and the
+garage mirror sensor — each is just a zone number + active/secure bit. A live walk-around mission
+observed clean open→close pairs for an Entry/Exit door, a kitchen sliding door, two window
+contacts, repeated shock activations on the co-located window shocks, and the garage mirror PIR,
+with no distinct payload shape per physical sensor class. Mapping zone → HA device class therefore
+comes from `GETZONEDETAILS` / naming conventions at discovery time, not from the live event wire
+format.
 
 ### AREA event states
 
@@ -182,7 +193,7 @@ Confirmed against this panel (via live capture) unless marked "prior art only":
 | 3 | unknown | Observed live, paired 1:1 with each zone-secure event during arm/disarm bookkeeping bursts — likely "zone secured/omitted" logging, not confirmed |
 | 31 | unknown | Observed live on **every** keypad code entry (arm, disarm, alarm-memory clear) — likely a generic "user code entered" event, not confirmed |
 | 41 | unknown | Observed live, not yet correlated with a specific action |
-| 53 | "Download Start" (inferred) | Observed live only during a Texecom Connect app-originated remote arm (SPIKE-002 first run) — name inferred from context (preceded a remote/app action), not from documentation |
+| 53 | "Download Start" / remote-session marker (inferred) | Observed live during a Texecom Connect app-originated remote arm (SPIKE-002) **and** repeatedly during an idle subscribed session with no arm/disarm activity (2026-08-04, ~every 2–10s while logged in and event-subscribed). Name inferred from context; behaviour looks more like a periodic "remote/UDL session active" log entry than an action-specific event. |
 | 113 | "Remote Command" (inferred) | Inferred, not documented. Originally seen only with the phone app (SPIKE-002); SPIKE-005 has now also observed it (group=`9`) immediately after both a `the prior MQTT bridge`-issued Arm Night and a directly-tested Arm Home — so it is not app-specific after all. See the arm-mode signature note below. |
 | 207 | unknown | Observed live (SPIKE-005): group=`6`, immediately after type `113`/group `9` and before the `part armed` AREA event, on every `the prior MQTT bridge`-issued Arm Night. Not seen for Arm Away or Arm Home. Meaning not decoded. |
 | 208 | unknown | Observed live (SPIKE-005): group=`6`, in the same position as `207` but following the directly-tested Arm Home instead of Arm Night. Sequential with `207` — see the arm-mode signature note below. |
@@ -224,6 +235,10 @@ Each LOG event also carries a **group** byte whose meaning is not yet decoded (v
   independently stress-tested for the true minimum on this panel).
 - **2-3 second response timeout, retry with the same sequence number** — the documented and
   empirically-confirmed way to recover from an ordinary same-protocol send/receive collision.
+- **Idle session timeout without keepalive.** A listen-only subscribed session (no outgoing commands)
+  was closed by the panel after ~60s (2026-08-04). Periodic `GETDATETIME` (~15s) kept the same
+  session alive for the full multi-minute walk-around mission. Production clients need a keepalive
+  regardless of whether they are actively issuing arm/disarm commands.
 - **Protocol-format collisions around arm/disarm/trigger events** — see the dedicated section above;
   this is the dominant real-world crash cause, not send timing.
 - **Forced disconnect on a real trigger**, with a recovery window measured in tens of seconds to at
@@ -231,16 +246,16 @@ Each LOG event also carries a **group** byte whose meaning is not yet decoded (v
 
 ## Open questions / known gaps
 
-- The send-side arm/disarm command byte and body format are still unknown — see Commands above.
 - LOG event types 1, 3, 31, 41, and the "group" byte on every LOG event are unmapped.
 - Whether `Reset After Alarm` (type 45) is ever emitted by this panel/firmware for a plain
   disarm-after-alarm or alarm-memory clear, versus only a full engineer-level reset, is unresolved.
-- The `AREA event` value used for `in exit` appears to collide with the documented value for
-  `disarmed` — needs reconciling against a live capture that unambiguously distinguishes the two.
 - The exact byte format of the non-Connect-protocol traffic beyond the identified AT commands (e.g.
   the 83-byte unidentified burst in SPIKE-002) is not decoded.
 - Whether the post-trigger disruption window has a bounded maximum duration is not established — only
   one real data point exists (~50s, not yet recovered).
+- Whether any *other* unexercised command (beyond `GETAREADETAILS`, now ruled out) can auto-detect
+  Part-Arm slot roles remains open — today the Home/Night-to-slot mapping must be per-installation
+  configuration.
 
 ## How to add to this document
 
