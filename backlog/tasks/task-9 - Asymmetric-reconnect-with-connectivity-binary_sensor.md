@@ -89,7 +89,7 @@ Note: Reconnect timing defaults (~10s normal / ~90s trigger) rest on a single SP
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
