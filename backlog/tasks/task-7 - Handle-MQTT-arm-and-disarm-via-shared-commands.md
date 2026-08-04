@@ -81,3 +81,10 @@ Note: Depends on TASK-6 (ready, not built): command topic, discovery, and live A
 
 `cd texecom-alarm-app && python -m pytest tests/test_arm_commands.py tests/test_protocol_client.py tests/test_e2e_fake_panel.py -q` — MQTT ARM_* / DISARM → FakePanel cmd 6/8 bodies; remapped `part_arm_*` changes mode byte; unknown payload sends nothing.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
