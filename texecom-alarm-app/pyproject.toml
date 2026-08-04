@@ -20,7 +20,6 @@ dev = [
   "bandit>=1.7",
   "pip-audit>=2.7",
   "pre-commit>=3.7",
-  "amqtt>=0.11",
 ]
 
 [tool.setuptools.packages.find]
@@ -49,4 +48,4 @@ src = ["src", "tests"]
 select = ["E", "F", "I", "B", "UP", "S"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106", "S107"]
+"tests/**" = ["S101", "S105", "S106", "S107", "S603", "S607"]

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 import socket
+import subprocess
+import tempfile
+from pathlib import Path
 
+import aiomqtt
 import pytest
-from amqtt.broker import Broker
-from amqtt.client import MQTTClient
-from amqtt.mqtt.constants import QOS_1
 from tests.fake_panel import FakePanel, FakeZone
 from tests.recording_mqtt import RecordingMqttPublisher
 
@@ -19,6 +21,8 @@ from texecom_alarm.config import Settings
 from texecom_alarm.mqtt.discovery import AVAILABILITY_OFFLINE, AVAILABILITY_ONLINE
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
 from texecom_alarm.protocol.client import PanelClient
+
+_MOSQUITTO_IMAGE = "eclipse-mosquitto:2"
 
 
 def _free_port() -> int:
@@ -41,6 +45,59 @@ def _settings(panel: FakePanel, mqtt_port: int) -> Settings:
         part_arm_night=1,
         part_arm_home=2,
     )
+
+
+class _MosquittoBroker:
+    """Ephemeral Mosquitto via Docker — closer to HA's broker than a pure-Python double."""
+
+    def __init__(self) -> None:
+        if shutil.which("docker") is None:
+            pytest.skip("docker required for Mosquitto E2E broker")
+        self.port = _free_port()
+        self._tmpdir = Path(tempfile.mkdtemp(prefix="texecom-mosquitto-"))
+        conf = self._tmpdir / "mosquitto.conf"
+        conf.write_text("listener 1883\nallow_anonymous true\n", encoding="utf-8")
+        self._container_id: str | None = None
+
+    def start(self) -> None:
+        result = subprocess.run(
+            [
+                "docker",
+                "run",
+                "-d",
+                "--rm",
+                "-p",
+                f"127.0.0.1:{self.port}:1883",
+                "-v",
+                f"{self._tmpdir / 'mosquitto.conf'}:/mosquitto/config/mosquitto.conf:ro",
+                _MOSQUITTO_IMAGE,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self._container_id = result.stdout.strip()
+
+    def stop(self) -> None:
+        if self._container_id:
+            subprocess.run(
+                ["docker", "stop", self._container_id],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self._container_id = None
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
+
+    async def wait_ready(self, timeout: float = 10.0) -> None:
+        deadline = asyncio.get_running_loop().time() + timeout
+        while asyncio.get_running_loop().time() < deadline:
+            try:
+                with socket.create_connection(("127.0.0.1", self.port), timeout=0.2):
+                    return
+            except OSError:
+                await asyncio.sleep(0.05)
+        raise TimeoutError(f"Mosquitto not accepting connections on {self.port}")
 
 
 def test_fake_panel_session_lifecycle() -> None:
@@ -75,7 +132,7 @@ async def test_e2e_login_against_fake_panel() -> None:
 
 
 def test_e2e_discovery_retained_and_lwt_on_app_stop() -> None:
-    """FakePanel + in-process amqtt: retained discovery; LWT offline when app drops."""
+    """FakePanel + Mosquitto: retained discovery; LWT offline when app drops."""
     asyncio.run(_e2e_discovery_retained_and_lwt())
 
 
@@ -91,108 +148,99 @@ async def _e2e_discovery_retained_and_lwt() -> None:
     )
     await panel.start()
 
-    mqtt_port = _free_port()
-    broker = Broker(
-        {
-            "listeners": {
-                "default": {"type": "tcp", "bind": f"127.0.0.1:{mqtt_port}"},
-            },
-            "sys_interval": 0,
-        }
-    )
-    await broker.start()
-
-    settings = _settings(panel, mqtt_port)
-    stop = asyncio.Event()
-    mqtt = AiomqttPublisher(
-        "127.0.0.1",
-        mqtt_port,
-        identifier="texecom-alarm-e2e-app",
-        keepalive=5,
-    )
-    panel_client = PanelClient(
-        panel.host,
-        panel.port,
-        udl_password="1234",
-        login_delay=0.0,
-        response_timeout=1.0,
-    )
-    await panel_client.connect()
-    await panel_client.login()
-
-    # Observer must be subscribed before the app connects (matches LWT delivery path).
-    observer = MQTTClient(client_id="texecom-alarm-e2e-observer")
-    await observer.connect(f"mqtt://127.0.0.1:{mqtt_port}/")
-    await observer.subscribe(
-        [
-            ("homeassistant/binary_sensor/+/config", QOS_1),
-            ("texecom/status", QOS_1),
-        ]
-    )
-
-    app_task = asyncio.create_task(run(settings, panel=panel_client, mqtt=mqtt, idle=stop.wait))
-
+    broker = _MosquittoBroker()
+    broker.start()
     try:
+        await broker.wait_ready()
+
+        settings = _settings(panel, broker.port)
+        stop = asyncio.Event()
+        mqtt = AiomqttPublisher(
+            "127.0.0.1",
+            broker.port,
+            identifier="texecom-alarm-e2e-app",
+            keepalive=5,
+        )
+        panel_client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=1.0,
+        )
+        await panel_client.connect()
+        await panel_client.login()
+
         discovered: dict[str, dict] = {}
         status_payloads: list[str] = []
-        deadline = asyncio.get_running_loop().time() + 8.0
-        while asyncio.get_running_loop().time() < deadline and not (
-            len(discovered) == 2 and AVAILABILITY_ONLINE in status_payloads
-        ):
-            if app_task.done():
-                exc = app_task.exception()
-                if exc is not None:
-                    raise exc
+
+        async with aiomqtt.Client(
+            hostname="127.0.0.1",
+            port=broker.port,
+            identifier="texecom-alarm-e2e-observer",
+        ) as observer:
+            await observer.subscribe("homeassistant/binary_sensor/+/config")
+            await observer.subscribe("texecom/status")
+
+            app_task = asyncio.create_task(
+                run(settings, panel=panel_client, mqtt=mqtt, idle=stop.wait)
+            )
             try:
-                message = await asyncio.wait_for(observer.deliver_message(), timeout=0.4)
-            except TimeoutError:
-                continue
-            packet = message.publish_packet
-            topic = packet.variable_header.topic_name
-            payload = packet.payload.data.decode("utf-8")
-            if topic.startswith("homeassistant/"):
-                discovered[topic] = json.loads(payload)
-            elif topic == "texecom/status":
-                status_payloads.append(payload)
+                deadline = asyncio.get_running_loop().time() + 15.0
+                while asyncio.get_running_loop().time() < deadline and not (
+                    len(discovered) == 2 and AVAILABILITY_ONLINE in status_payloads
+                ):
+                    if app_task.done():
+                        exc = app_task.exception()
+                        if exc is not None:
+                            raise exc
+                    try:
+                        message = await asyncio.wait_for(observer.messages.__anext__(), timeout=0.4)
+                    except TimeoutError:
+                        continue
+                    topic = str(message.topic)
+                    payload = message.payload.decode("utf-8")
+                    if topic.startswith("homeassistant/"):
+                        discovered[topic] = json.loads(payload)
+                    elif topic == "texecom/status":
+                        status_payloads.append(payload)
 
-        assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in discovered
-        assert "homeassistant/binary_sensor/texecom_alarm_kitchen_pir_3/config" in discovered
-        assert len(discovered) == 2
-        assert AVAILABILITY_ONLINE in status_payloads
+                assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in discovered
+                assert (
+                    "homeassistant/binary_sensor/texecom_alarm_kitchen_pir_3/config" in discovered
+                )
+                assert len(discovered) == 2
+                assert AVAILABILITY_ONLINE in status_payloads
 
-        front = discovered["homeassistant/binary_sensor/texecom_alarm_front_door_1/config"]
-        assert front["availability_topic"] == "texecom/status"
-        assert front["unique_id"] == "texecom_alarm_front_door_1"
+                front = discovered["homeassistant/binary_sensor/texecom_alarm_front_door_1/config"]
+                assert front["availability_topic"] == "texecom/status"
+                assert front["unique_id"] == "texecom_alarm_front_door_1"
 
-        # Simulate app-process crash: abort MQTT TCP without DISCONNECT → broker LWT.
-        await mqtt.abort()
+                # Simulate app-process crash: abort MQTT TCP without DISCONNECT → LWT.
+                await mqtt.abort()
 
-        lwt_seen = False
-        deadline = asyncio.get_running_loop().time() + 8.0
-        while asyncio.get_running_loop().time() < deadline and not lwt_seen:
-            try:
-                message = await asyncio.wait_for(observer.deliver_message(), timeout=0.5)
-            except TimeoutError:
-                continue
-            packet = message.publish_packet
-            topic = packet.variable_header.topic_name
-            payload = packet.payload.data.decode("utf-8")
-            if topic == "texecom/status" and payload == AVAILABILITY_OFFLINE:
-                lwt_seen = True
+                lwt_seen = False
+                deadline = asyncio.get_running_loop().time() + 15.0
+                while asyncio.get_running_loop().time() < deadline and not lwt_seen:
+                    try:
+                        message = await asyncio.wait_for(observer.messages.__anext__(), timeout=0.5)
+                    except TimeoutError:
+                        continue
+                    topic = str(message.topic)
+                    payload = message.payload.decode("utf-8")
+                    if topic == "texecom/status" and payload == AVAILABILITY_OFFLINE:
+                        lwt_seen = True
 
-        assert lwt_seen, f"expected LWT offline on texecom/status, got {status_payloads!r}"
+                assert lwt_seen, f"expected LWT offline on texecom/status, got {status_payloads!r}"
+            finally:
+                # Avoid graceful offline-publish hang after we already aborted the socket.
+                mqtt._client = None
+                stop.set()
+                if not app_task.done():
+                    app_task.cancel()
+                    await asyncio.gather(app_task, return_exceptions=True)
     finally:
-        # Avoid graceful offline-publish hang after we already aborted the socket.
-        mqtt._client = None
-        stop.set()
-        if not app_task.done():
-            app_task.cancel()
-            await asyncio.gather(app_task, return_exceptions=True)
-        try:
-            await observer.disconnect()
-        except Exception:  # noqa: S110
-            pass
-        await broker.shutdown()
+        broker.stop()
         await panel.stop()
 
 

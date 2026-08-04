@@ -1,10 +1,10 @@
 ---
 id: TASK-3
 title: Enumerate zones and publish MQTT discovery
-status: attention
+status: done
 assignee: []
 created_date: '2026-08-04 12:51'
-updated_date: '2026-08-04 15:09'
+updated_date: '2026-08-04 15:16'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -43,9 +43,9 @@ Entity IDs provisionally match today's texecom_alarm_* naming pending household 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Unused panel zone slots produce no discovery configs; in-use zones each get a binary_sensor discovery payload
-- [ ] #2 Unit tests assert discovery topics/payloads via a recording MQTT stub without a broker
-- [ ] #3 E2E against FakePanel and an in-process lightweight broker shows discovery retained and availability via Last-Will when the app process stops
+- [x] #1 Unused panel zone slots produce no discovery configs; in-use zones each get a binary_sensor discovery payload
+- [x] #2 Unit tests assert discovery topics/payloads via a recording MQTT stub without a broker
+- [x] #3 E2E against FakePanel and an in-process lightweight broker shows discovery retained and availability via Last-Will when the app process stops
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -80,5 +80,5 @@ Verification: `pip install -e ".[dev]" && pytest --cov=texecom_alarm --cov-fail-
 Notes/assumptions: Provisional object_ids are `texecom_alarm_<slugified panel name>` (RISK-005 still open). Shared availability topic is `{mqtt_topic_prefix}/status` with LWT `offline` / online `online` (ADR-004). Zone state topics are published in discovery only — no SETEVENTMESSAGES/live state updates in this task. Panel-link connectivity sensor not included (separate ADR-004 follow-on).
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
