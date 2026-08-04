@@ -91,8 +91,8 @@ class AiomqttPublisher:
     async def abort(self) -> None:
         """Drop the TCP session without an MQTT DISCONNECT so the broker fires LWT.
 
-        Keeps the aiomqtt client object referenced: clearing it before the broker
-        observes the TCP close prevents Last-Will delivery with amqtt in-process.
+        Keeps the aiomqtt client object referenced until the broker observes the
+        TCP close — clearing it too early can prevent Last-Will delivery.
         """
         client = self._client
         if client is None:
