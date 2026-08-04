@@ -86,5 +86,5 @@ Note: Depends on TASK-6 (ready, not built): command topic, discovery, and live A
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
