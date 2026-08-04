@@ -79,6 +79,13 @@ Files likely affected:
 Test strategy: `cd texecom-alarm-app && python -m pytest tests/test_trigger_snapshot.py tests/test_mqtt_discovery.py tests/test_area_state.py tests/test_e2e_fake_panel.py -q`
 <!-- SECTION:PLAN:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 docs/definition-of-done.md
