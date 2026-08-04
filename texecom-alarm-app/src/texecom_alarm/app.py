@@ -44,6 +44,10 @@ async def run(
         password=cfg.mqtt_password,
     )
 
+    # True once MQTT is connected: failure paths must publish offline before a
+    # clean DISCONNECT (otherwise retained "online" sticks and LWT never fires).
+    # Hard crash / abort() still relies on LWT (no clean DISCONNECT).
+    mqtt_connected = False
     try:
         logger.debug("app_start")
         if owns_panel:
@@ -59,22 +63,23 @@ async def run(
             will_payload=AVAILABILITY_OFFLINE,
             will_retain=True,
         )
+        mqtt_connected = True
         await publish_zone_discovery(mqtt_client, zones, topic_prefix=cfg.mqtt_topic_prefix)
 
         if idle is not None:
             await idle()
         else:
             await _idle_forever()
-        # Graceful stop: mark offline before MQTT DISCONNECT (crash path uses LWT).
-        try:
-            await mqtt_client.publish(
-                availability_topic(cfg.mqtt_topic_prefix),
-                AVAILABILITY_OFFLINE,
-                retain=True,
-            )
-        except Exception:
-            logger.exception("mqtt_offline_publish_failed")
     finally:
+        if mqtt_connected:
+            try:
+                await mqtt_client.publish(
+                    availability_topic(cfg.mqtt_topic_prefix),
+                    AVAILABILITY_OFFLINE,
+                    retain=True,
+                )
+            except Exception:
+                logger.exception("mqtt_offline_publish_failed")
         try:
             await mqtt_client.disconnect()
         except Exception:

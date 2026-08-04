@@ -40,3 +40,9 @@ def test_parse_zone_details_length_variants() -> None:
 def test_zone_slug_empty_falls_back_to_number() -> None:
     assert zone_slug("", zone_number=7) == "zone_7"
     assert zone_slug("!!!", zone_number=9) == "zone_9"
+
+
+def test_zone_slug_always_includes_zone_number() -> None:
+    assert zone_slug("FRONT DOOR", zone_number=1) == "front_door_1"
+    assert zone_slug("FRONT DOOR", zone_number=12) == "front_door_12"
+    assert zone_slug("FRONT DOOR", zone_number=1) != zone_slug("FRONT DOOR", zone_number=12)

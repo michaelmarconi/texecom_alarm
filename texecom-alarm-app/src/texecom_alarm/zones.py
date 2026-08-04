@@ -60,11 +60,11 @@ def parse_zone_details(payload: bytes, *, zone_number: int) -> Zone:
 
 
 def zone_slug(name: str, *, zone_number: int) -> str:
-    """Slugify a panel zone name for provisional texecom_alarm_* object_ids."""
+    """Slugify a panel zone name; always includes zone number to avoid collisions."""
     base = _ZONE_NAME_SLUG_RE.sub("_", name.lower()).strip("_")
     if not base:
-        base = f"zone_{zone_number}"
-    return base
+        base = "zone"
+    return f"{base}_{zone_number}"
 
 
 async def enumerate_zones(client: PanelClient) -> list[Zone]:

@@ -11,7 +11,7 @@ from tests.recording_mqtt import RecordingMqttPublisher
 
 from texecom_alarm.app import main, run
 from texecom_alarm.config import Settings
-from texecom_alarm.mqtt.discovery import AVAILABILITY_OFFLINE
+from texecom_alarm.mqtt.discovery import AVAILABILITY_OFFLINE, AVAILABILITY_ONLINE
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
 from texecom_alarm.protocol.client import PanelClient
 
@@ -53,7 +53,47 @@ async def test_run_owns_panel_with_login_delay() -> None:
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)
         assert mqtt.will_payload == AVAILABILITY_OFFLINE
-        assert any("front_door" in m.topic for m in mqtt.messages)
+        assert any("front_door_1" in m.topic for m in mqtt.messages)
+        assert mqtt.payloads_for("texecom/status")[-1] == AVAILABILITY_OFFLINE
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_run_publishes_offline_when_discovery_fails_after_online() -> None:
+    """Regression: failure after retained online must still clear availability."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR")],
+        zone_count=1,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+
+        async def fail_after_online(
+            mqtt_client: RecordingMqttPublisher,
+            zones: object,
+            *,
+            topic_prefix: str,
+        ) -> None:
+            await mqtt_client.publish(
+                f"{topic_prefix}/status",
+                AVAILABILITY_ONLINE,
+                retain=True,
+            )
+            raise RuntimeError("discovery boom")
+
+        with (
+            patch("texecom_alarm.app.publish_zone_discovery", side_effect=fail_after_online),
+            pytest.raises(RuntimeError, match="discovery boom"),
+        ):
+            await run(_settings(panel), mqtt=mqtt, idle=asyncio.Event().wait, login_delay=0.0)
+
+        status = mqtt.payloads_for("texecom/status")
+        assert AVAILABILITY_ONLINE in status
+        assert status[-1] == AVAILABILITY_OFFLINE
+        assert mqtt.connected is False
     finally:
         await panel.stop()
 
