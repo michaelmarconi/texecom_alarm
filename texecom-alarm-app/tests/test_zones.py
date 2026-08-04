@@ -38,8 +38,9 @@ async def test_enumerate_zones_skips_unused_slots(panel: FakePanel) -> None:
     await client.connect()
     await client.login()
 
-    zones = await enumerate_zones(client)
+    zones, zone_count = await enumerate_zones(client)
 
+    assert zone_count == 4
     assert zones == [
         Zone(number=1, zone_type=1, name="FRONT DOOR"),
         Zone(number=3, zone_type=3, name="KITCHEN PIR"),
