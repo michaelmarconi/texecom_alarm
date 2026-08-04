@@ -119,9 +119,13 @@ class PanelClient:
             raise ProtocolError(f"GetZoneState: start {start} out of 1-byte range")
         logger.debug("panel_get_zone_state", extra={"start": start, "count": count})
         payload = await self.send_command(CMD_GET_ZONE_STATE, bytes([start, count]))
-        if len(payload) == 1 and payload[0] == NAK:
-            raise ProtocolError("GetZoneState NAK")
+        # Success is exactly ``count`` status bytes. A status byte may be NAK (0x15)
+        # when higher bits are set (e.g. Active+fault+alarmed) — so only treat a
+        # single-byte NAK as failure when length does not match the requested count
+        # (same length-first pattern as multi-byte reads like GETZONEDETAILS).
         if len(payload) != count:
+            if len(payload) == 1 and payload[0] == NAK:
+                raise ProtocolError("GetZoneState NAK")
             raise ProtocolError(f"GetZoneState: expected {count} status bytes, got {len(payload)}")
         return payload
 
