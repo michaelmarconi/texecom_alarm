@@ -1,10 +1,10 @@
 ---
 id: TASK-3
 title: Enumerate zones and publish MQTT discovery
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-04 12:51'
-updated_date: '2026-08-04 13:52'
+updated_date: '2026-08-04 14:54'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -62,6 +62,12 @@ Test strategy: TDD for enum skip-unused and discovery JSON shape via recording s
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Enumerate in-use panel zones and publish HA MQTT binary_sensor discovery with shared app-liveness Last-Will; asyncio entry runnable under s6.
+Changed files: texecom-alarm-app/pyproject.toml, texecom-alarm-app/src/texecom_alarm/zones.py, texecom-alarm-app/src/texecom_alarm/mqtt/__init__.py, texecom-alarm-app/src/texecom_alarm/mqtt/discovery.py, texecom-alarm-app/src/texecom_alarm/mqtt/publisher.py, texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/src/texecom_alarm/__main__.py, texecom-alarm-app/src/texecom_alarm/protocol/frame.py, texecom-alarm-app/tests/fake_panel.py, texecom-alarm-app/tests/recording_mqtt.py, texecom-alarm-app/tests/test_zones.py, texecom-alarm-app/tests/test_mqtt_discovery.py, texecom-alarm-app/tests/test_e2e_fake_panel.py, texecom-alarm-app/tests/test_zone_parse.py, texecom-alarm-app/tests/test_app_mqtt.py, texecom-alarm-app/tests/test_main_module.py, rootfs/usr/bin/texecom_alarm
+Verification: `pip install -e ".[dev]" && pytest --cov=texecom_alarm --cov-fail-under=90` → 67 passed, 95.96% coverage; `ruff check` + `ruff format --check` → clean
+Notes/assumptions: Provisional object_ids are `texecom_alarm_<slugified panel name>` (RISK-005 still open). Shared availability topic is `{mqtt_topic_prefix}/status` with LWT `offline` / online `online` (ADR-004). Zone state topics are published in discovery only — no SETEVENTMESSAGES/live state updates in this task. Panel-link connectivity sensor not included (separate ADR-004 follow-on).
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
