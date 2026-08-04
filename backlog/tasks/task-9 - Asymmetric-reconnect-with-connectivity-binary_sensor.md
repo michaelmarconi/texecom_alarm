@@ -1,10 +1,10 @@
 ---
 id: TASK-9
 title: Asymmetric reconnect with connectivity binary_sensor
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-04 12:52'
-updated_date: '2026-08-04 17:51'
+updated_date: '2026-08-04 17:52'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -48,9 +48,9 @@ Note: Reconnect timing defaults (~10s normal / ~90s trigger) rest on a single SP
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 After FakePanel forces a disconnect while last alarm state is not `triggered`, the app reconnects using the normal budget settings, publishes connectivity OFF then ON, and re-runs LOGIN + zone + area snapshots + SETEVENTMESSAGES without changing alarm/zone availability topics.
-- [ ] #2 After a disconnect that follows a `triggered` alarm decode, the app uses the longer trigger budget settings (verifiable via injected short intervals / attempt counts in tests).
-- [ ] #3 Connectivity discovery is a separate `binary_sensor` (`texecom_alarm_panel_link`); zone and alarm discovery continue to use only the app LWT availability topic (not panel-link state).
+- [x] #1 After FakePanel forces a disconnect while last alarm state is not `triggered`, the app reconnects using the normal budget settings, publishes connectivity OFF then ON, and re-runs LOGIN + zone + area snapshots + SETEVENTMESSAGES without changing alarm/zone availability topics.
+- [x] #2 After a disconnect that follows a `triggered` alarm decode, the app uses the longer trigger budget settings (verifiable via injected short intervals / attempt counts in tests).
+- [x] #3 Connectivity discovery is a separate `binary_sensor` (`texecom_alarm_panel_link`); zone and alarm discovery continue to use only the app LWT availability topic (not panel-link state).
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -106,10 +106,10 @@ Verification: pre-commit ruff 0.8.4 `ruff format --check tests/test_reconnect.py
 Notes/assumptions: Do not treat uv ruff 0.16 format prefs as gate; CI/DoD use pre-commit rev v0.8.4.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 docs/definition-of-done.md
+- [x] #1 docs/definition-of-done.md
 <!-- DOD:END -->
