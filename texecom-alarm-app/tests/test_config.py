@@ -178,19 +178,35 @@ def test_part_arm_supervisor_display_labels_parse_to_canonical() -> None:
     assert settings.mode_byte_for_ha_mode("away") == FULL_ARM_AWAY_MODE_BYTE
 
 
-def test_addon_config_schema_accepts_lowercase_legacy_part_arm_values() -> None:
-    """Supervisor validates persisted options with exact vol.In against schema lists.
+def test_addon_config_schema_uses_display_part_arm_tokens() -> None:
+    """Supervisor list(...) tokens are the Configuration radio labels.
 
-    Existing installs may have saved lowercase home/night/away/unused. Schema must
-    keep those canonical tokens (not Title Case + emoji alone) or the add-on will
-    fail validation and refuse to start.
+    Schema must use Title Case + emoji display tokens (not lowercase alone).
+    Settings still normalise both display and legacy lowercase forms to canonical.
     """
     config_path = Path(__file__).resolve().parents[2] / "config.yaml"
     text = config_path.read_text(encoding="utf-8")
+    display_list = "list(Home 🏠|Night 🌙|Away 🔒|Unused)"
     for slot in ("part_arm_1", "part_arm_2", "part_arm_3"):
-        assert f"{slot}: list(home|night|away|unused)" in text
-        assert f"{slot}: unused" in text
-    assert "list(Home 🏠|Night 🌙|Away 🔒|Unused)" not in text
+        assert f"{slot}: {display_list}" in text
+        assert f"{slot}: Unused" in text
+    assert "list(home|night|away|unused)" not in text
+
+    display = load_settings(
+        _valid_options(
+            part_arm_1="Home 🏠",
+            part_arm_2="Night 🌙",
+            part_arm_3="Away 🔒",
+        )
+    )
+    assert display.part_arm_1 == "home"
+    assert display.part_arm_2 == "night"
+    assert display.part_arm_3 == "away"
+
+    legacy = load_settings(_valid_options(part_arm_1="home", part_arm_2="night", part_arm_3="away"))
+    assert legacy.part_arm_1 == "home"
+    assert legacy.part_arm_2 == "night"
+    assert legacy.part_arm_3 == "away"
 
 
 def test_part_arm_remapping_changes_mode_bytes() -> None:
