@@ -85,7 +85,7 @@ A Home Assistant Add-on that replaces unreliable `the prior MQTT bridge` for a T
 ## Still open
 
 - [ ] **Panel-link connectivity entity missing on the broker** — code path exists (`texecom_alarm_panel_link` / `texecom/panel_link/state`) but no discovery or state retained on Mosquitto during the walk; not visible in HA. Investigate publish path.
-- [ ] **Part-Arm Configuration radio labels** — slots/UDL copy landed (TASK-11/15); radios still show lowercase `home`/`night`/`away`/`unused`. Need `Home 🏠` / `Night 🌙` / `Away 🔒` / `Unused` on the radios (schema list tokens = labels) and drop the “Stored values are…” helper. Tracked as **TASK-17**; Hold TASK-13 until done.
+- [x] **Part-Arm Configuration radio labels** — TASK-17: schema radios `Home 🏠` / `Night 🌙` / `Away 🔒` / `Unused`; short helpers only. Hard-refresh Configuration to confirm live UI.
 - [ ] **Entity ID collision risk** — entities appeared as `binary_sensor.front_door` etc.; want a Texecom-scoped prefix/scheme (HA uses underscores, not dotted subdomains).
 - [ ] **Friendly-name casing** — panel names published in CAPS (`FRONT DOOR`); decide normalisation (sentence case vs capitalise first word, etc.).
 - [ ] **No Device** — MQTT entities ungrouped (Device column empty); discuss discovery `device` block.
