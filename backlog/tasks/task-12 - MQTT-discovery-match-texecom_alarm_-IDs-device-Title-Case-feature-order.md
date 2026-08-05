@@ -1,10 +1,10 @@
 ---
 id: TASK-12
 title: 'MQTT discovery: match texecom_alarm_* IDs, device, Title Case, feature order'
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-05 11:53'
-updated_date: '2026-08-05 14:58'
+updated_date: '2026-08-05 14:59'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -38,9 +38,9 @@ Closes architecture/spec naming open questions as: match existing texecom_alarm_
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Discovery payloads use texecom_alarm_* object_id/unique_id for zones and texecom_alarm_arm_status for the alarm panel
-- [ ] #2 Zone, alarm, and panel-link discovery share one MQTT device block; zone names are Title Case; alarm name is Texecom Alarm
-- [ ] #3 supported_features lists arm_home, arm_night, arm_away in that order; specs/architecture naming open questions are marked answered as match today’s IDs
+- [x] #1 Discovery payloads use texecom_alarm_* object_id/unique_id for zones and texecom_alarm_arm_status for the alarm panel
+- [x] #2 Zone, alarm, and panel-link discovery share one MQTT device block; zone names are Title Case; alarm name is Texecom Alarm
+- [x] #3 supported_features lists arm_home, arm_night, arm_away in that order; specs/architecture naming open questions are marked answered as match today’s IDs
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -76,7 +76,7 @@ Verification: pytest -q --cov=texecom_alarm --cov-fail-under=90 → 167 passed, 
 Notes/assumptions: Practitioner chose keep _N + amend “match / no migration” wording. Alarm entity_id stays texecom_alarm_arm_status. Cutover automation updates deferred.
 
 ## Build phase
-phase: merging
+phase: done
 
 ## Attention
 Resolved: Category 2 — keep _{zone_number}; docs amended to scheme-not-exact-match (2026-08-05).
