@@ -1,9 +1,10 @@
 ---
 id: TASK-13
 title: 'Checkpoint: texecom-alarm-app accept follow-ups wave 1'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-05 11:53'
+updated_date: '2026-08-05 14:59'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
