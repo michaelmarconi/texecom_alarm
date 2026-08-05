@@ -54,3 +54,10 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/mqtt/discovery.py (mo
 3. Confirm zone/alarm availability still uses only app LWT (never panel-link).
 Test strategy: how we'll know = unit + E2E (stand-in: FakePanel + RecordingMqttPublisher); pytest tests that assert retained discovery config + panel_link state topics appear; manual acceptance re-check on live broker after merge.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
