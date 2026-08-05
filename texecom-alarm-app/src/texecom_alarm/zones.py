@@ -67,6 +67,14 @@ def zone_slug(name: str, *, zone_number: int) -> str:
     return f"{base}_{zone_number}"
 
 
+def zone_display_name(name: str, *, zone_number: int) -> str:
+    """Title-Case friendly name for MQTT discovery (panel names are often ALL CAPS)."""
+    cleaned = name.strip()
+    if not cleaned:
+        return f"Zone {zone_number}"
+    return cleaned.title()
+
+
 async def enumerate_zones(client: PanelClient) -> tuple[list[Zone], int]:
     """LOGIN must already have succeeded. Ask the panel for in-use zones only.
 
