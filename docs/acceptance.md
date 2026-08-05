@@ -95,6 +95,7 @@ A Home Assistant Add-on that replaces unreliable `the prior MQTT bridge` for a T
 - [ ] **HA alarm card feedback on failed arm** — after NAK, card left Home selected while entity stayed Disarmed; investigate expected MQTT/HA behaviour and whether we should republish state or surface failure.
 - [ ] **UDL option clarity** — label should explain what UDL is; consider baking factory default `1234` into the config UI default (panel confirmed in spikes).
 - [ ] **Unwalked acceptance paths** — door/window/other zone classes; Away/Night ×3; disarm matrix; live siren + forced disconnect + snapshot; household wrapper/aggregates; production cutover with `the prior MQTT bridge` removed.
+- [ ] **Published release / CHANGELOG / `/ship` cadence** — local no-fake-bump rule is in [addon-versioning.md](addon-versioning.md); when to authorize a real `version` bump and CHANGELOG depth for go-live remains deferred until `/ship` (or an explicit decision).
 
 ## Review
 
