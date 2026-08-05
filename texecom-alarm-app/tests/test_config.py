@@ -149,14 +149,33 @@ def test_part_arm_slot_defaults_and_mode_bytes() -> None:
             "mqtt_host": "mqtt.local",
         }
     )
+    assert settings.part_arm_1 == "unused"
+    assert settings.part_arm_2 == "unused"
+    assert settings.part_arm_3 == "unused"
+    assert settings.mode_byte_for_ha_mode("night") is None
+    assert settings.mode_byte_for_ha_mode("home") is None
+    assert settings.mode_byte_for_ha_mode("away") == FULL_ARM_AWAY_MODE_BYTE
+    assert settings.ha_mode_for_part_arm_slot(1) is None
+    assert settings.ha_mode_for_part_arm_slot(2) is None
+    assert settings.ha_mode_for_part_arm_slot(3) is None
+    assert settings.supported_arm_features() == ["arm_away"]
+
+
+def test_part_arm_supervisor_display_labels_parse_to_canonical() -> None:
+    """Supervisor radios store Title Case + emoji; Settings keep canonical tokens."""
+    settings = load_settings(
+        _valid_options(
+            part_arm_1="Night 🌙",
+            part_arm_2="Home 🏠",
+            part_arm_3="Unused",
+        )
+    )
     assert settings.part_arm_1 == "night"
     assert settings.part_arm_2 == "home"
     assert settings.part_arm_3 == "unused"
     assert settings.mode_byte_for_ha_mode("night") == 1
     assert settings.mode_byte_for_ha_mode("home") == 2
     assert settings.mode_byte_for_ha_mode("away") == FULL_ARM_AWAY_MODE_BYTE
-    assert settings.ha_mode_for_part_arm_slot(3) is None
-    assert settings.supported_arm_features() == ["arm_home", "arm_night", "arm_away"]
 
 
 def test_part_arm_remapping_changes_mode_bytes() -> None:
