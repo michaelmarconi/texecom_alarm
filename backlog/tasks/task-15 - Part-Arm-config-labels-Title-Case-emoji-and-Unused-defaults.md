@@ -1,10 +1,10 @@
 ---
 id: TASK-15
 title: Part-Arm config labels Title Case + emoji and Unused defaults
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-05 15:43'
-updated_date: '2026-08-05 15:50'
+updated_date: '2026-08-05 15:54'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
