@@ -69,20 +69,20 @@ Root prefix for discovery and state topics this Add-on publishes. Default:
 Which HA arm button (Home / Night / Away) each engineer-configured **Part-Arm
 slot** should use — or Unused if the slot isn't configured on your panel.
 
-Schema values are the canonical lowercase tokens `home`, `night`, `away`, or
-`unused` (defaults `unused`). Supervisor validates persisted options with exact
-`vol.In` matching, so the schema must keep these lowercase forms — Title Case +
-emoji (`Home 🏠`, `Night 🌙`, `Away 🔒`, `Unused`) appear in the Configuration
-helper text so HA-card icons stay visible without breaking existing installs.
-Python still accepts both forms if present.
+Supervisor `list(...)` tokens are the Configuration radio labels (there is no
+separate label/value). Schema options are therefore the display tokens
+`Home 🏠`, `Night 🌙`, `Away 🔒`, or `Unused` (defaults `Unused`). Python still
+canonicalises those selections — and any legacy lowercase `home` / `night` /
+`away` / `unused` values — to `home|night|away|unused` for shared arm-command
+mapping (`cmd=6`).
 
 Defaults (map each slot for your installation — do not assume a household layout):
 
 | Option | Default |
 |--------|---------|
-| `part_arm_1` | `unused` |
-| `part_arm_2` | `unused` |
-| `part_arm_3` | `unused` |
+| `part_arm_1` | `Unused` |
+| `part_arm_2` | `Unused` |
+| `part_arm_3` | `Unused` |
 
 Under the hood the Add-on still issues the confirmed shared arm command (`cmd=6`)
 with mode byte equal to the Part-Arm slot number (slot 1 → byte `1`, slot 2 →
