@@ -1,9 +1,10 @@
 ---
 id: TASK-12
 title: 'MQTT discovery: match texecom_alarm_* IDs, device, Title Case, feature order'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-05 11:53'
+updated_date: '2026-08-05 14:23'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
