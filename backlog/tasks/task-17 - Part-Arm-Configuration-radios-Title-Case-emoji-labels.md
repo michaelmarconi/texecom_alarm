@@ -53,7 +53,7 @@ Test strategy: how we'll know = pytest test_config (+ related) green; ruff clean
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
