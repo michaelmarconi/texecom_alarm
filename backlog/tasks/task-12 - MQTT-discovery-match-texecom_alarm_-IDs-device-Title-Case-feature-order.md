@@ -59,5 +59,5 @@ Test strategy: how we'll know = unit tests on discovery payloads (object_id, dev
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
