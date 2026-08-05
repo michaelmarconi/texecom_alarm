@@ -36,11 +36,10 @@ TCP port for the ComIP / Connect session. Default: `10001`.
 
 ### Option: `udl_password`
 
-Panel **UDL** (User Data Link) login password — the same password Wintex and other
-Connect-protocol clients use to authenticate to the panel. Factory default on many
-Premier Elite panels is `1234`; change it on the panel if still set, and override
-this option to match. Default in the Add-on schema: `1234`. Treated as a secret in
-the Supervisor UI.
+**Panel UDL password** — the panel login used by Wintex / Connect clients
+(UDL = User Data Link). Default is usually `1234`, but check with your engineer if
+login fails. Default in the Add-on schema: `1234`. Treated as a secret in the
+Supervisor UI.
 
 ### Option: `mqtt_host`
 
@@ -67,15 +66,19 @@ Root prefix for discovery and state topics this Add-on publishes. Default:
 
 ### Option: `part_arm_1` / `part_arm_2` / `part_arm_3`
 
-Which Home Assistant arm mode each engineer-configured **Part-Arm slot** carries.
-Each field is one of: `home`, `night`, `away`, or `unused`.
+Which HA arm button (Home / Night / Away) each engineer-configured **Part-Arm
+slot** should use — or Unused if the slot isn't configured on your panel.
 
-Defaults (this household's layout — override per installation):
+Supervisor radios show Title Case labels with emoji (`Home 🏠`, `Night 🌙`,
+`Away 🔒`, `Unused`); the Add-on stores/parses the canonical values `home`,
+`night`, `away`, or `unused`.
+
+Defaults (map each slot for your installation — do not assume a household layout):
 
 | Option | Default |
 |--------|---------|
-| `part_arm_1` | `night` |
-| `part_arm_2` | `home` |
+| `part_arm_1` | `unused` |
+| `part_arm_2` | `unused` |
 | `part_arm_3` | `unused` |
 
 Under the hood the Add-on still issues the confirmed shared arm command (`cmd=6`)
