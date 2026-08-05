@@ -1,10 +1,10 @@
 ---
 id: TASK-17
 title: 'Part-Arm Configuration radios: Title Case + emoji labels'
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-05 19:09'
-updated_date: '2026-08-05 19:11'
+updated_date: '2026-08-05 19:13'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -52,8 +52,14 @@ Test strategy: how we'll know = pytest test_config (+ related) green; ruff clean
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Part-Arm schema radios use Title Case + emoji labels; helpers shortened; DOCS/tests updated; version left at 0.0.1.
+Changed files: config.yaml, translations/en.yaml, DOCS.md, texecom-alarm-app/tests/test_config.py
+Verification: pytest tests/test_config.py -q → 27 passed; pytest -q → 169 passed; ruff check/format — clean; version remains 0.0.1.
+Notes/assumptions: Live HA Configuration verify still needed after ha store reload + rebuild/update per docs/run.md. Persisted lowercase options may need re-select after schema refresh.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
