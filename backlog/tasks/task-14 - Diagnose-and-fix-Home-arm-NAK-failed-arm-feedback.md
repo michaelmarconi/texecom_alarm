@@ -68,5 +68,5 @@ Verification: pytest → 173 passed; ruff clean. Bugbot stale-snapshot finding f
 Notes/assumptions: AC#3 root cause = panel reject (not app framing/mapping). Feedback gap fixed. Mid-flight state race on NAK republish fixed after Bugbot.
 
 ## Build phase
-phase: awaiting-merge-signoff
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
