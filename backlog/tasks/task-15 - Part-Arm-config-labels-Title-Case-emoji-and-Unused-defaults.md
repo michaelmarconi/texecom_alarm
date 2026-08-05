@@ -1,10 +1,10 @@
 ---
 id: TASK-15
 title: Part-Arm config labels Title Case + emoji and Unused defaults
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-05 15:43'
-updated_date: '2026-08-05 16:27'
+updated_date: '2026-08-05 16:40'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -35,9 +35,9 @@ ordinal: 10000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Radio labels render as Home 🏠 / Night 🌙 / Away 🔒 / Unused (emoji after label); each slot helper matches: Which HA arm button (Home / Night / Away) this Part-Arm slot should use — or Unused if the slot isn't configured on your panel.
-- [ ] #2 Schema and Settings defaults for part_arm_1, part_arm_2, and part_arm_3 are all unused (not household Night/Home); unit tests and DOCS.md reflect that; remapping still changes cmd=6 mode bytes without code edits.
-- [ ] #3 UDL option name is "Panel UDL password"; description states the usual default is 1234 and to check with the engineer if login fails. Add-on version is not bumped.
+- [x] #1 Radio labels render as Home 🏠 / Night 🌙 / Away 🔒 / Unused (emoji after label); each slot helper matches: Which HA arm button (Home / Night / Away) this Part-Arm slot should use — or Unused if the slot isn't configured on your panel.
+- [x] #2 Schema and Settings defaults for part_arm_1, part_arm_2, and part_arm_3 are all unused (not household Night/Home); unit tests and DOCS.md reflect that; remapping still changes cmd=6 mode bytes without code edits.
+- [x] #3 UDL option name is "Panel UDL password"; description states the usual default is 1234 and to check with the engineer if login fails. Add-on version is not bumped.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -61,12 +61,12 @@ Verification: pytest test_config 27 passed; full suite 169 passed; ruff clean on
 Notes/assumptions: Bugbot fix — no mixed 8-option schema; radio values remain canonical lowercase; AC display intent via helpers. Prior Bugbot note addressed.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 Part-Arm radios match the agreed mock (Title Case, emoji after label, simple helper)
-- [ ] #2 Defaults are Unused for all three slots (ADR-005: do not bake this household layout into defaults)
-- [ ] #3 UDL label/helper match the agreed copy; config.yaml version unchanged
+- [x] #1 Part-Arm radios match the agreed mock (Title Case, emoji after label, simple helper)
+- [x] #2 Defaults are Unused for all three slots (ADR-005: do not bake this household layout into defaults)
+- [x] #3 UDL label/helper match the agreed copy; config.yaml version unchanged
 <!-- DOD:END -->
