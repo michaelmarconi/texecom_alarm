@@ -49,6 +49,13 @@ Files likely affected: config.yaml (modify), translations/en.yaml (modify), DOCS
 Test strategy: how we'll know = pytest test_config (+ related) green; ruff clean; live HA Configuration radios show Title Case + emoji after store reload + rebuild/update.
 <!-- SECTION:PLAN:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 Live Configuration radios match the agreed mock (Title Case + emoji after label)
