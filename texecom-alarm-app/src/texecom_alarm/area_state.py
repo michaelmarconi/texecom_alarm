@@ -98,13 +98,10 @@ def mqtt_payload_for_area_state(state: int, settings: Settings) -> str:
 
 def _ha_state_for_part_arm_slot(slot: int, settings: Settings) -> str:
     """Invert install-time Part-Arm mapping (ADR-005) to an HA armed_* payload."""
-    if slot == settings.part_arm_night:
-        return "armed_night"
-    if slot == settings.part_arm_home:
-        return "armed_home"
-    if slot == settings.part_arm_away:
+    ha_mode = settings.ha_mode_for_part_arm_slot(slot)
+    if ha_mode is None:
         return "armed_away"
-    return "armed_away"
+    return f"armed_{ha_mode}"
 
 
 def decode_area_ha_state(

@@ -6,6 +6,7 @@ import json
 import logging
 from typing import Protocol
 
+from texecom_alarm.config import Settings
 from texecom_alarm.zones import Zone, zone_slug
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,15 @@ def zone_discovery_payload(zone: Zone, *, topic_prefix: str) -> dict[str, object
     }
 
 
-def alarm_discovery_payload(*, topic_prefix: str) -> dict[str, object]:
+def alarm_discovery_payload(
+    *,
+    topic_prefix: str,
+    settings: Settings | None = None,
+) -> dict[str, object]:
+    if settings is None:
+        supported = ["arm_home", "arm_away", "arm_night"]
+    else:
+        supported = settings.supported_arm_features()
     return {
         "name": "Arm Status",
         "unique_id": ALARM_OBJECT_ID,
@@ -99,7 +108,7 @@ def alarm_discovery_payload(*, topic_prefix: str) -> dict[str, object]:
         "payload_not_available": AVAILABILITY_OFFLINE,
         "code_arm_required": False,
         "code_disarm_required": False,
-        "supported_features": ["arm_home", "arm_away", "arm_night"],
+        "supported_features": supported,
     }
 
 
@@ -145,10 +154,11 @@ async def publish_alarm_discovery(
     mqtt: MqttPublisher,
     *,
     topic_prefix: str,
+    settings: Settings | None = None,
 ) -> None:
     """Publish retained alarm_control_panel discovery (ADR-003)."""
     topic = alarm_discovery_topic()
-    payload = alarm_discovery_payload(topic_prefix=topic_prefix)
+    payload = alarm_discovery_payload(topic_prefix=topic_prefix, settings=settings)
     body = json.dumps(payload, separators=(",", ":"))
     await mqtt.publish(topic, body, retain=True)
     logger.debug(

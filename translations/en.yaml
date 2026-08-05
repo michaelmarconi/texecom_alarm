@@ -7,7 +7,10 @@ configuration:
     description: TCP port for the panel ComIP session (default 10001).
   udl_password:
     name: UDL password
-    description: Panel UDL login password.
+    description: >-
+      Panel UDL (User Data Link) login password used by Wintex / Connect-protocol
+      clients. Factory default on many Premier Elite panels is 1234 — change it
+      on the panel if still set, and override here to match.
   mqtt_host:
     name: MQTT host
     description: MQTT broker hostname or IP.
@@ -23,15 +26,21 @@ configuration:
   mqtt_topic_prefix:
     name: MQTT topic prefix
     description: Root prefix for discovery and state topics (default texecom).
-  part_arm_away:
-    name: Part-Arm mode byte (Away)
-    description: Mode byte for Home Assistant Away — must match this installation's Part-Arm layout.
-  part_arm_night:
-    name: Part-Arm mode byte (Night)
-    description: Mode byte for Home Assistant Night — must match this installation's Part-Arm layout.
-  part_arm_home:
-    name: Part-Arm mode byte (Home)
-    description: Mode byte for Home Assistant Home — must match this installation's Part-Arm layout.
+  part_arm_1:
+    name: Part-Arm slot 1
+    description: >-
+      Home Assistant arm mode carried by Part-Arm slot 1 (or unused). Must match
+      this installation's engineer Part-Arm layout.
+  part_arm_2:
+    name: Part-Arm slot 2
+    description: >-
+      Home Assistant arm mode carried by Part-Arm slot 2 (or unused). Must match
+      this installation's engineer Part-Arm layout.
+  part_arm_3:
+    name: Part-Arm slot 3
+    description: >-
+      Home Assistant arm mode carried by Part-Arm slot 3 (or unused). Must match
+      this installation's engineer Part-Arm layout.
   reconnect_normal_attempts:
     name: Reconnect attempts (normal)
     description: Named retry budget after an ordinary panel disconnect (default 4). Tunable; the add-on keeps retrying after the budget rather than exiting.

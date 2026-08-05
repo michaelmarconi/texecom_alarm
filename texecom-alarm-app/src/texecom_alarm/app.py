@@ -80,7 +80,7 @@ async def run(
         )
         mqtt_connected = True
         await publish_zone_discovery(mqtt_client, zones, topic_prefix=cfg.mqtt_topic_prefix)
-        await publish_alarm_discovery(mqtt_client, topic_prefix=cfg.mqtt_topic_prefix)
+        await publish_alarm_discovery(mqtt_client, topic_prefix=cfg.mqtt_topic_prefix, settings=cfg)
         await publish_connectivity_discovery(mqtt_client, topic_prefix=cfg.mqtt_topic_prefix)
 
         await publish_zone_state_snapshot(
