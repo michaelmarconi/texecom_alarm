@@ -4,7 +4,7 @@ title: 'Part-Arm Configuration radios: Title Case + emoji labels'
 status: awaiting-review
 assignee: []
 created_date: '2026-08-05 19:09'
-updated_date: '2026-08-05 19:13'
+updated_date: '2026-08-05 19:15'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -59,7 +59,7 @@ Verification: pytest tests/test_config.py -q → 27 passed; pytest -q → 169 pa
 Notes/assumptions: Live HA Configuration verify still needed after ha store reload + rebuild/update per docs/run.md. Persisted lowercase options may need re-select after schema refresh.
 
 ## Build phase
-phase: awaiting-review
+phase: awaiting-merge-signoff
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
