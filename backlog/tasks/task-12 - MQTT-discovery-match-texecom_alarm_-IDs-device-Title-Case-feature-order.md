@@ -54,3 +54,10 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/mqtt/discovery.py (mo
 5. Close the naming Open Questions in both specs and the architecture open-question bullet to record match-today’s-IDs (no migration).
 Test strategy: how we'll know = unit tests on discovery payloads (object_id, device, name casing, feature order); pytest test_mqtt_discovery.py — no live HA required for CI; manual accept re-check entity_ids in HA.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
