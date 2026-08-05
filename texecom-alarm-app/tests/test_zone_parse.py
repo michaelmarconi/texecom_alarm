@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from texecom_alarm.protocol.client import ProtocolError
-from texecom_alarm.zones import parse_zone_count, parse_zone_details, zone_slug
+from texecom_alarm.zones import parse_zone_count, parse_zone_details, zone_display_name, zone_slug
 
 
 def test_parse_zone_count_from_bytes() -> None:
@@ -46,3 +46,9 @@ def test_zone_slug_always_includes_zone_number() -> None:
     assert zone_slug("FRONT DOOR", zone_number=1) == "front_door_1"
     assert zone_slug("FRONT DOOR", zone_number=12) == "front_door_12"
     assert zone_slug("FRONT DOOR", zone_number=1) != zone_slug("FRONT DOOR", zone_number=12)
+
+
+def test_zone_display_name_title_cases_panel_names() -> None:
+    assert zone_display_name("FRONT DOOR", zone_number=1) == "Front Door"
+    assert zone_display_name("  kitchen pir  ", zone_number=3) == "Kitchen Pir"
+    assert zone_display_name("", zone_number=9) == "Zone 9"

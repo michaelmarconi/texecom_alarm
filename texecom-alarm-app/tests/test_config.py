@@ -156,9 +156,7 @@ def test_part_arm_slot_defaults_and_mode_bytes() -> None:
     assert settings.mode_byte_for_ha_mode("home") == 2
     assert settings.mode_byte_for_ha_mode("away") == FULL_ARM_AWAY_MODE_BYTE
     assert settings.ha_mode_for_part_arm_slot(3) is None
-    assert "arm_night" in settings.supported_arm_features()
-    assert "arm_home" in settings.supported_arm_features()
-    assert "arm_away" in settings.supported_arm_features()
+    assert settings.supported_arm_features() == ["arm_home", "arm_night", "arm_away"]
 
 
 def test_part_arm_remapping_changes_mode_bytes() -> None:
@@ -168,7 +166,7 @@ def test_part_arm_remapping_changes_mode_bytes() -> None:
     assert settings.mode_byte_for_ha_mode("home") == 1
     assert settings.mode_byte_for_ha_mode("away") == 2
     assert settings.mode_byte_for_ha_mode("night") == 3
-    assert settings.supported_arm_features() == ["arm_home", "arm_away", "arm_night"]
+    assert settings.supported_arm_features() == ["arm_home", "arm_night", "arm_away"]
 
 
 def test_unused_slot_not_offered_as_arm_target() -> None:
@@ -178,9 +176,8 @@ def test_unused_slot_not_offered_as_arm_target() -> None:
     assert settings.mode_byte_for_ha_mode("night") == 1
     assert settings.mode_byte_for_ha_mode("home") is None
     features = settings.supported_arm_features()
-    assert "arm_night" in features
+    assert features == ["arm_night", "arm_away"]
     assert "arm_home" not in features
-    assert "arm_away" in features  # full-arm Away when not on a Part-Arm slot
 
 
 def test_duplicate_part_arm_mode_raises_clear_error() -> None:

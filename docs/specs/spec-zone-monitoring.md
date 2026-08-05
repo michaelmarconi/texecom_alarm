@@ -126,9 +126,12 @@ uninstalled once this is delivered.
 
 ## Open Questions
 
-- Should new zone entity IDs exactly match today's `binary_sensor.texecom_alarm_*`
-  naming, or is a documented rename/migration acceptable? (Owner: household/spec
-  author — resolve before Phase 2 build starts on this capability.)
+- ~~Should new zone entity IDs exactly match today's `binary_sensor.texecom_alarm_*`
+  naming, or is a documented rename/migration acceptable?~~ **Answered 2026-08-05:**
+  Use the `texecom_alarm_*` scheme (not bit-identical legacy IDs). Discovery publishes
+  `texecom_alarm_{slug}_{zone_number}` via `object_id`/`unique_id` plus
+  `default_entity_id` so HA keeps the prefix and each zone stays unique; cutover may
+  need household automation/entity updates later (acceptable for this stage).
 
 ## Spike Candidates
 
