@@ -42,9 +42,9 @@ def _settings(panel: FakePanel, mqtt_port: int) -> Settings:
         mqtt_username="",
         mqtt_password="",
         mqtt_topic_prefix="texecom",
-        part_arm_away=0,
-        part_arm_night=1,
-        part_arm_home=2,
+        part_arm_1="night",
+        part_arm_2="home",
+        part_arm_3="unused",
     )
 
 
@@ -608,9 +608,9 @@ async def test_e2e_mqtt_arm_disarm_commands() -> None:
             mqtt_username="",
             mqtt_password="",
             mqtt_topic_prefix="texecom",
-            part_arm_away=0,
-            part_arm_night=1,
-            part_arm_home=2,
+            part_arm_1="night",
+            part_arm_2="home",
+            part_arm_3="unused",
         )
         stop = asyncio.Event()
         client = PanelClient(
@@ -677,8 +677,8 @@ async def test_e2e_mqtt_arm_disarm_commands() -> None:
 
 
 @pytest.mark.asyncio
-async def test_e2e_mqtt_arm_uses_remapped_part_arm_bytes() -> None:
-    """AC-3: changing Settings.part_arm_* changes the mode byte without code change."""
+async def test_e2e_mqtt_arm_uses_remapped_part_arm_slots() -> None:
+    """AC-3: changing Part-Arm slot → HA mode changes the mode byte without code change."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
@@ -696,9 +696,9 @@ async def test_e2e_mqtt_arm_uses_remapped_part_arm_bytes() -> None:
             mqtt_username="",
             mqtt_password="",
             mqtt_topic_prefix="texecom",
-            part_arm_away=7,
-            part_arm_night=8,
-            part_arm_home=9,
+            part_arm_1="home",
+            part_arm_2="away",
+            part_arm_3="night",
         )
         stop = asyncio.Event()
         client = PanelClient(
@@ -721,26 +721,26 @@ async def test_e2e_mqtt_arm_uses_remapped_part_arm_bytes() -> None:
                     raise exc
             await asyncio.sleep(0.02)
 
-        await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_HOME")
         for _ in range(100):
-            if panel.last_arm_body == bytes([0x07, 0x01]):
+            if panel.last_arm_body == bytes([0x01, 0x01]):
                 break
             await asyncio.sleep(0.02)
-        assert panel.last_arm_body == bytes([0x07, 0x01])
+        assert panel.last_arm_body == bytes([0x01, 0x01])
+
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
+        for _ in range(100):
+            if panel.last_arm_body == bytes([0x02, 0x01]):
+                break
+            await asyncio.sleep(0.02)
+        assert panel.last_arm_body == bytes([0x02, 0x01])
 
         await mqtt.push_inbound("texecom/alarm/command", "ARM_NIGHT")
         for _ in range(100):
-            if panel.last_arm_body == bytes([0x08, 0x01]):
+            if panel.last_arm_body == bytes([0x03, 0x01]):
                 break
             await asyncio.sleep(0.02)
-        assert panel.last_arm_body == bytes([0x08, 0x01])
-
-        await mqtt.push_inbound("texecom/alarm/command", "ARM_HOME")
-        for _ in range(100):
-            if panel.last_arm_body == bytes([0x09, 0x01]):
-                break
-            await asyncio.sleep(0.02)
-        assert panel.last_arm_body == bytes([0x09, 0x01])
+        assert panel.last_arm_body == bytes([0x03, 0x01])
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)

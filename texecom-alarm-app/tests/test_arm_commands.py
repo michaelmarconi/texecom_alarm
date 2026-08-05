@@ -10,8 +10,8 @@ from texecom_alarm.arm_commands import handle_alarm_command
 from texecom_alarm.config import Settings
 
 
-def _settings(**overrides: int) -> Settings:
-    base = dict(
+def _settings(**overrides: object) -> Settings:
+    base: dict[str, object] = dict(
         panel_host="127.0.0.1",
         panel_port=10001,
         udl_password="1234",
@@ -20,9 +20,9 @@ def _settings(**overrides: int) -> Settings:
         mqtt_username="",
         mqtt_password="",
         mqtt_topic_prefix="texecom",
-        part_arm_away=0,
-        part_arm_night=1,
-        part_arm_home=2,
+        part_arm_1="night",
+        part_arm_2="home",
+        part_arm_3="unused",
     )
     base.update(overrides)
     return Settings(**base)  # type: ignore[arg-type]
@@ -30,25 +30,25 @@ def _settings(**overrides: int) -> Settings:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("payload", "mode_attr"),
+    ("payload", "expected_byte"),
     [
-        ("ARM_AWAY", "part_arm_away"),
-        ("ARM_NIGHT", "part_arm_night"),
-        ("ARM_HOME", "part_arm_home"),
-        (b"ARM_AWAY", "part_arm_away"),
+        ("ARM_AWAY", 0),
+        ("ARM_NIGHT", 1),
+        ("ARM_HOME", 2),
+        (b"ARM_AWAY", 0),
     ],
 )
 async def test_arm_payloads_call_set_area_arm_with_settings_mode(
-    payload: str | bytes, mode_attr: str
+    payload: str | bytes, expected_byte: int
 ) -> None:
     panel = MagicMock()
     panel.set_area_arm = AsyncMock()
     panel.set_area_disarm = AsyncMock()
-    settings = _settings(part_arm_away=10, part_arm_night=11, part_arm_home=12)
+    settings = _settings()
 
     await handle_alarm_command(panel, settings, payload)
 
-    panel.set_area_arm.assert_awaited_once_with(getattr(settings, mode_attr))
+    panel.set_area_arm.assert_awaited_once_with(expected_byte)
     panel.set_area_disarm.assert_not_awaited()
 
 
@@ -78,11 +78,29 @@ async def test_unknown_payload_is_ignored() -> None:
 
 
 @pytest.mark.asyncio
-async def test_remapped_part_arm_bytes_are_used() -> None:
+async def test_remapped_part_arm_slots_change_mode_bytes() -> None:
     panel = MagicMock()
     panel.set_area_arm = AsyncMock()
-    settings = _settings(part_arm_away=7, part_arm_night=8, part_arm_home=9)
+    settings = _settings(part_arm_1="home", part_arm_2="away", part_arm_3="night")
+
+    await handle_alarm_command(panel, settings, "ARM_HOME")
+    panel.set_area_arm.assert_awaited_once_with(1)
+
+    panel.set_area_arm.reset_mock()
+    await handle_alarm_command(panel, settings, "ARM_AWAY")
+    panel.set_area_arm.assert_awaited_once_with(2)
+
+    panel.set_area_arm.reset_mock()
+    await handle_alarm_command(panel, settings, "ARM_NIGHT")
+    panel.set_area_arm.assert_awaited_once_with(3)
+
+
+@pytest.mark.asyncio
+async def test_unmapped_home_mode_is_ignored() -> None:
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    settings = _settings(part_arm_1="night", part_arm_2="unused", part_arm_3="unused")
 
     await handle_alarm_command(panel, settings, "ARM_HOME")
 
-    panel.set_area_arm.assert_awaited_once_with(9)
+    panel.set_area_arm.assert_not_awaited()
