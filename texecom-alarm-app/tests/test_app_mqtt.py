@@ -27,9 +27,9 @@ def _settings(panel: FakePanel) -> Settings:
         mqtt_username="",
         mqtt_password="",
         mqtt_topic_prefix="texecom",
-        part_arm_away=0,
-        part_arm_night=1,
-        part_arm_home=2,
+        part_arm_1="night",
+        part_arm_2="home",
+        part_arm_3="unused",
     )
 
 
