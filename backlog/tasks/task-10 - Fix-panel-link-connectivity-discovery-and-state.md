@@ -59,5 +59,5 @@ Test strategy: how we'll know = unit + E2E (stand-in: FakePanel + RecordingMqttP
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
