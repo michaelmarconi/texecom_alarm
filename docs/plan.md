@@ -8,10 +8,10 @@
 
 | Component | Effort | Status | Notes |
 |---|---|---|---|
-| texecom-alarm-app | L | planned ✅ | Tasks authored in the ledger (container:texecom-alarm-app). Wave 1 ready; follow-ons as skeleton drafts. |
+| texecom-alarm-app | L | planned ✅ | Accept follow-ups authored (TASK-10–14): panel-link fix, Part-Arm/UDL config, discovery naming closures, Home arm NAK. Prior wave TASK-1–9 done. |
 
 ---
 
 ## Review
 
-<!-- Practitioner accepted without formal /review. -->
+<!-- Populated by /review. Do not edit manually. -->
