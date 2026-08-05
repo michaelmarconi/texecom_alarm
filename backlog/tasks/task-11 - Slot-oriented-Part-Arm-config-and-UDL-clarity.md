@@ -1,9 +1,10 @@
 ---
 id: TASK-11
 title: Slot-oriented Part-Arm config and UDL clarity
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-05 11:53'
+updated_date: '2026-08-05 12:52'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
