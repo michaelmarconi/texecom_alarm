@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 
 from texecom_alarm.area_state import handle_area_message, publish_area_state_snapshot
 from texecom_alarm.arm_commands import handle_alarm_command
@@ -30,6 +31,13 @@ logger = logging.getLogger(__name__)
 # Panel drops passive listen-only sessions after ~60s; ~15s GETDATETIME keeps alive
 # (docs/protocol-reference.md). Used as recv_message idle timeout → keepalive.
 _KEEPALIVE_IDLE_TIMEOUT = 15.0
+
+
+@dataclass
+class _SharedAlarmState:
+    """Last known HA alarm payload shared by listen + MQTT command tasks."""
+
+    payload: str | None = None
 
 
 async def run(
@@ -109,6 +117,7 @@ async def run(
         await mqtt_client.subscribe(command_topic)  # type: ignore[attr-defined]
         logger.debug("mqtt_alarm_command_subscribed", extra={"topic": command_topic})
 
+        alarm_state = _SharedAlarmState(payload=initial_alarm_payload)
         in_use = {z.number for z in zones}
         listen_task = asyncio.create_task(
             _listen_with_reconnect(
@@ -119,7 +128,7 @@ async def run(
                 zone_count=zone_count,
                 topic_prefix=cfg.mqtt_topic_prefix,
                 in_use_zones=in_use,
-                initial_alarm_payload=initial_alarm_payload,
+                alarm_state=alarm_state,
             ),
             name="panel-listen",
         )
@@ -129,6 +138,7 @@ async def run(
                 mqtt_client,
                 settings=cfg,
                 command_topic=command_topic,
+                alarm_state=alarm_state,
             ),
             name="mqtt-alarm-commands",
         )
@@ -169,6 +179,7 @@ async def _listen_alarm_commands(
     *,
     settings: Settings,
     command_topic: str,
+    alarm_state: _SharedAlarmState,
 ) -> None:
     """Subscribe loop: MQTT ARM_*/DISARM → shared panel arm/disarm (ADR-005)."""
     inbound = mqtt.inbound_messages  # type: ignore[attr-defined]
@@ -179,7 +190,14 @@ async def _listen_alarm_commands(
             continue
         payload = getattr(message, "payload", b"")
         try:
-            await handle_alarm_command(panel, settings, payload)
+            await handle_alarm_command(
+                panel,
+                settings,
+                payload,
+                mqtt=mqtt,  # type: ignore[arg-type]
+                topic_prefix=settings.mqtt_topic_prefix,
+                current_alarm_state=alarm_state.payload,
+            )
         except Exception:
             logger.exception("alarm_command_failed", extra={"topic": topic})
 
@@ -193,23 +211,22 @@ async def _listen_with_reconnect(
     zone_count: int,
     topic_prefix: str,
     in_use_zones: set[int],
+    alarm_state: _SharedAlarmState,
     idle_timeout: float = _KEEPALIVE_IDLE_TIMEOUT,
-    initial_alarm_payload: str | None = None,
 ) -> None:
     """Listen for panel pushes; on ForcedDisconnect, asymmetric reconnect then resume."""
-    last_alarm_payload = initial_alarm_payload
     # Survive outages: one rolling buffer across reconnect cycles (ADR-004).
     activity = TriggerActivityBuffer()
     while True:
         try:
-            last_alarm_payload = await _listen_panel_messages(
+            await _listen_panel_messages(
                 panel,
                 mqtt,
                 settings=settings,
                 topic_prefix=topic_prefix,
                 in_use_zones=in_use_zones,
                 idle_timeout=idle_timeout,
-                initial_alarm_payload=last_alarm_payload,
+                alarm_state=alarm_state,
                 activity=activity,
             )
         except Exception:
@@ -222,6 +239,7 @@ async def _listen_with_reconnect(
                 live=False,
             )
             raise
+        last_alarm_payload = alarm_state.payload
         logger.info(
             "panel_forced_disconnect",
             extra={"last_alarm_payload": last_alarm_payload},
@@ -235,6 +253,7 @@ async def _listen_with_reconnect(
             zone_count=zone_count,
             last_alarm_payload=last_alarm_payload,
         )
+        alarm_state.payload = last_alarm_payload
         # Snapshot may edge into triggered during the outage; use preserved buffer.
         await maybe_publish_trigger_snapshot(
             mqtt,  # type: ignore[arg-type]
@@ -252,18 +271,17 @@ async def _listen_panel_messages(
     settings: Settings,
     topic_prefix: str,
     in_use_zones: set[int],
+    alarm_state: _SharedAlarmState,
     idle_timeout: float = _KEEPALIVE_IDLE_TIMEOUT,
-    initial_alarm_payload: str | None = None,
     activity: TriggerActivityBuffer | None = None,
-) -> str | None:
-    """Steady-state loop until ForcedDisconnect; returns last HOUSE alarm payload.
+) -> None:
+    """Steady-state loop until ForcedDisconnect.
 
     Keepalive on idle timeout. Cancellation still propagates.
+    Updates ``alarm_state`` when HOUSE AREA pushes change the MQTT payload.
     """
     logger.debug("panel_listen_start")
     buffer = activity if activity is not None else TriggerActivityBuffer()
-    # Seed from area-flags snapshot so cold-start already-in-alarm does not invent.
-    last_alarm_payload: str | None = initial_alarm_payload
     try:
         while True:
             try:
@@ -301,16 +319,16 @@ async def _listen_panel_messages(
                 if new_payload is not None:
                     await maybe_publish_trigger_snapshot(
                         mqtt,  # type: ignore[arg-type]
-                        previous_payload=last_alarm_payload,
+                        previous_payload=alarm_state.payload,
                         new_payload=new_payload,
                         topic_prefix=topic_prefix,
                         buffer=buffer,
                     )
-                    last_alarm_payload = new_payload
+                    alarm_state.payload = new_payload
             else:
                 logger.debug("panel_message_ignored", extra={"subtype": subtype})
     except ForcedDisconnect:
-        return last_alarm_payload
+        return
 
 
 # Backward-compatible alias for tests that still import the old name.

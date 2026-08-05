@@ -90,6 +90,7 @@ class FakePanel:
         self.last_arm_mode: int | None = None
         self.last_arm_body: bytes | None = None
         self.arm_calls: list[int] = []
+        self.nak_next_arm = False
         self.last_disarm_body: bytes | None = None
         self.disarm_calls = 0
         self._handlers: dict[int, Callable[[Frame], bytes]] = {
@@ -328,6 +329,9 @@ class FakePanel:
         if body:
             self.last_arm_mode = body[0]
             self.arm_calls.append(body[0])
+        if self.nak_next_arm:
+            self.nak_next_arm = False
+            return bytes([CMD_SET_AREA_ARM, NAK])
         return bytes([CMD_SET_AREA_ARM, ACK])
 
     def _handle_set_area_disarm(self, frame: Frame) -> bytes:
