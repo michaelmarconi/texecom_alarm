@@ -1,10 +1,10 @@
 ---
 id: TASK-10
 title: Fix panel-link connectivity discovery and state
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-05 11:53'
-updated_date: '2026-08-05 11:56'
+updated_date: '2026-08-05 12:48'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -58,6 +58,12 @@ Test strategy: how we'll know = unit + E2E (stand-in: FakePanel + RecordingMqttP
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Locked retained panel-link discovery/state in E2E (source already published correctly; live accept gap was a stale pre-TASK-9 add-on image).
+Changed files: texecom-alarm-app/tests/test_e2e_fake_panel.py, texecom-alarm-app/tests/test_app_mqtt.py, texecom-alarm-app/tests/test_reconnect.py
+Verification: how we'll know = unit + E2E (FakePanel + RecordingMqttPublisher + Mosquitto late-subscriber retain); `cd texecom-alarm-app && .venv/bin/pytest -q --cov=texecom_alarm --cov-fail-under=90` → 160 passed, coverage 93%; `ruff check` + `ruff format --check` clean
+Notes/assumptions: Production path in `app.py` / `discovery.py` / `reconnect.py` already publishes retained `texecom_alarm_panel_link` discovery and `texecom/panel_link/state` ON/OFF without touching zone/alarm availability. Running container `app_local_texecom_alarm` still lacks `reconnect.py`/`trigger_snapshot.py` and the publish calls — rebuild/restart the local add-on after merge for HA/broker to see the sensor. `test_reconnect.py` change is ruff format only.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
