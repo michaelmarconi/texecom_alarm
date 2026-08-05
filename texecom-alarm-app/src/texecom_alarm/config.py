@@ -14,9 +14,9 @@ DEFAULT_PANEL_PORT = 10001
 DEFAULT_MQTT_PORT = 1883
 DEFAULT_MQTT_TOPIC_PREFIX = "texecom"
 DEFAULT_UDL_PASSWORD = "1234"  # noqa: S105 — panel factory default, overridable
-# Slot-oriented Part-Arm defaults (this household's layout; overridable per install).
-DEFAULT_PART_ARM_1 = "night"
-DEFAULT_PART_ARM_2 = "home"
+# Slot-oriented Part-Arm defaults (Unused until the installer maps each slot).
+DEFAULT_PART_ARM_1 = "unused"
+DEFAULT_PART_ARM_2 = "unused"
 DEFAULT_PART_ARM_3 = "unused"
 # Confirmed SPIKE-005 full-arm Away mode byte when Away is not on a Part-Arm slot.
 FULL_ARM_AWAY_MODE_BYTE = 0
@@ -222,7 +222,13 @@ def _parse_part_arm_label(raw: Mapping[str, Any], key: str, default: PartArmLabe
     value = raw[key]
     if not isinstance(value, str):
         raise ConfigError(f"option {key} must be a string")
-    label = value.strip().lower()
+    # Canonical schema values are lowercase (home|night|away|unused). Also accept
+    # Title Case + emoji (e.g. "Home 🏠") if somehow present. First whitespace
+    # token after lower() is enough.
+    stripped = value.strip()
+    if not stripped:
+        return default
+    label = stripped.lower().split(None, 1)[0]
     if label not in _PART_ARM_LABELS:
         raise ConfigError(f"option {key} must be one of home, night, away, unused (got {value!r})")
     return label  # type: ignore[return-value]
