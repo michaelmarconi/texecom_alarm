@@ -4,7 +4,7 @@ title: 'Checkpoint: texecom-alarm-app accept follow-ups wave 1'
 status: in-progress
 assignee: []
 created_date: '2026-08-05 11:53'
-updated_date: '2026-08-05 14:59'
+updated_date: '2026-08-05 15:00'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
@@ -21,6 +21,13 @@ ordinal: 8000
 - [ ] #2 Build/lint clean (ruff check + format --check exit 0)
 - [ ] #3 E2E FakePanel path still asserts panel-link discovery/state and discovery object_id/device contracts from this wave
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
