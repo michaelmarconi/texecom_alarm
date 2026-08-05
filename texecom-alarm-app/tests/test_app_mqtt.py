@@ -9,7 +9,7 @@ import pytest
 from tests.fake_panel import FakePanel, FakeZone
 from tests.recording_mqtt import RecordingMqttPublisher
 
-from texecom_alarm.app import _listen_zone_messages, main, run
+from texecom_alarm.app import _listen_zone_messages, _SharedAlarmState, main, run
 from texecom_alarm.config import Settings
 from texecom_alarm.mqtt.discovery import AVAILABILITY_OFFLINE, AVAILABILITY_ONLINE
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
@@ -62,6 +62,7 @@ async def test_listen_loop_sends_keepalive_on_idle_timeout() -> None:
                 settings=_settings(panel),
                 topic_prefix="texecom",
                 in_use_zones={1},
+                alarm_state=_SharedAlarmState(),
                 idle_timeout=0.05,
             )
         )
