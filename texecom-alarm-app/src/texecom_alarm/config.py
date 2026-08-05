@@ -99,18 +99,17 @@ class Settings:
     def supported_arm_features(self) -> list[str]:
         """MQTT discovery ``supported_features`` for in-use Part-Arm modes.
 
-        Unused slots contribute no arm target. Away remains available via the
-        full-arm mode byte when not assigned to a Part-Arm slot.
+        Order is always Home → Night → Away (HA card best-effort). Unused slots
+        contribute no arm target. Away remains available via the full-arm mode
+        byte when not assigned to a Part-Arm slot.
         """
-        features: list[str] = []
-        seen: set[str] = set()
+        available: set[str] = set()
         for label in self.part_arm_labels():
-            if label != "unused" and label not in seen:
-                features.append(f"arm_{label}")
-                seen.add(label)
-        if "away" not in seen:
-            features.append("arm_away")
-        return features
+            if label != "unused":
+                available.add(label)
+        if "away" not in available:
+            available.add("away")
+        return [f"arm_{mode}" for mode in ("home", "night", "away") if mode in available]
 
 
 def load_settings(
@@ -240,8 +239,7 @@ def _validate_unique_part_arm_modes(
             continue
         if label in seen:
             raise ConfigError(
-                f"HA mode {label!r} is assigned to both Part-Arm slot "
-                f"{seen[label]} and slot {slot}"
+                f"HA mode {label!r} is assigned to both Part-Arm slot {seen[label]} and slot {slot}"
             )
         seen[label] = slot
 

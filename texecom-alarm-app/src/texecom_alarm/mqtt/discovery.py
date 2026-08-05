@@ -7,7 +7,7 @@ import logging
 from typing import Protocol
 
 from texecom_alarm.config import Settings
-from texecom_alarm.zones import Zone, zone_slug
+from texecom_alarm.zones import Zone, zone_display_name, zone_slug
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,17 @@ ALARM_OBJECT_ID = "texecom_alarm_arm_status"
 CONNECTIVITY_OBJECT_ID = "texecom_alarm_panel_link"
 PANEL_LINK_ON = "ON"
 PANEL_LINK_OFF = "OFF"
+
+# Shared across zone, alarm, and panel-link discovery so HA groups one device.
+MQTT_DEVICE: dict[str, object] = {
+    "identifiers": ["texecom_alarm"],
+    "name": "Texecom Alarm",
+    "manufacturer": "Texecom",
+    "model": "Premier Elite",
+}
+
+# HA card order when the MQTT platform respects supported_features list order.
+_ARM_FEATURE_ORDER = ("arm_home", "arm_night", "arm_away")
 
 
 class MqttPublisher(Protocol):
@@ -36,7 +47,7 @@ def availability_topic(topic_prefix: str) -> str:
 
 
 def zone_object_id(zone: Zone) -> str:
-    """Provisional object_id: texecom_alarm_{slug}_{zone_number} (unique per zone)."""
+    """object_id / unique_id: texecom_alarm_{slug}_{zone_number} (unique per zone)."""
     return f"texecom_alarm_{zone_slug(zone.name, zone_number=zone.number)}"
 
 
@@ -75,9 +86,12 @@ def connectivity_discovery_topic(object_id: str = CONNECTIVITY_OBJECT_ID) -> str
 def zone_discovery_payload(zone: Zone, *, topic_prefix: str) -> dict[str, object]:
     object_id = zone_object_id(zone)
     return {
-        "name": zone.name or f"Zone {zone.number}",
+        "name": zone_display_name(zone.name, zone_number=zone.number),
         "unique_id": object_id,
         "object_id": object_id,
+        # Modern HA ignores topic/object_id for entity_id; name would win otherwise.
+        "default_entity_id": f"binary_sensor.{object_id}",
+        "device": MQTT_DEVICE,
         "state_topic": zone_state_topic(topic_prefix, zone.number),
         "availability_topic": availability_topic(topic_prefix),
         "payload_available": AVAILABILITY_ONLINE,
@@ -93,13 +107,15 @@ def alarm_discovery_payload(
     settings: Settings | None = None,
 ) -> dict[str, object]:
     if settings is None:
-        supported = ["arm_home", "arm_away", "arm_night"]
+        supported = list(_ARM_FEATURE_ORDER)
     else:
         supported = settings.supported_arm_features()
     return {
-        "name": "Arm Status",
+        "name": "Texecom Alarm",
         "unique_id": ALARM_OBJECT_ID,
         "object_id": ALARM_OBJECT_ID,
+        "default_entity_id": f"alarm_control_panel.{ALARM_OBJECT_ID}",
+        "device": MQTT_DEVICE,
         "state_topic": alarm_state_topic(topic_prefix),
         "command_topic": alarm_command_topic(topic_prefix),
         "json_attributes_topic": alarm_attributes_topic(topic_prefix),
@@ -117,6 +133,8 @@ def connectivity_discovery_payload(*, topic_prefix: str) -> dict[str, object]:
         "name": "Panel Link",
         "unique_id": CONNECTIVITY_OBJECT_ID,
         "object_id": CONNECTIVITY_OBJECT_ID,
+        "default_entity_id": f"binary_sensor.{CONNECTIVITY_OBJECT_ID}",
+        "device": MQTT_DEVICE,
         "state_topic": connectivity_state_topic(topic_prefix),
         "availability_topic": availability_topic(topic_prefix),
         "payload_available": AVAILABILITY_ONLINE,
