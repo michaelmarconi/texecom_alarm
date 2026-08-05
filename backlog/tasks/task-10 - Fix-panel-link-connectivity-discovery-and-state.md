@@ -1,9 +1,10 @@
 ---
 id: TASK-10
 title: Fix panel-link connectivity discovery and state
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-05 11:53'
+updated_date: '2026-08-05 11:56'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
