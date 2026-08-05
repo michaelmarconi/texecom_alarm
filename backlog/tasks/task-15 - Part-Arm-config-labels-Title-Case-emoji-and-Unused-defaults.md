@@ -4,7 +4,7 @@ title: Part-Arm config labels Title Case + emoji and Unused defaults
 status: awaiting-review
 assignee: []
 created_date: '2026-08-05 15:43'
-updated_date: '2026-08-05 15:59'
+updated_date: '2026-08-05 16:15'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -61,7 +61,7 @@ Verification: PYTHONPATH=src pytest tests/test_config.py → 26 passed; PYTHONPA
 Notes/assumptions: Supervisor translation schema strips items, so radio labels are schema list members; Python normalizes to canonical home|night|away|unused. Schema defaults Title-Case Unused. Version not bumped.
 
 ## Build phase
-phase: awaiting-review
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
