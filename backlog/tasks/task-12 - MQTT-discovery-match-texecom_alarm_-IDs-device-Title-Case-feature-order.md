@@ -4,7 +4,7 @@ title: 'MQTT discovery: match texecom_alarm_* IDs, device, Title Case, feature o
 status: awaiting-review
 assignee: []
 created_date: '2026-08-05 11:53'
-updated_date: '2026-08-05 14:56'
+updated_date: '2026-08-05 14:58'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -76,7 +76,7 @@ Verification: pytest -q --cov=texecom_alarm --cov-fail-under=90 → 167 passed, 
 Notes/assumptions: Practitioner chose keep _N + amend “match / no migration” wording. Alarm entity_id stays texecom_alarm_arm_status. Cutover automation updates deferred.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 
 ## Attention
 Resolved: Category 2 — keep _{zone_number}; docs amended to scheme-not-exact-match (2026-08-05).
