@@ -128,6 +128,7 @@ A Home Assistant Add-on that replaces unreliable `the prior MQTT bridge` for a T
 - [ ] **Texecom iOS App coexistence** — need durable design so app + add-on both work (survive and sync); Local vs cloud paths; not “app holds ComIP” as the only model.
 - [ ] **Remote Access Started log spam** — likely our always-on ComIP LOGIN / type-53 session markers; confirm and decide if acceptable.
 - [ ] **Panel piping noise** — check whether it stops when this add-on is not running.
+- [ ] **DEBUG logging for zone/area activity** — not seeing expected DEBUG lines for entering/leaving areas, doors opening/closing, etc.; sort out log level / event logging later.
 - [ ] **More-info arm order** Home→Away→Night — HA frontend-fixed; use Lovelace `states:` if household cares (limitation).
 - [ ] **Unwalked acceptance paths** — door/window/other/shock zones; Away/Night ×3; full disarm matrix; keypad-disarm-after-arm MQTT proof; live siren + forced disconnect + snapshot; household wrapper/aggregates; production cutover with `the prior MQTT bridge` removed.
 - [ ] **Published release / CHANGELOG / `/ship` cadence** — see [addon-versioning.md](addon-versioning.md); real version bump deferred to `/ship` or an explicit decision.
