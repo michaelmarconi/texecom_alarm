@@ -162,7 +162,7 @@ def test_part_arm_slot_defaults_and_mode_bytes() -> None:
 
 
 def test_part_arm_supervisor_display_labels_parse_to_canonical() -> None:
-    """Supervisor radios store Title Case + emoji; Settings keep canonical tokens."""
+    """Python still normalises Title Case + emoji if present; Settings stay canonical."""
     settings = load_settings(
         _valid_options(
             part_arm_1="Night 🌙",
@@ -176,6 +176,21 @@ def test_part_arm_supervisor_display_labels_parse_to_canonical() -> None:
     assert settings.mode_byte_for_ha_mode("night") == 1
     assert settings.mode_byte_for_ha_mode("home") == 2
     assert settings.mode_byte_for_ha_mode("away") == FULL_ARM_AWAY_MODE_BYTE
+
+
+def test_addon_config_schema_accepts_lowercase_legacy_part_arm_values() -> None:
+    """Supervisor validates persisted options with exact vol.In against schema lists.
+
+    Existing installs may have saved lowercase home/night/away/unused. Schema must
+    keep those canonical tokens (not Title Case + emoji alone) or the add-on will
+    fail validation and refuse to start.
+    """
+    config_path = Path(__file__).resolve().parents[2] / "config.yaml"
+    text = config_path.read_text(encoding="utf-8")
+    for slot in ("part_arm_1", "part_arm_2", "part_arm_3"):
+        assert f"{slot}: list(home|night|away|unused)" in text
+        assert f"{slot}: unused" in text
+    assert "list(Home 🏠|Night 🌙|Away 🔒|Unused)" not in text
 
 
 def test_part_arm_remapping_changes_mode_bytes() -> None:
