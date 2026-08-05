@@ -124,12 +124,41 @@ async def test_arm_nak_republishes_current_alarm_state() -> None:
         "ARM_HOME",
         mqtt=mqtt,
         topic_prefix="texecom",
-        current_alarm_state="disarmed",
+        get_current_alarm_state=lambda: "disarmed",
     )
 
     panel.set_area_arm.assert_awaited_once_with(2)
     assert mqtt.payloads_for("texecom/alarm/state") == ["disarmed"]
     # Retained so HA refreshes selection even if the payload is unchanged.
+    assert mqtt.messages[-1].retain is True
+
+
+@pytest.mark.asyncio
+async def test_arm_nak_republishes_live_state_after_midflight_update() -> None:
+    """NAK must read live last-known state, not a snapshot frozen at command receipt."""
+    live_state = {"payload": "disarmed"}
+
+    async def arm_then_update_and_nak(_mode: int) -> None:
+        live_state["payload"] = "armed_away"
+        raise ProtocolError("SETAREAARM NAK")
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock(side_effect=arm_then_update_and_nak)
+    panel.set_area_disarm = AsyncMock()
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_HOME",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: live_state["payload"],
+    )
+
+    panel.set_area_arm.assert_awaited_once_with(2)
+    assert mqtt.payloads_for("texecom/alarm/state") == ["armed_away"]
     assert mqtt.messages[-1].retain is True
 
 
@@ -147,7 +176,7 @@ async def test_successful_arm_does_not_publish_optimistic_state() -> None:
         "ARM_HOME",
         mqtt=mqtt,
         topic_prefix="texecom",
-        current_alarm_state="disarmed",
+        get_current_alarm_state=lambda: "disarmed",
     )
 
     panel.set_area_arm.assert_awaited_once_with(2)

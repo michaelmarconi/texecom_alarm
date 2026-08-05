@@ -196,7 +196,7 @@ async def _listen_alarm_commands(
                 payload,
                 mqtt=mqtt,  # type: ignore[arg-type]
                 topic_prefix=settings.mqtt_topic_prefix,
-                current_alarm_state=alarm_state.payload,
+                get_current_alarm_state=lambda: alarm_state.payload,
             )
         except Exception:
             logger.exception("alarm_command_failed", extra={"topic": topic})
