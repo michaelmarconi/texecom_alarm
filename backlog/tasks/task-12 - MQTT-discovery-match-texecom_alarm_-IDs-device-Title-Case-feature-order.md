@@ -1,10 +1,10 @@
 ---
 id: TASK-12
 title: 'MQTT discovery: match texecom_alarm_* IDs, device, Title Case, feature order'
-status: attention
+status: awaiting-review
 assignee: []
 created_date: '2026-08-05 11:53'
-updated_date: '2026-08-05 14:50'
+updated_date: '2026-08-05 14:56'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -70,11 +70,14 @@ Decision needed: (A) Drop _{zone_number} so HA entity_ids exactly match today’
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build result
-Summary: MQTT discovery now matches texecom_alarm_* IDs (via default_entity_id), shares one device block, Title-Cases zones, names the alarm Texecom Alarm, and orders arm features Home→Night→Away.
+Summary: MQTT discovery matches texecom_alarm_* scheme (default_entity_id, shared device, Title Case, Home→Night→Away); zone IDs keep _{zone_number}; docs clarified as scheme not bit-identical legacy (practitioner decision after attention).
 Changed files: texecom-alarm-app/src/texecom_alarm/mqtt/discovery.py, texecom-alarm-app/src/texecom_alarm/zones.py, texecom-alarm-app/src/texecom_alarm/config.py, texecom-alarm-app/tests/test_mqtt_discovery.py, texecom-alarm-app/tests/test_config.py, texecom-alarm-app/tests/test_zone_parse.py, texecom-alarm-app/tests/test_e2e_fake_panel.py, docs/specs/spec-zone-monitoring.md, docs/specs/spec-alarm-control.md, docs/architecture.md
-Verification: unit tests on discovery payloads + FakePanel e2e; pytest -q --cov=texecom_alarm --cov-fail-under=90 → 167 passed, 93.72% coverage; ruff 0.8.4 format/check clean on changed files
-Notes/assumptions: Added default_entity_id because modern HA ignores object_id for entity_id; kept _{zone_number} suffix for uniqueness. Naming open questions answered as match-today's-IDs (practitioner confirmed keep docs).
+Verification: pytest -q --cov=texecom_alarm --cov-fail-under=90 → 167 passed, 93.72% coverage; ruff 0.8.4 clean on changed files
+Notes/assumptions: Practitioner chose keep _N + amend “match / no migration” wording. Alarm entity_id stays texecom_alarm_arm_status. Cutover automation updates deferred.
 
 ## Build phase
 phase: awaiting-review
+
+## Attention
+Resolved: Category 2 — keep _{zone_number}; docs amended to scheme-not-exact-match (2026-08-05).
 <!-- SECTION:FINAL_SUMMARY:END -->
