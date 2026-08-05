@@ -391,11 +391,12 @@ module accepts only one TCP client at a time (ADR-001).
   build begins. (Docker packaging and the s6-overlay-supervised process are not a
   comparable decision point — both are inherited, platform-mandated requirements of
   building any Home Assistant App/add-on at all.)
-- **Entity ID/naming migration** (RISK-005): should new entity IDs exactly match
+- ~~**Entity ID/naming migration** (RISK-005): should new entity IDs exactly match
   today's `alarm_control_panel.texecom_alarm_arm_status` /
-  `binary_sensor.texecom_alarm_*` naming, or is a documented rename acceptable? Both
-  specs flag this as needing to close out before Phase 2 build starts on either
-  capability. → household/spec-author decision.
+  `binary_sensor.texecom_alarm_*` naming, or is a documented rename acceptable?~~
+  **Answered 2026-08-05:** Match today's `texecom_alarm_*` IDs — no migration /
+  rename path. MQTT discovery uses those `object_id`/`unique_id` values plus
+  `default_entity_id` so HA does not derive entity IDs from friendly names.
 - **Exact reconnect wait times/retry counts are not finalised** (ADR-002 follow-on;
   only one real trigger data point exists). This architecture assumes a short (~10s)
   budget for arm/disarm-adjacent drops and a longer, configurable (60s+) budget for

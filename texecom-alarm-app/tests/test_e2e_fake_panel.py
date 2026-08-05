@@ -230,11 +230,16 @@ async def _e2e_discovery_retained_and_lwt() -> None:
                 front = discovered["homeassistant/binary_sensor/texecom_alarm_front_door_1/config"]
                 assert front["availability_topic"] == "texecom/status"
                 assert front["unique_id"] == "texecom_alarm_front_door_1"
+                assert front["default_entity_id"] == "binary_sensor.texecom_alarm_front_door_1"
+                assert front["name"] == "Front Door"
+                assert front["device"]["identifiers"] == ["texecom_alarm"]
 
                 link = discovered[link_cfg]
                 assert link["availability_topic"] == "texecom/status"
                 assert link["device_class"] == "connectivity"
                 assert link["state_topic"] == "texecom/panel_link/state"
+                assert link["device"]["identifiers"] == ["texecom_alarm"]
+                assert link["device"] == front["device"]
 
                 # Late subscriber must still receive retained discovery + panel-link state.
                 async with aiomqtt.Client(
@@ -474,11 +479,12 @@ async def test_e2e_alarm_snapshot_live_area_and_discovery() -> None:
         )
         assert payload["unique_id"] == "texecom_alarm_arm_status"
         assert payload["object_id"] == "texecom_alarm_arm_status"
+        assert payload["default_entity_id"] == "alarm_control_panel.texecom_alarm_arm_status"
+        assert payload["name"] == "Texecom Alarm"
+        assert payload["device"]["identifiers"] == ["texecom_alarm"]
         assert payload["availability_topic"] == "texecom/status"
         assert payload["json_attributes_topic"] == "texecom/alarm/attributes"
-        assert "arm_home" in payload["supported_features"]
-        assert "arm_away" in payload["supported_features"]
-        assert "arm_night" in payload["supported_features"]
+        assert payload["supported_features"] == ["arm_home", "arm_night", "arm_away"]
         assert payload["command_topic"] == "texecom/alarm/command"
 
         # AC-2: injected AREA push updates state (0/3/5 at minimum).
