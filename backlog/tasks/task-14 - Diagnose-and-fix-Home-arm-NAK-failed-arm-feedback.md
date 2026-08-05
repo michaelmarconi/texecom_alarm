@@ -4,7 +4,7 @@ title: Diagnose and fix Home arm NAK + failed-arm feedback
 status: awaiting-review
 assignee: []
 created_date: '2026-08-05 11:54'
-updated_date: '2026-08-05 19:36'
+updated_date: '2026-08-05 19:38'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -68,5 +68,5 @@ Verification: pytest → 173 passed; ruff clean. Bugbot stale-snapshot finding f
 Notes/assumptions: AC#3 root cause = panel reject (not app framing/mapping). Feedback gap fixed. Mid-flight state race on NAK republish fixed after Bugbot.
 
 ## Build phase
-phase: awaiting-review
+phase: awaiting-merge-signoff
 <!-- SECTION:FINAL_SUMMARY:END -->
