@@ -54,3 +54,10 @@ Files likely affected: config.yaml (modify), translations/en.yaml (modify), DOCS
 4. Keep arm_commands reading Settings so remapping slots changes which HA mode sends which mode byte without code edits.
 Test strategy: how we'll know = unit tests for Settings parse + arm command byte mapping for remapped/unused slots; pytest ./texecom-alarm-app/tests/test_config.py test_arm_commands.py — no live panel.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
