@@ -51,7 +51,7 @@ Test strategy: how we'll know = docs exist and are cross-linked; no code change 
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
