@@ -10,7 +10,7 @@ import pytest
 from tests.fake_panel import FakePanel, FakeZone
 from tests.recording_mqtt import RecordingMqttPublisher
 
-from texecom_alarm.app import _listen_with_reconnect, run
+from texecom_alarm.app import _listen_with_reconnect, _SharedAlarmState, run
 from texecom_alarm.area_state import AREA_FLAGS_COUNT
 from texecom_alarm.config import Settings
 from texecom_alarm.mqtt.discovery import AVAILABILITY_ONLINE, availability_topic
@@ -253,12 +253,12 @@ async def test_reconnect_trigger_budget_after_triggered() -> None:
                 await asyncio.sleep(0.02)
 
             assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
-            assert any(abs(s - 0.05) < 1e-9 for s in sleeps), (
-                f"expected trigger interval in {sleeps}"
-            )
-            assert not any(abs(s - 0.01) < 1e-9 for s in sleeps), (
-                f"normal interval leaked: {sleeps}"
-            )
+            assert any(
+                abs(s - 0.05) < 1e-9 for s in sleeps
+            ), f"expected trigger interval in {sleeps}"
+            assert not any(
+                abs(s - 0.01) < 1e-9 for s in sleeps
+            ), f"normal interval leaked: {sleeps}"
 
             stop.set()
             await asyncio.wait_for(task, timeout=2.0)
@@ -542,7 +542,7 @@ async def test_non_recoverable_listen_failure_publishes_panel_link_off() -> None
                 zone_count=12,
                 topic_prefix="texecom",
                 in_use_zones={1},
-                initial_alarm_payload="disarmed",
+                alarm_state=_SharedAlarmState(payload="disarmed"),
             )
 
     assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"

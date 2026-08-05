@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import Protocol
 
+from texecom_alarm.area_state import publish_alarm_state
 from texecom_alarm.config import Settings
-from texecom_alarm.protocol.client import PanelClient
+from texecom_alarm.protocol.client import PanelClient, ProtocolError
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +24,32 @@ _PAYLOAD_TO_HA_MODE = {
 }
 
 
+class MqttPublisher(Protocol):
+    async def publish(
+        self,
+        topic: str,
+        payload: str | bytes,
+        *,
+        retain: bool = False,
+        qos: int = 0,
+    ) -> None: ...
+
+
 async def handle_alarm_command(
     panel: PanelClient,
     settings: Settings,
     payload: str | bytes,
+    *,
+    mqtt: MqttPublisher | None = None,
+    topic_prefix: str | None = None,
+    get_current_alarm_state: Callable[[], str | None] | None = None,
 ) -> None:
     """Translate ARM_*/DISARM MQTT payloads into shared panel commands (ADR-005).
 
-    Does not publish alarm state — MQTT state comes from AREA/snapshot updates.
+    Does not publish optimistic armed_* on success — MQTT state comes from
+    AREA/snapshot updates. On panel NAK for arm, republishes the live last-known
+    alarm state (via get_current_alarm_state at NAK time) so HA does not leave a
+    stuck mode selection and mid-flight retained updates are not overwritten.
     Unknown payloads and HA modes not available from the Part-Arm mapping are
     ignored (logged, no panel send).
     """
@@ -54,4 +75,18 @@ async def handle_alarm_command(
         return
 
     logger.debug("alarm_command_arm", extra={"mode": ha_mode, "byte": mode_byte})
-    await panel.set_area_arm(mode_byte)
+    try:
+        await panel.set_area_arm(mode_byte)
+    except ProtocolError as exc:
+        logger.warning(
+            "alarm_command_arm_rejected",
+            extra={"mode": ha_mode, "byte": mode_byte, "reason": str(exc)},
+        )
+        live_state = get_current_alarm_state() if get_current_alarm_state is not None else None
+        if mqtt is not None and topic_prefix is not None and live_state is not None:
+            await publish_alarm_state(
+                mqtt,
+                payload=live_state,
+                topic_prefix=topic_prefix,
+            )
+        return
