@@ -1,10 +1,10 @@
 ---
 id: TASK-16
 title: Define add-on versioning and release policy
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-05 15:50'
-updated_date: '2026-08-05 15:57'
+updated_date: '2026-08-05 15:58'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -32,9 +32,9 @@ ordinal: 11000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A written policy states when config.yaml version may be bumped vs left alone, including that local Configuration reload must not invent release numbers.
-- [ ] #2 docs/run.md (or DoD) tells operators how to rebuild/reload the local add-on so schema/translations refresh without a version bump.
-- [ ] #3 Policy notes relationship to /ship (or explicitly defers ship/changelog detail) so agents have a stop/ask line rather than guessing.
+- [x] #1 A written policy states when config.yaml version may be bumped vs left alone, including that local Configuration reload must not invent release numbers.
+- [x] #2 docs/run.md (or DoD) tells operators how to rebuild/reload the local add-on so schema/translations refresh without a version bump.
+- [x] #3 Policy notes relationship to /ship (or explicitly defers ship/changelog detail) so agents have a stop/ask line rather than guessing.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -57,12 +57,12 @@ Verification: Read-back of all four docs against ACs #1–#3; confirmed config.y
 Notes/assumptions: Local refresh path documented as UI Rebuild + hard-refresh; if Rebuild fails, policy says stop/ask rather than bumping version.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 Version/release policy is written and findable under docs/
-- [ ] #2 Local reload without version bump is documented
-- [ ] #3 Agents have a clear stop/ask rather than silent semver bumps
+- [x] #1 Version/release policy is written and findable under docs/
+- [x] #2 Local reload without version bump is documented
+- [x] #3 Agents have a clear stop/ask rather than silent semver bumps
 <!-- DOD:END -->
