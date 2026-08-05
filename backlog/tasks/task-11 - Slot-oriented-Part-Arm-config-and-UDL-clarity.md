@@ -1,10 +1,10 @@
 ---
 id: TASK-11
 title: Slot-oriented Part-Arm config and UDL clarity
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-05 11:53'
-updated_date: '2026-08-05 14:22'
+updated_date: '2026-08-05 14:23'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -39,9 +39,9 @@ Coverage gap for the ADR-005 option-shape follow-on. Does not auto-detect slots 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Supervisor options express Part-Arm slots with HA mode or unused rather than raw Away/Night/Home mode-byte fields alone
-- [ ] #2 UDL option documents what it is and defaults to the factory password 1234 (overridable)
-- [ ] #3 Changing slot→mode mapping changes which MQTT arm mode sends which panel mode byte without code changes; unused slots are not offered as HA arm targets
+- [x] #1 Supervisor options express Part-Arm slots with HA mode or unused rather than raw Away/Night/Home mode-byte fields alone
+- [x] #2 UDL option documents what it is and defaults to the factory password 1234 (overridable)
+- [x] #3 Changing slot→mode mapping changes which MQTT arm mode sends which panel mode byte without code changes; unused slots are not offered as HA arm targets
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -65,5 +65,5 @@ Verification: how we'll know = Settings parse + arm byte mapping for remapped/un
 Notes/assumptions: Slot N → mode byte N (SPIKE-005). Away not on any Part-Arm slot still uses full-arm mode byte 0 and remains in supported_features. Duplicate HA modes across slots raise ConfigError. Also updated area_state + discovery (needed for AC#3 / decode invert) beyond the task's likely file list.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
