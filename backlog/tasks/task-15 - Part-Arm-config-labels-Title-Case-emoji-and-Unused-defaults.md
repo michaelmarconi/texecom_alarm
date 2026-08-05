@@ -4,7 +4,7 @@ title: Part-Arm config labels Title Case + emoji and Unused defaults
 status: awaiting-review
 assignee: []
 created_date: '2026-08-05 15:43'
-updated_date: '2026-08-05 16:22'
+updated_date: '2026-08-05 16:27'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -61,7 +61,7 @@ Verification: pytest test_config 27 passed; full suite 169 passed; ruff clean on
 Notes/assumptions: Bugbot fix — no mixed 8-option schema; radio values remain canonical lowercase; AC display intent via helpers. Prior Bugbot note addressed.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
