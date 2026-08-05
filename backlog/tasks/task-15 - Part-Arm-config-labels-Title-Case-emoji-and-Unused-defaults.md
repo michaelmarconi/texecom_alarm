@@ -55,7 +55,7 @@ Test strategy: how we'll know = unit tests for Unused defaults + remapping still
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
