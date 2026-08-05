@@ -1,10 +1,10 @@
 ---
 id: TASK-15
 title: Part-Arm config labels Title Case + emoji and Unused defaults
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-05 15:43'
-updated_date: '2026-08-05 15:54'
+updated_date: '2026-08-05 15:59'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -54,8 +54,14 @@ Test strategy: how we'll know = unit tests for Unused defaults + remapping still
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Part-Arm radios show Home 🏠 / Night 🌙 / Away 🔒 / Unused via schema display strings; all slots default unused; UDL copy updated; version stays 0.0.1.
+Changed files: config.yaml, translations/en.yaml, DOCS.md, texecom-alarm-app/src/texecom_alarm/config.py, texecom-alarm-app/tests/test_config.py
+Verification: PYTHONPATH=src pytest tests/test_config.py → 26 passed; PYTHONPATH=src pytest tests/ → 168 passed; ruff check src tests → clean; ruff format --check on changed py files → clean
+Notes/assumptions: Supervisor translation schema strips items, so radio labels are schema list members; Python normalizes to canonical home|night|away|unused. Schema defaults Title-Case Unused. Version not bumped.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
