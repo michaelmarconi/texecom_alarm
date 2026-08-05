@@ -222,8 +222,9 @@ def _parse_part_arm_label(raw: Mapping[str, Any], key: str, default: PartArmLabe
     value = raw[key]
     if not isinstance(value, str):
         raise ConfigError(f"option {key} must be a string")
-    # Supervisor radios use Title Case + emoji (e.g. "Home 🏠"); env/tests may
-    # pass canonical lowercase. First whitespace token after lower() is enough.
+    # Canonical schema values are lowercase (home|night|away|unused). Also accept
+    # Title Case + emoji (e.g. "Home 🏠") if somehow present. First whitespace
+    # token after lower() is enough.
     stripped = value.strip()
     if not stripped:
         return default
