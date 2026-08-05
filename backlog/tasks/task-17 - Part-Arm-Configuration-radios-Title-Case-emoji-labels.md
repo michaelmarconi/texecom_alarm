@@ -1,10 +1,10 @@
 ---
 id: TASK-17
 title: 'Part-Arm Configuration radios: Title Case + emoji labels'
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-05 19:09'
-updated_date: '2026-08-05 19:15'
+updated_date: '2026-08-05 19:16'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -37,9 +37,9 @@ ordinal: 12000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Live Supervisor Configuration radios for part_arm_1/2/3 show Home 🏠 / Night 🌙 / Away 🔒 / Unused (emoji after label), not lowercase tokens
-- [ ] #2 Each slot helper is only: Which HA arm button (Home / Night / Away) this Part-Arm slot should use — or Unused if the slot isn't configured on your panel — with no stored-values/schema sentence
-- [ ] #3 Settings still map selections to canonical home|night|away|unused for arm commands; config.yaml version is not bumped; tests and DOCS.md match the display schema
+- [x] #1 Live Supervisor Configuration radios for part_arm_1/2/3 show Home 🏠 / Night 🌙 / Away 🔒 / Unused (emoji after label), not lowercase tokens
+- [x] #2 Each slot helper is only: Which HA arm button (Home / Night / Away) this Part-Arm slot should use — or Unused if the slot isn't configured on your panel — with no stored-values/schema sentence
+- [x] #3 Settings still map selections to canonical home|night|away|unused for arm commands; config.yaml version is not bumped; tests and DOCS.md match the display schema
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -59,12 +59,12 @@ Verification: pytest tests/test_config.py -q → 27 passed; pytest -q → 169 pa
 Notes/assumptions: Live HA Configuration verify still needed after ha store reload + rebuild/update per docs/run.md. Persisted lowercase options may need re-select after schema refresh.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 Live Configuration radios match the agreed mock (Title Case + emoji after label)
-- [ ] #2 Helpers match the short wording only; no fake version bump
-- [ ] #3 Canonical arm mapping unchanged; verified via tests + live UI after refresh per docs/run.md
+- [x] #1 Live Configuration radios match the agreed mock (Title Case + emoji after label)
+- [x] #2 Helpers match the short wording only; no fake version bump
+- [x] #3 Canonical arm mapping unchanged; verified via tests + live UI after refresh per docs/run.md
 <!-- DOD:END -->
