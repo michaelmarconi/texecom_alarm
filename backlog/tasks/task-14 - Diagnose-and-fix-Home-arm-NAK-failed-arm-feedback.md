@@ -57,3 +57,10 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/arm_commands.py (modi
 4. Keep successful arm path reliant on AREA/snapshot updates (no optimistic armed_* without panel evidence).
 Test strategy: how we'll know = unit/E2E FakePanel NAK → retained disarmed republish; pytest test_arm_commands + E2E; manual acceptance test for live Home arm on a daytime clean panel (not CI).
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
