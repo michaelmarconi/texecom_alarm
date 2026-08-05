@@ -85,7 +85,7 @@ A Home Assistant Add-on that replaces unreliable `the prior MQTT bridge` for a T
 ## Still open
 
 - [ ] **Panel-link connectivity entity missing on the broker** — code path exists (`texecom_alarm_panel_link` / `texecom/panel_link/state`) but no discovery or state retained on Mosquitto during the walk; not visible in HA. Investigate publish path.
-- [ ] **Part-Arm configuration UX** — current options are “mode bytes” for Away/Night/Home; should be slot-oriented (label per Part-Arm slot, mark unused). This house: slot 1 = Night time, slot 2 = Home, slot 3 unused. Whether unused/in-use slots can be discovered from the panel is still unknown; if not, config must capture that. (ADR-005 requires configurable mapping; concrete surface still open; auto-detect via tested area-details was ruled out.)
+- [ ] **Part-Arm Configuration radio labels** — slots/UDL copy landed (TASK-11/15); radios still show lowercase `home`/`night`/`away`/`unused`. Need `Home 🏠` / `Night 🌙` / `Away 🔒` / `Unused` on the radios (schema list tokens = labels) and drop the “Stored values are…” helper. Tracked as **TASK-17**; Hold TASK-13 until done.
 - [ ] **Entity ID collision risk** — entities appeared as `binary_sensor.front_door` etc.; want a Texecom-scoped prefix/scheme (HA uses underscores, not dotted subdomains).
 - [ ] **Friendly-name casing** — panel names published in CAPS (`FRONT DOOR`); decide normalisation (sentence case vs capitalise first word, etc.).
 - [ ] **No Device** — MQTT entities ungrouped (Device column empty); discuss discovery `device` block.
@@ -93,7 +93,7 @@ A Home Assistant Add-on that replaces unreliable `the prior MQTT bridge` for a T
 - [ ] **Arm-mode control order** — HA card showed Home, Away, Night, Disarmed; prefer Home, Night, Away, Disarmed if the MQTT platform allows.
 - [ ] **Home arm NAK root cause** — panel rejected `SETAREAARM` mode 2; do not assume open windows are the cause without a daytime corroboration.
 - [ ] **HA alarm card feedback on failed arm** — after NAK, card left Home selected while entity stayed Disarmed; investigate expected MQTT/HA behaviour and whether we should republish state or surface failure.
-- [ ] **UDL option clarity** — label should explain what UDL is; consider baking factory default `1234` into the config UI default (panel confirmed in spikes).
+- [x] **UDL option clarity** — “Panel UDL password” + usual-1234 helper landed in TASK-15 (default remains `1234` in options).
 - [ ] **Unwalked acceptance paths** — door/window/other zone classes; Away/Night ×3; disarm matrix; live siren + forced disconnect + snapshot; household wrapper/aggregates; production cutover with `the prior MQTT bridge` removed.
 - [ ] **Published release / CHANGELOG / `/ship` cadence** — local no-fake-bump rule is in [addon-versioning.md](addon-versioning.md); when to authorize a real `version` bump and CHANGELOG depth for go-live remains deferred until `/ship` (or an explicit decision).
 

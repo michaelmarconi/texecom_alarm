@@ -8,7 +8,7 @@
 
 | Component | Effort | Status | Notes |
 |---|---|---|---|
-| texecom-alarm-app | L | planned ✅ | Accept follow-ups TASK-10–14; TASK-15 Part-Arm/UDL config polish (Hold TASK-13); TASK-16 add-on versioning/release policy. Prior wave TASK-1–9 done. |
+| texecom-alarm-app | L | planned ✅ | Accept follow-ups TASK-10–14; TASK-15/16 done; **Hold TASK-13** for TASK-17 (Part-Arm radio Title Case + emoji). Prior wave TASK-1–9 done. |
 
 ---
 

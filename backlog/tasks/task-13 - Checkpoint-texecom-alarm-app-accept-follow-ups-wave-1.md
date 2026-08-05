@@ -4,7 +4,7 @@ title: 'Checkpoint: texecom-alarm-app accept follow-ups wave 1'
 status: awaiting-review
 assignee: []
 created_date: '2026-08-05 11:53'
-updated_date: '2026-08-05 15:01'
+updated_date: '2026-08-05 19:09'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
@@ -15,12 +15,13 @@ dependencies:
 ordinal: 8000
 ---
 
-## Acceptance Criteria
-<!-- AC:BEGIN -->
-- [ ] #1 All tests pass (pytest in texecom-alarm-app exits 0 with coverage gate)
-- [ ] #2 Build/lint clean (ruff check + format --check exit 0)
-- [ ] #3 E2E FakePanel path still asserts panel-link discovery/state and discovery object_id/device contracts from this wave
-<!-- AC:END -->
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+### Overview
+
+Wave-1 accept follow-ups checkpoint (TASK-10–12). Verifier **pass**; practitioner **Hold** pending TASK-17 (Part-Arm Configuration radio labels Title Case + emoji). Do not Approve until TASK-17 is done or the practitioner explicitly Accepts the gap.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Final Summary
 
@@ -35,6 +36,13 @@ Notes: DoD intent holds — ADR-004 retained panel-link ≠ LWT availability; AD
 ## Build phase
 phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [ ] #1 All tests pass (pytest in texecom-alarm-app exits 0 with coverage gate)
+- [ ] #2 Build/lint clean (ruff check + format --check exit 0)
+- [ ] #3 E2E FakePanel path still asserts panel-link discovery/state and discovery object_id/device contracts from this wave
+<!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
