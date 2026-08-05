@@ -62,5 +62,5 @@ Test strategy: how we'll know = unit/E2E FakePanel NAK → retained disarmed rep
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
