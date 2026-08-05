@@ -4,7 +4,7 @@ title: Diagnose and fix Home arm NAK + failed-arm feedback
 status: awaiting-review
 assignee: []
 created_date: '2026-08-05 11:54'
-updated_date: '2026-08-05 19:31'
+updated_date: '2026-08-05 19:36'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -62,10 +62,10 @@ Test strategy: how we'll know = unit/E2E FakePanel NAK → retained disarmed rep
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build result
-Summary: On arm NAK, republish last known alarm MQTT state so HA clears stuck mode selection; ARM_HOME ACK path unchanged.
+Summary: On arm NAK, republish live last-known alarm MQTT state (getter); ARM_HOME ACK path unchanged.
 Changed files: texecom-alarm-app/src/texecom_alarm/arm_commands.py, texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/tests/fake_panel.py, texecom-alarm-app/tests/test_arm_commands.py, texecom-alarm-app/tests/test_e2e_fake_panel.py, texecom-alarm-app/tests/test_app_mqtt.py, texecom-alarm-app/tests/test_reconnect.py
-Verification: pytest arm+e2e → 20 passed; full pytest → 172 passed; ruff clean; coverage 93.74%.
-Notes/assumptions: AC#3 root cause = panel reject (not app framing, not Part-Arm mapping). App sent Home mode byte 2; panel NAKd. Open-zones hypothesis not corroborated. Feedback gap fixed via retained republish + alarm_command_arm_rejected warning. Mosquitto E2E wait_ready hardened.
+Verification: pytest → 173 passed; ruff clean. Bugbot stale-snapshot finding fixed via get_current_alarm_state callable.
+Notes/assumptions: AC#3 root cause = panel reject (not app framing/mapping). Feedback gap fixed. Mid-flight state race on NAK republish fixed after Bugbot.
 
 ## Build phase
 phase: awaiting-review
