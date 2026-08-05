@@ -32,6 +32,12 @@ root `README.md` (install/run), `DOCS.md` (Supervisor docs tab — configuration
 options fully described), `CHANGELOG.md` for user-visible releases, and
 `config.yaml` schema/options kept in sync with documented behaviour.
 
+## Add-on version discipline
+Do not bump `config.yaml` `version` mid-task or to reload local Configuration —
+follow [addon-versioning.md](addon-versioning.md). Local schema/translation
+refresh uses Rebuild (see [run.md](run.md#reload-local-add-on-without-a-version-bump)).
+Release/CHANGELOG/`/ship` cadence beyond that policy is undecided — stop and ask.
+
 ## Ops tracing
 Every panel session lifecycle step (connect, login, enumerate, subscribe,
 arm/disarm, resync, reconnect) and MQTT publish/command path is covered by
