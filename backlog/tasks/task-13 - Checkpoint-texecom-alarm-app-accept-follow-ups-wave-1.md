@@ -1,10 +1,10 @@
 ---
 id: TASK-13
 title: 'Checkpoint: texecom-alarm-app accept follow-ups wave 1'
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-05 11:53'
-updated_date: '2026-08-05 19:09'
+updated_date: '2026-08-05 19:18'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
@@ -23,6 +23,13 @@ ordinal: 8000
 Wave-1 accept follow-ups checkpoint (TASK-10–12). Verifier **pass**; practitioner **Hold** pending TASK-17 (Part-Arm Configuration radio labels Title Case + emoji). Do not Approve until TASK-17 is done or the practitioner explicitly Accepts the gap.
 <!-- SECTION:DESCRIPTION:END -->
 
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [x] #1 All tests pass (pytest in texecom-alarm-app exits 0 with coverage gate)
+- [x] #2 Build/lint clean (ruff check + format --check exit 0)
+- [x] #3 E2E FakePanel path still asserts panel-link discovery/state and discovery object_id/device contracts from this wave
+<!-- AC:END -->
+
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
@@ -34,19 +41,12 @@ verdict: pass
 Notes: DoD intent holds — ADR-004 retained panel-link ≠ LWT availability; ADR-005 `part_arm_{1,2,3}` install-time (no GETAREADETAILS); naming `texecom_alarm_{slug}_{N}` + `texecom_alarm_arm_status`.
 
 ## Build phase
-phase: awaiting-review
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
-
-## Acceptance Criteria
-<!-- AC:BEGIN -->
-- [ ] #1 All tests pass (pytest in texecom-alarm-app exits 0 with coverage gate)
-- [ ] #2 Build/lint clean (ruff check + format --check exit 0)
-- [ ] #3 E2E FakePanel path still asserts panel-link discovery/state and discovery object_id/device contracts from this wave
-<!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 ADR-004 connectivity sensor is published retained and never drives zone/alarm availability
-- [ ] #2 ADR-005 mapping remains install-time configuration (slot-oriented surface, no GETAREADETAILS auto-detect)
-- [ ] #3 Naming open questions closed as match today’s texecom_alarm_* IDs
+- [x] #1 ADR-004 connectivity sensor is published retained and never drives zone/alarm availability
+- [x] #2 ADR-005 mapping remains install-time configuration (slot-oriented surface, no GETAREADETAILS auto-detect)
+- [x] #3 Naming open questions closed as match today’s texecom_alarm_* IDs
 <!-- DOD:END -->
