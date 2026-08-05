@@ -59,7 +59,7 @@ Verification: pytest tests/test_config.py -q → 27 passed; pytest -q → 169 pa
 Notes/assumptions: Live HA Configuration verify still needed after ha store reload + rebuild/update per docs/run.md. Persisted lowercase options may need re-select after schema refresh.
 
 ## Build phase
-phase: awaiting-merge-signoff
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
