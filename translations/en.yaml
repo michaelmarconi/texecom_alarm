@@ -28,24 +28,18 @@ configuration:
   part_arm_1:
     name: Part-Arm slot 1
     description: >-
-      Which HA arm button (Home 🏠 / Night 🌙 / Away 🔒) this Part-Arm slot should
-      use — or Unused if the slot isn't configured on your panel. Stored values are
-      home / night / away / unused (HA-card icons shown here; schema keeps
-      lowercase so existing installs keep validating).
+      Which HA arm button (Home / Night / Away) this Part-Arm slot should use —
+      or Unused if the slot isn't configured on your panel.
   part_arm_2:
     name: Part-Arm slot 2
     description: >-
-      Which HA arm button (Home 🏠 / Night 🌙 / Away 🔒) this Part-Arm slot should
-      use — or Unused if the slot isn't configured on your panel. Stored values are
-      home / night / away / unused (HA-card icons shown here; schema keeps
-      lowercase so existing installs keep validating).
+      Which HA arm button (Home / Night / Away) this Part-Arm slot should use —
+      or Unused if the slot isn't configured on your panel.
   part_arm_3:
     name: Part-Arm slot 3
     description: >-
-      Which HA arm button (Home 🏠 / Night 🌙 / Away 🔒) this Part-Arm slot should
-      use — or Unused if the slot isn't configured on your panel. Stored values are
-      home / night / away / unused (HA-card icons shown here; schema keeps
-      lowercase so existing installs keep validating).
+      Which HA arm button (Home / Night / Away) this Part-Arm slot should use —
+      or Unused if the slot isn't configured on your panel.
   reconnect_normal_attempts:
     name: Reconnect attempts (normal)
     description: Named retry budget after an ordinary panel disconnect (default 4). Tunable; the add-on keeps retrying after the budget rather than exiting.
