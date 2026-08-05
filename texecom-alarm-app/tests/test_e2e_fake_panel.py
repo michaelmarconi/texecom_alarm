@@ -179,10 +179,12 @@ async def _e2e_discovery_retained_and_lwt() -> None:
             hostname="127.0.0.1",
             port=broker.port,
             identifier="texecom-alarm-e2e-observer",
+            timeout=20.0,
         ) as observer:
             await observer.subscribe("homeassistant/binary_sensor/+/config")
             await observer.subscribe("homeassistant/alarm_control_panel/+/config")
             await observer.subscribe("texecom/status")
+            await observer.subscribe("texecom/panel_link/state")
 
             app_task = asyncio.create_task(
                 run(settings, panel=panel_client, mqtt=mqtt, idle=stop.wait)
@@ -190,10 +192,14 @@ async def _e2e_discovery_retained_and_lwt() -> None:
             try:
                 deadline = asyncio.get_running_loop().time() + 15.0
                 alarm_cfg = "homeassistant/alarm_control_panel/texecom_alarm_arm_status/config"
+                link_cfg = "homeassistant/binary_sensor/texecom_alarm_panel_link/config"
+                link_states: list[str] = []
                 while asyncio.get_running_loop().time() < deadline and not (
                     len(discovered) >= 4
                     and alarm_cfg in discovered
+                    and link_cfg in discovered
                     and AVAILABILITY_ONLINE in status_payloads
+                    and "ON" in link_states
                 ):
                     if app_task.done():
                         exc = app_task.exception()
@@ -209,23 +215,55 @@ async def _e2e_discovery_retained_and_lwt() -> None:
                         discovered[topic] = json.loads(payload)
                     elif topic == "texecom/status":
                         status_payloads.append(payload)
+                    elif topic == "texecom/panel_link/state":
+                        link_states.append(payload)
 
                 assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in discovered
                 assert (
                     "homeassistant/binary_sensor/texecom_alarm_kitchen_pir_3/config" in discovered
                 )
                 assert alarm_cfg in discovered
-                assert "homeassistant/binary_sensor/texecom_alarm_panel_link/config" in discovered
+                assert link_cfg in discovered
                 assert AVAILABILITY_ONLINE in status_payloads
+                assert link_states and link_states[-1] == "ON"
 
                 front = discovered["homeassistant/binary_sensor/texecom_alarm_front_door_1/config"]
                 assert front["availability_topic"] == "texecom/status"
                 assert front["unique_id"] == "texecom_alarm_front_door_1"
 
-                link = discovered["homeassistant/binary_sensor/texecom_alarm_panel_link/config"]
+                link = discovered[link_cfg]
                 assert link["availability_topic"] == "texecom/status"
                 assert link["device_class"] == "connectivity"
                 assert link["state_topic"] == "texecom/panel_link/state"
+
+                # Late subscriber must still receive retained discovery + panel-link state.
+                async with aiomqtt.Client(
+                    hostname="127.0.0.1",
+                    port=broker.port,
+                    identifier="texecom-alarm-e2e-late",
+                    timeout=20.0,
+                ) as late:
+                    await late.subscribe(link_cfg)
+                    await late.subscribe("texecom/panel_link/state")
+                    got_cfg: dict | None = None
+                    got_state: str | None = None
+                    late_deadline = asyncio.get_running_loop().time() + 5.0
+                    while asyncio.get_running_loop().time() < late_deadline and (
+                        got_cfg is None or got_state is None
+                    ):
+                        try:
+                            message = await asyncio.wait_for(late.messages.__anext__(), timeout=0.4)
+                        except TimeoutError:
+                            continue
+                        topic = str(message.topic)
+                        payload = message.payload.decode("utf-8")
+                        if topic == link_cfg:
+                            got_cfg = json.loads(payload)
+                        elif topic == "texecom/panel_link/state":
+                            got_state = payload
+                    assert got_cfg is not None, "panel_link discovery was not retained on broker"
+                    assert got_cfg["device_class"] == "connectivity"
+                    assert got_state == "ON", "panel_link state was not retained ON on broker"
 
                 # Simulate app-process crash: abort MQTT TCP without DISCONNECT → LWT.
                 await mqtt.abort()
@@ -292,12 +330,30 @@ async def test_e2e_app_run_with_recording_mqtt() -> None:
         topics = [m.topic for m in mqtt.messages]
         assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in topics
         assert "homeassistant/alarm_control_panel/texecom_alarm_arm_status/config" in topics
-        assert "homeassistant/binary_sensor/texecom_alarm_panel_link/config" in topics
+        link_cfg = "homeassistant/binary_sensor/texecom_alarm_panel_link/config"
+        assert link_cfg in topics
         assert "texecom/panel_link/state" in topics
         assert mqtt.payloads_for("texecom/panel_link/state")[0] == "ON"
+        # TASK-10 AC-1/AC-2/AC-3: discovery + panel-link state must be retained.
+        link_disc = next(m for m in mqtt.messages if m.topic == link_cfg)
+        assert link_disc.retain is True
+        link_state = next(m for m in mqtt.messages if m.topic == "texecom/panel_link/state")
+        assert link_state.retain is True
+        assert link_state.payload == "ON"
         assert "texecom/status" in topics
         assert mqtt.will_payload == AVAILABILITY_OFFLINE
         assert mqtt.payloads_for("texecom/status")[-1] == AVAILABILITY_OFFLINE
+        # ADR-004: zone/alarm availability stays on app LWT, not panel-link.
+        zone_disc = next(
+            m
+            for m in mqtt.messages
+            if m.topic == "homeassistant/binary_sensor/texecom_alarm_front_door_1/config"
+        )
+        zone_payload = json.loads(
+            zone_disc.payload if isinstance(zone_disc.payload, str) else zone_disc.payload.decode()
+        )
+        assert zone_payload["availability_topic"] == "texecom/status"
+        assert zone_payload["availability_topic"] != "texecom/panel_link/state"
     finally:
         await panel.stop()
 
