@@ -1,9 +1,10 @@
 ---
 id: TASK-16
 title: Define add-on versioning and release policy
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-05 15:50'
+updated_date: '2026-08-05 15:54'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
