@@ -95,8 +95,28 @@ class _MosquittoBroker:
         while asyncio.get_running_loop().time() < deadline:
             try:
                 with socket.create_connection(("127.0.0.1", self.port), timeout=0.2):
-                    return
+                    pass
             except OSError:
+                await asyncio.sleep(0.05)
+                continue
+            # TCP can accept before the broker completes MQTT handshake (Docker
+            # port publish race). Probe with a short CONNECT/CONNACK exchange.
+            try:
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection("127.0.0.1", self.port),
+                    timeout=0.5,
+                )
+                try:
+                    # MQTT 3.1.1 CONNECT: empty client id, clean session.
+                    writer.write(b"\x10\x0c\x00\x04MQTT\x04\x02\x00\x3c\x00\x00")
+                    await writer.drain()
+                    connack = await asyncio.wait_for(reader.readexactly(4), timeout=0.5)
+                    if connack[:2] == b"\x20\x02":
+                        return
+                finally:
+                    writer.close()
+                    await writer.wait_closed()
+            except (OSError, TimeoutError, asyncio.IncompleteReadError):
                 await asyncio.sleep(0.05)
         raise TimeoutError(f"Mosquitto not accepting connections on {self.port}")
 
@@ -132,9 +152,10 @@ async def test_e2e_login_against_fake_panel() -> None:
         await panel.stop()
 
 
-def test_e2e_discovery_retained_and_lwt_on_app_stop() -> None:
+@pytest.mark.asyncio
+async def test_e2e_discovery_retained_and_lwt_on_app_stop() -> None:
     """FakePanel + Mosquitto: retained discovery; LWT offline when app drops."""
-    asyncio.run(_e2e_discovery_retained_and_lwt())
+    await _e2e_discovery_retained_and_lwt()
 
 
 async def _e2e_discovery_retained_and_lwt() -> None:
@@ -747,6 +768,89 @@ async def test_e2e_mqtt_arm_uses_remapped_part_arm_slots() -> None:
                 break
             await asyncio.sleep(0.02)
         assert panel.last_arm_body == bytes([0x03, 0x01])
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_arm_nak_republishes_disarmed_state() -> None:
+    """AC-1: FakePanel NAK of ARM_HOME republishes retained disarmed (no stuck selection)."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[
+            FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00),
+            FakeZone(number=2, zone_type=0, name=""),
+        ],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = Settings(
+            panel_host=panel.host,
+            panel_port=panel.port,
+            udl_password="1234",
+            mqtt_host="127.0.0.1",
+            mqtt_port=1883,
+            mqtt_username="",
+            mqtt_password="",
+            mqtt_topic_prefix="texecom",
+            part_arm_1="night",
+            part_arm_2="home",
+            part_arm_3="unused",
+        )
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        for _ in range(150):
+            states = mqtt.payloads_for("texecom/alarm/state")
+            if states and "texecom/alarm/command" in mqtt.subscribed:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+        before = len(mqtt.payloads_for("texecom/alarm/state"))
+
+        panel.nak_next_arm = True
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_HOME")
+        for _ in range(100):
+            if panel.last_arm_mode == 2 and len(mqtt.payloads_for("texecom/alarm/state")) > before:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        assert panel.last_arm_mode == 2
+        assert panel.last_arm_body == bytes([0x02, 0x01])
+        states = mqtt.payloads_for("texecom/alarm/state")
+        assert len(states) > before
+        assert states[-1] == "disarmed"
+
+        # AC-2: subsequent successful ARM_HOME still uses Home mode byte 2.
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_HOME")
+        for _ in range(100):
+            if len(panel.arm_calls) >= 2 and panel.arm_calls[-1] == 2:
+                break
+            await asyncio.sleep(0.02)
+        assert panel.arm_calls[-1] == 2
+        assert panel.last_arm_body == bytes([0x02, 0x01])
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)

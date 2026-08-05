@@ -5,9 +5,11 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from tests.recording_mqtt import RecordingMqttPublisher
 
 from texecom_alarm.arm_commands import handle_alarm_command
 from texecom_alarm.config import Settings
+from texecom_alarm.protocol.client import ProtocolError
 
 
 def _settings(**overrides: object) -> Settings:
@@ -104,3 +106,49 @@ async def test_unmapped_home_mode_is_ignored() -> None:
     await handle_alarm_command(panel, settings, "ARM_HOME")
 
     panel.set_area_arm.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_arm_nak_republishes_current_alarm_state() -> None:
+    """AC-1: panel NAK must republish last known state (no stuck HA selection)."""
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock(side_effect=ProtocolError("SETAREAARM NAK"))
+    panel.set_area_disarm = AsyncMock()
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    settings = _settings()
+
+    await handle_alarm_command(
+        panel,
+        settings,
+        "ARM_HOME",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        current_alarm_state="disarmed",
+    )
+
+    panel.set_area_arm.assert_awaited_once_with(2)
+    assert mqtt.payloads_for("texecom/alarm/state") == ["disarmed"]
+    # Retained so HA refreshes selection even if the payload is unchanged.
+    assert mqtt.messages[-1].retain is True
+
+
+@pytest.mark.asyncio
+async def test_successful_arm_does_not_publish_optimistic_state() -> None:
+    """AC-2 / ADR: success path waits for AREA/snapshot — no optimistic armed_*."""
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_HOME",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        current_alarm_state="disarmed",
+    )
+
+    panel.set_area_arm.assert_awaited_once_with(2)
+    assert mqtt.payloads_for("texecom/alarm/state") == []
