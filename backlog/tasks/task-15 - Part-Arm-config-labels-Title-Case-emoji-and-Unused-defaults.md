@@ -51,6 +51,13 @@ Files likely affected: translations/en.yaml, config.yaml (defaults only — not 
 Test strategy: how we'll know = unit tests for Unused defaults + remapping still works; pytest test_config (and related) green; ruff clean. No live panel required.
 <!-- SECTION:PLAN:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 Part-Arm radios match the agreed mock (Title Case, emoji after label, simple helper)

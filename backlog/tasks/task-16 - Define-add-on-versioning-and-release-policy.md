@@ -47,6 +47,13 @@ Files likely affected: docs/definition-of-done.md and/or docs/run.md and/or a sh
 Test strategy: how we'll know = docs exist and are cross-linked; no code change required unless a stale version comment remains.
 <!-- SECTION:PLAN:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 Version/release policy is written and findable under docs/
