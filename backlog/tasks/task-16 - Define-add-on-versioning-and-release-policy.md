@@ -1,10 +1,10 @@
 ---
 id: TASK-16
 title: Define add-on versioning and release policy
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-05 15:50'
-updated_date: '2026-08-05 15:54'
+updated_date: '2026-08-05 15:56'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -50,8 +50,14 @@ Test strategy: how we'll know = docs exist and are cross-linked; no code change 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Short add-on versioning policy plus run/DoD reload guidance; /ship+CHANGELOG deferred with stop/ask.
+Changed files: docs/addon-versioning.md, docs/run.md, docs/definition-of-done.md, docs/acceptance.md
+Verification: Read-back of all four docs against ACs #1–#3; confirmed config.yaml left at 0.0.1 (no bump); docs-only so no pytest.
+Notes/assumptions: Local refresh path documented as UI Rebuild + hard-refresh; if Rebuild fails, policy says stop/ask rather than bumping version.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
