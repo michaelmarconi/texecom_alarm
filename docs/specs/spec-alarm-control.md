@@ -152,9 +152,10 @@ normal arm/disarm cycles or an actual alarm trigger.
 - ~~Should the new `alarm_control_panel` entity ID exactly match today's
   `alarm_control_panel.texecom_alarm_arm_status` naming, or is a documented
   rename/migration (updating `house_alarm.yaml`'s target) acceptable?~~
-  **Answered 2026-08-05:** Match today's `alarm_control_panel.texecom_alarm_arm_status`
-  ID (no migration / rename path). Discovery keeps that `object_id`/`unique_id` and
-  sets `default_entity_id` accordingly; friendly name is `Texecom Alarm`.
+  **Answered 2026-08-05:** Keep `alarm_control_panel.texecom_alarm_arm_status` (same
+  as today for the panel entity). Friendly name is `Texecom Alarm`. Zone IDs use the
+  same `texecom_alarm_*` scheme with a unique `_{zone_number}` suffix — not a promise
+  of bit-identical legacy zone IDs; cutover may need household updates later.
 - ~~Can the panel's own protocol (e.g. `GETAREADETAILS`, `cmd=35`) report each
   Part-Arm slot's configured role/name?~~ **Answered 2026-08-04:** `GETAREADETAILS`
   returns area identity only (`HOUSE` / unused areas), not Part-Arm slot roles —

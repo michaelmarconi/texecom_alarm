@@ -394,9 +394,11 @@ module accepts only one TCP client at a time (ADR-001).
 - ~~**Entity ID/naming migration** (RISK-005): should new entity IDs exactly match
   today's `alarm_control_panel.texecom_alarm_arm_status` /
   `binary_sensor.texecom_alarm_*` naming, or is a documented rename acceptable?~~
-  **Answered 2026-08-05:** Match today's `texecom_alarm_*` IDs — no migration /
-  rename path. MQTT discovery uses those `object_id`/`unique_id` values plus
-  `default_entity_id` so HA does not derive entity IDs from friendly names.
+  **Answered 2026-08-05:** Use the `texecom_alarm_*` scheme — alarm keeps
+  `texecom_alarm_arm_status`; zones use `texecom_alarm_{slug}_{zone_number}` for
+  uniqueness (not bit-identical to legacy `texecom_alarm_<slug>`). MQTT discovery
+  sets `object_id`/`unique_id` plus `default_entity_id` so HA does not derive IDs
+  from friendly names. Exact legacy parity / automation cutover is deferred.
 - **Exact reconnect wait times/retry counts are not finalised** (ADR-002 follow-on;
   only one real trigger data point exists). This architecture assumes a short (~10s)
   budget for arm/disarm-adjacent drops and a longer, configurable (60s+) budget for
