@@ -1,10 +1,10 @@
 ---
 id: TASK-11
 title: Slot-oriented Part-Arm config and UDL clarity
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-05 11:53'
-updated_date: '2026-08-05 12:52'
+updated_date: '2026-08-05 14:10'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -58,6 +58,12 @@ Test strategy: how we'll know = unit tests for Settings parse + arm command byte
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Replaced opaque Away/Night/Home mode-byte options with slot-oriented Part-Arm mapping (plus UDL clarity/default 1234); remapping changes cmd=6 bytes without code edits.
+Changed files: config.yaml, translations/en.yaml, DOCS.md, rootfs/etc/services.d/texecom_alarm/run, texecom-alarm-app/src/texecom_alarm/config.py, texecom-alarm-app/src/texecom_alarm/arm_commands.py, texecom-alarm-app/src/texecom_alarm/area_state.py, texecom-alarm-app/src/texecom_alarm/mqtt/discovery.py, texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/tests/test_config.py, texecom-alarm-app/tests/test_arm_commands.py, texecom-alarm-app/tests/test_area_state.py, texecom-alarm-app/tests/test_app_mqtt.py, texecom-alarm-app/tests/test_reconnect.py, texecom-alarm-app/tests/test_e2e_fake_panel.py
+Verification: how we'll know = Settings parse + arm byte mapping for remapped/unused slots; pytest test_config + test_arm_commands green; full pytest --cov-fail-under=90 → 163 passed, 93.7% cov; ruff 0.8.4 check+format clean
+Notes/assumptions: Slot N → mode byte N (SPIKE-005). Away not on any Part-Arm slot still uses full-arm mode byte 0 and remains in supported_features. Duplicate HA modes across slots raise ConfigError. Also updated area_state + discovery (needed for AC#3 / decode invert) beyond the task's likely file list.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
