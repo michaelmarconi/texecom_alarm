@@ -1,9 +1,10 @@
 ---
 id: TASK-14
 title: Diagnose and fix Home arm NAK + failed-arm feedback
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-05 11:54'
+updated_date: '2026-08-05 19:20'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
