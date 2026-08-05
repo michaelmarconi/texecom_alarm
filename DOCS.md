@@ -36,8 +36,11 @@ TCP port for the ComIP / Connect session. Default: `10001`.
 
 ### Option: `udl_password`
 
-Panel UDL login password. Change this from the factory default on any panel still
-using it. **Required.** Treated as a secret in the Supervisor UI.
+Panel **UDL** (User Data Link) login password — the same password Wintex and other
+Connect-protocol clients use to authenticate to the panel. Factory default on many
+Premier Elite panels is `1234`; change it on the panel if still set, and override
+this option to match. Default in the Add-on schema: `1234`. Treated as a secret in
+the Supervisor UI.
 
 ### Option: `mqtt_host`
 
@@ -62,22 +65,26 @@ Supervisor UI.
 Root prefix for discovery and state topics this Add-on publishes. Default:
 `texecom`.
 
-### Option: `part_arm_away`
+### Option: `part_arm_1` / `part_arm_2` / `part_arm_3`
 
-Mode byte sent with the shared arm command for Home Assistant **Away**. Integer
-`0`–`255`. Default: `0`. Must match this installation's engineer Part-Arm layout
-— do not assume another household's mapping.
+Which Home Assistant arm mode each engineer-configured **Part-Arm slot** carries.
+Each field is one of: `home`, `night`, `away`, or `unused`.
 
-### Option: `part_arm_night`
+Defaults (this household's layout — override per installation):
 
-Mode byte for Home Assistant **Night**. Integer `0`–`255`. Default: `1`.
+| Option | Default |
+|--------|---------|
+| `part_arm_1` | `night` |
+| `part_arm_2` | `home` |
+| `part_arm_3` | `unused` |
 
-### Option: `part_arm_home`
-
-Mode byte for Home Assistant **Home**. Integer `0`–`255`. Default: `2`.
-
-Part-Arm slot roles are install-specific and cannot be auto-detected from
-`GETAREADETAILS`; set these three fields to the mode bytes your panel expects.
+Under the hood the Add-on still issues the confirmed shared arm command (`cmd=6`)
+with mode byte equal to the Part-Arm slot number (slot 1 → byte `1`, slot 2 →
+byte `2`, slot 3 → byte `3`). Away that is not assigned to any Part-Arm slot uses
+the confirmed full-arm mode byte `0`. Unused slots are not offered as HA arm
+targets. Part-Arm roles cannot be auto-detected from `GETAREADETAILS` — set these
+fields to match your panel's engineer layout. Do not assign the same HA mode to
+more than one slot.
 
 ### Option: `reconnect_normal_attempts`
 

@@ -11,13 +11,15 @@ from texecom_alarm.config import (
     DEFAULT_MQTT_PORT,
     DEFAULT_MQTT_TOPIC_PREFIX,
     DEFAULT_PANEL_PORT,
-    DEFAULT_PART_ARM_AWAY,
-    DEFAULT_PART_ARM_HOME,
-    DEFAULT_PART_ARM_NIGHT,
+    DEFAULT_PART_ARM_1,
+    DEFAULT_PART_ARM_2,
+    DEFAULT_PART_ARM_3,
     DEFAULT_RECONNECT_NORMAL_ATTEMPTS,
     DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
     DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
     DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
+    DEFAULT_UDL_PASSWORD,
+    FULL_ARM_AWAY_MODE_BYTE,
     ConfigError,
     Settings,
     load_settings,
@@ -28,15 +30,15 @@ def _valid_options(**overrides: object) -> dict[str, object]:
     data: dict[str, object] = {
         "panel_host": "192.168.1.183",
         "panel_port": DEFAULT_PANEL_PORT,
-        "udl_password": "1234",
+        "udl_password": DEFAULT_UDL_PASSWORD,
         "mqtt_host": "core-mosquitto",
         "mqtt_port": DEFAULT_MQTT_PORT,
         "mqtt_username": "",
         "mqtt_password": "",
         "mqtt_topic_prefix": DEFAULT_MQTT_TOPIC_PREFIX,
-        "part_arm_away": DEFAULT_PART_ARM_AWAY,
-        "part_arm_night": DEFAULT_PART_ARM_NIGHT,
-        "part_arm_home": DEFAULT_PART_ARM_HOME,
+        "part_arm_1": DEFAULT_PART_ARM_1,
+        "part_arm_2": DEFAULT_PART_ARM_2,
+        "part_arm_3": DEFAULT_PART_ARM_3,
         "reconnect_normal_attempts": DEFAULT_RECONNECT_NORMAL_ATTEMPTS,
         "reconnect_normal_interval_seconds": DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
         "reconnect_trigger_attempts": DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
@@ -47,26 +49,24 @@ def _valid_options(**overrides: object) -> dict[str, object]:
 
 
 def test_load_settings_applies_schema_defaults() -> None:
-    udl = "udl-test"
     settings = load_settings(
         {
             "panel_host": "10.0.0.2",
-            "udl_password": udl,
             "mqtt_host": "mqtt.local",
         }
     )
     assert settings == Settings(
         panel_host="10.0.0.2",
         panel_port=DEFAULT_PANEL_PORT,
-        udl_password=udl,
+        udl_password=DEFAULT_UDL_PASSWORD,
         mqtt_host="mqtt.local",
         mqtt_port=DEFAULT_MQTT_PORT,
         mqtt_username="",
         mqtt_password="",
         mqtt_topic_prefix=DEFAULT_MQTT_TOPIC_PREFIX,
-        part_arm_away=DEFAULT_PART_ARM_AWAY,
-        part_arm_night=DEFAULT_PART_ARM_NIGHT,
-        part_arm_home=DEFAULT_PART_ARM_HOME,
+        part_arm_1=DEFAULT_PART_ARM_1,
+        part_arm_2=DEFAULT_PART_ARM_2,
+        part_arm_3=DEFAULT_PART_ARM_3,
         reconnect_normal_attempts=DEFAULT_RECONNECT_NORMAL_ATTEMPTS,
         reconnect_normal_interval_seconds=DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
         reconnect_trigger_attempts=DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
@@ -74,11 +74,23 @@ def test_load_settings_applies_schema_defaults() -> None:
     )
 
 
+def test_udl_password_defaults_to_factory_1234() -> None:
+    settings = load_settings(
+        {
+            "panel_host": "10.0.0.2",
+            "mqtt_host": "mqtt.local",
+        }
+    )
+    assert settings.udl_password == "1234"
+
+    overridden = load_settings(_valid_options(udl_password="custom-udl"))
+    assert overridden.udl_password == "custom-udl"
+
+
 def test_reconnect_settings_defaults_and_overrides() -> None:
     defaults = load_settings(
         {
             "panel_host": "10.0.0.2",
-            "udl_password": "udl",
             "mqtt_host": "mqtt.local",
         }
     )
@@ -130,16 +142,60 @@ def test_reconnect_settings_from_environ() -> None:
     assert settings.reconnect_trigger_interval_seconds == 3.0
 
 
-def test_part_arm_mapping_parses_mode_bytes() -> None:
-    settings = load_settings(_valid_options(part_arm_away=2, part_arm_night=0, part_arm_home=1))
-    assert settings.part_arm_away == 2
-    assert settings.part_arm_night == 0
-    assert settings.part_arm_home == 1
+def test_part_arm_slot_defaults_and_mode_bytes() -> None:
+    settings = load_settings(
+        {
+            "panel_host": "10.0.0.2",
+            "mqtt_host": "mqtt.local",
+        }
+    )
+    assert settings.part_arm_1 == "night"
+    assert settings.part_arm_2 == "home"
+    assert settings.part_arm_3 == "unused"
+    assert settings.mode_byte_for_ha_mode("night") == 1
+    assert settings.mode_byte_for_ha_mode("home") == 2
+    assert settings.mode_byte_for_ha_mode("away") == FULL_ARM_AWAY_MODE_BYTE
+    assert settings.ha_mode_for_part_arm_slot(3) is None
+    assert "arm_night" in settings.supported_arm_features()
+    assert "arm_home" in settings.supported_arm_features()
+    assert "arm_away" in settings.supported_arm_features()
+
+
+def test_part_arm_remapping_changes_mode_bytes() -> None:
+    settings = load_settings(
+        _valid_options(part_arm_1="home", part_arm_2="away", part_arm_3="night")
+    )
+    assert settings.mode_byte_for_ha_mode("home") == 1
+    assert settings.mode_byte_for_ha_mode("away") == 2
+    assert settings.mode_byte_for_ha_mode("night") == 3
+    assert settings.supported_arm_features() == ["arm_home", "arm_away", "arm_night"]
+
+
+def test_unused_slot_not_offered_as_arm_target() -> None:
+    settings = load_settings(
+        _valid_options(part_arm_1="night", part_arm_2="unused", part_arm_3="unused")
+    )
+    assert settings.mode_byte_for_ha_mode("night") == 1
+    assert settings.mode_byte_for_ha_mode("home") is None
+    features = settings.supported_arm_features()
+    assert "arm_night" in features
+    assert "arm_home" not in features
+    assert "arm_away" in features  # full-arm Away when not on a Part-Arm slot
+
+
+def test_duplicate_part_arm_mode_raises_clear_error() -> None:
+    with pytest.raises(ConfigError, match="night"):
+        load_settings(_valid_options(part_arm_1="night", part_arm_2="night"))
+
+
+def test_invalid_part_arm_label_raises_clear_error() -> None:
+    with pytest.raises(ConfigError, match="part_arm_1"):
+        load_settings(_valid_options(part_arm_1="vacation"))
 
 
 @pytest.mark.parametrize(
     "missing_key",
-    ["panel_host", "udl_password", "mqtt_host"],
+    ["panel_host", "mqtt_host"],
 )
 def test_missing_required_option_raises_clear_error(missing_key: str) -> None:
     options = _valid_options()
@@ -150,7 +206,7 @@ def test_missing_required_option_raises_clear_error(missing_key: str) -> None:
 
 @pytest.mark.parametrize(
     "missing_key",
-    ["panel_host", "udl_password", "mqtt_host"],
+    ["panel_host", "mqtt_host"],
 )
 def test_blank_required_option_raises_clear_error(missing_key: str) -> None:
     with pytest.raises(ConfigError, match=missing_key):
@@ -160,11 +216,6 @@ def test_blank_required_option_raises_clear_error(missing_key: str) -> None:
 def test_invalid_port_raises_clear_error() -> None:
     with pytest.raises(ConfigError, match="panel_port"):
         load_settings(_valid_options(panel_port=70000))
-
-
-def test_invalid_part_arm_mode_byte_raises_clear_error() -> None:
-    with pytest.raises(ConfigError, match="part_arm_home"):
-        load_settings(_valid_options(part_arm_home=256))
 
 
 def test_invalid_integer_string_raises_clear_error() -> None:
@@ -177,7 +228,7 @@ def test_load_settings_from_options_file(tmp_path: Path) -> None:
     path.write_text(json.dumps(_valid_options(panel_host="panel.lan")), encoding="utf-8")
     settings = load_settings(options_path=path, environ={})
     assert settings.panel_host == "panel.lan"
-    assert settings.part_arm_away == DEFAULT_PART_ARM_AWAY
+    assert settings.part_arm_1 == DEFAULT_PART_ARM_1
 
 
 def test_load_settings_from_environ() -> None:
@@ -186,17 +237,20 @@ def test_load_settings_from_environ() -> None:
             "TEXECOM_PANEL_HOST": "panel.env",
             "TEXECOM_UDL_PASSWORD": "udl",
             "TEXECOM_MQTT_HOST": "broker.env",
-            "TEXECOM_PART_ARM_AWAY": "10",
-            "TEXECOM_PART_ARM_NIGHT": "11",
-            "TEXECOM_PART_ARM_HOME": "12",
+            "TEXECOM_PART_ARM_1": "away",
+            "TEXECOM_PART_ARM_2": "night",
+            "TEXECOM_PART_ARM_3": "home",
         },
         options_path="/nonexistent/options.json",
     )
     assert settings.panel_host == "panel.env"
     assert settings.mqtt_host == "broker.env"
-    assert settings.part_arm_away == 10
-    assert settings.part_arm_night == 11
-    assert settings.part_arm_home == 12
+    assert settings.part_arm_1 == "away"
+    assert settings.part_arm_2 == "night"
+    assert settings.part_arm_3 == "home"
+    assert settings.mode_byte_for_ha_mode("away") == 1
+    assert settings.mode_byte_for_ha_mode("night") == 2
+    assert settings.mode_byte_for_ha_mode("home") == 3
 
 
 def test_invalid_options_json_raises_clear_error(tmp_path: Path) -> None:

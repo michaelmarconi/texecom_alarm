@@ -19,7 +19,7 @@ from texecom_alarm.protocol.client import PanelClient
 from texecom_alarm.protocol.frame import CMD_GET_AREA_FLAGS
 
 
-def _settings(**overrides: int) -> Settings:
+def _settings(**overrides: object) -> Settings:
     base = dict(
         panel_host="127.0.0.1",
         panel_port=10001,
@@ -29,9 +29,9 @@ def _settings(**overrides: int) -> Settings:
         mqtt_username="",
         mqtt_password="",
         mqtt_topic_prefix="texecom",
-        part_arm_away=0,
-        part_arm_night=1,
-        part_arm_home=2,
+        part_arm_1="night",
+        part_arm_2="home",
+        part_arm_3="unused",
     )
     base.update(overrides)
     return Settings(**base)  # type: ignore[arg-type]
@@ -67,7 +67,7 @@ def test_mqtt_payload_for_live_area_state(state: int, expected: str) -> None:
 
 def test_mqtt_payload_for_live_part_arm_uses_remapped_settings() -> None:
     """AREA 6/7 are Part-Arm slots 1/2 — HA mode follows Settings (ADR-005)."""
-    remapped = _settings(part_arm_night=2, part_arm_home=1, part_arm_away=0)
+    remapped = _settings(part_arm_1="home", part_arm_2="night", part_arm_3="unused")
     assert mqtt_payload_for_area_state(6, remapped) == "armed_home"
     assert mqtt_payload_for_area_state(7, remapped) == "armed_night"
 
@@ -107,7 +107,7 @@ def test_decode_armed_full_is_armed_away() -> None:
 
 
 def test_decode_part_armed_slot_maps_via_settings() -> None:
-    settings = _settings(part_arm_night=1, part_arm_home=2)
+    settings = _settings(part_arm_1="night", part_arm_2="home")
     flags_night = bytearray(_quiet_flags())
     _set_flag(flags_night, 23, 1)  # PartArmed
     _set_flag(flags_night, 50, 1)  # PartArm1
@@ -198,7 +198,7 @@ async def test_handle_area_message_remapped_part_arm_publishes_correct_ha_mode()
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
     # Swap Night/Home slots vs defaults: slot 1 → Home, slot 2 → Night.
-    settings = _settings(part_arm_night=2, part_arm_home=1, part_arm_away=0)
+    settings = _settings(part_arm_1="home", part_arm_2="night", part_arm_3="unused")
     # AREA state 6 = Part Arm 1 → armed_home under remapped Settings.
     published = await handle_area_message(
         mqtt, bytes([2, 1, 6]), settings=settings, topic_prefix="texecom"

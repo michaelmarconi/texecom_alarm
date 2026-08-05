@@ -7,20 +7,27 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 # Overridable schema defaults (installers must set values that match their panel).
 DEFAULT_PANEL_PORT = 10001
 DEFAULT_MQTT_PORT = 1883
 DEFAULT_MQTT_TOPIC_PREFIX = "texecom"
-DEFAULT_PART_ARM_AWAY = 0
-DEFAULT_PART_ARM_NIGHT = 1
-DEFAULT_PART_ARM_HOME = 2
+DEFAULT_UDL_PASSWORD = "1234"  # noqa: S105 — panel factory default, overridable
+# Slot-oriented Part-Arm defaults (this household's layout; overridable per install).
+DEFAULT_PART_ARM_1 = "night"
+DEFAULT_PART_ARM_2 = "home"
+DEFAULT_PART_ARM_3 = "unused"
+# Confirmed SPIKE-005 full-arm Away mode byte when Away is not on a Part-Arm slot.
+FULL_ARM_AWAY_MODE_BYTE = 0
 # Tunable reconnect budgets (ADR-002) — not final hardcodes; SPIKE-002 one data point.
 DEFAULT_RECONNECT_NORMAL_ATTEMPTS = 4
 DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS = 2.5
 DEFAULT_RECONNECT_TRIGGER_ATTEMPTS = 18
 DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS = 5.0
+
+PartArmLabel = Literal["home", "night", "away", "unused"]
+_PART_ARM_LABELS = frozenset({"home", "night", "away", "unused"})
 
 _ENV_KEYS = {
     "panel_host": "TEXECOM_PANEL_HOST",
@@ -31,9 +38,9 @@ _ENV_KEYS = {
     "mqtt_username": "TEXECOM_MQTT_USERNAME",
     "mqtt_password": "TEXECOM_MQTT_PASSWORD",
     "mqtt_topic_prefix": "TEXECOM_MQTT_TOPIC_PREFIX",
-    "part_arm_away": "TEXECOM_PART_ARM_AWAY",
-    "part_arm_night": "TEXECOM_PART_ARM_NIGHT",
-    "part_arm_home": "TEXECOM_PART_ARM_HOME",
+    "part_arm_1": "TEXECOM_PART_ARM_1",
+    "part_arm_2": "TEXECOM_PART_ARM_2",
+    "part_arm_3": "TEXECOM_PART_ARM_3",
     "reconnect_normal_attempts": "TEXECOM_RECONNECT_NORMAL_ATTEMPTS",
     "reconnect_normal_interval_seconds": "TEXECOM_RECONNECT_NORMAL_INTERVAL_SECONDS",
     "reconnect_trigger_attempts": "TEXECOM_RECONNECT_TRIGGER_ATTEMPTS",
@@ -47,7 +54,7 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    """Install-time bridge settings (panel, MQTT, Part-Arm mode bytes)."""
+    """Install-time bridge settings (panel, MQTT, Part-Arm slot → HA mode)."""
 
     panel_host: str
     panel_port: int
@@ -57,13 +64,53 @@ class Settings:
     mqtt_username: str
     mqtt_password: str
     mqtt_topic_prefix: str
-    part_arm_away: int
-    part_arm_night: int
-    part_arm_home: int
+    part_arm_1: PartArmLabel
+    part_arm_2: PartArmLabel
+    part_arm_3: PartArmLabel
     reconnect_normal_attempts: int = DEFAULT_RECONNECT_NORMAL_ATTEMPTS
     reconnect_normal_interval_seconds: float = DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS
     reconnect_trigger_attempts: int = DEFAULT_RECONNECT_TRIGGER_ATTEMPTS
     reconnect_trigger_interval_seconds: float = DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS
+
+    def part_arm_labels(self) -> tuple[PartArmLabel, PartArmLabel, PartArmLabel]:
+        return (self.part_arm_1, self.part_arm_2, self.part_arm_3)
+
+    def mode_byte_for_ha_mode(self, ha_mode: str) -> int | None:
+        """Return cmd=6 mode byte for an HA arm mode, or None if not available.
+
+        Part-Arm slot N uses confirmed mode byte N. When Away is not assigned to
+        any slot, full-arm Away uses mode byte 0 (SPIKE-005).
+        """
+        for slot, label in enumerate(self.part_arm_labels(), start=1):
+            if label == ha_mode:
+                return slot
+        if ha_mode == "away":
+            return FULL_ARM_AWAY_MODE_BYTE
+        return None
+
+    def ha_mode_for_part_arm_slot(self, slot: int) -> str | None:
+        """Return the HA mode label for Part-Arm slot 1/2/3, or None if unused."""
+        labels = {1: self.part_arm_1, 2: self.part_arm_2, 3: self.part_arm_3}
+        label = labels.get(slot)
+        if label is None or label == "unused":
+            return None
+        return label
+
+    def supported_arm_features(self) -> list[str]:
+        """MQTT discovery ``supported_features`` for in-use Part-Arm modes.
+
+        Unused slots contribute no arm target. Away remains available via the
+        full-arm mode byte when not assigned to a Part-Arm slot.
+        """
+        features: list[str] = []
+        seen: set[str] = set()
+        for label in self.part_arm_labels():
+            if label != "unused" and label not in seen:
+                features.append(f"arm_{label}")
+                seen.add(label)
+        if "away" not in seen:
+            features.append("arm_away")
+        return features
 
 
 def load_settings(
@@ -116,11 +163,18 @@ def _from_environ(environ: Mapping[str, str]) -> dict[str, Any]:
 
 def _parse(raw: Mapping[str, Any]) -> Settings:
     panel_host = _require_str(raw, "panel_host")
-    udl_password = _require_str(raw, "udl_password")
+    udl_password = _optional_str(raw, "udl_password", DEFAULT_UDL_PASSWORD)
+    if not udl_password:
+        udl_password = DEFAULT_UDL_PASSWORD
     mqtt_host = _require_str(raw, "mqtt_host")
     mqtt_topic_prefix = _optional_str(raw, "mqtt_topic_prefix", DEFAULT_MQTT_TOPIC_PREFIX)
     if not mqtt_topic_prefix:
         raise ConfigError("mqtt_topic_prefix must not be empty")
+
+    part_arm_1 = _parse_part_arm_label(raw, "part_arm_1", DEFAULT_PART_ARM_1)
+    part_arm_2 = _parse_part_arm_label(raw, "part_arm_2", DEFAULT_PART_ARM_2)
+    part_arm_3 = _parse_part_arm_label(raw, "part_arm_3", DEFAULT_PART_ARM_3)
+    _validate_unique_part_arm_modes(part_arm_1, part_arm_2, part_arm_3)
 
     return Settings(
         panel_host=panel_host,
@@ -131,15 +185,9 @@ def _parse(raw: Mapping[str, Any]) -> Settings:
         mqtt_username=_optional_str(raw, "mqtt_username", ""),
         mqtt_password=_optional_str(raw, "mqtt_password", ""),
         mqtt_topic_prefix=mqtt_topic_prefix,
-        part_arm_away=_optional_int(
-            raw, "part_arm_away", DEFAULT_PART_ARM_AWAY, minimum=0, maximum=255
-        ),
-        part_arm_night=_optional_int(
-            raw, "part_arm_night", DEFAULT_PART_ARM_NIGHT, minimum=0, maximum=255
-        ),
-        part_arm_home=_optional_int(
-            raw, "part_arm_home", DEFAULT_PART_ARM_HOME, minimum=0, maximum=255
-        ),
+        part_arm_1=part_arm_1,
+        part_arm_2=part_arm_2,
+        part_arm_3=part_arm_3,
         reconnect_normal_attempts=_optional_int(
             raw,
             "reconnect_normal_attempts",
@@ -167,6 +215,35 @@ def _parse(raw: Mapping[str, Any]) -> Settings:
             minimum=0.0,
         ),
     )
+
+
+def _parse_part_arm_label(raw: Mapping[str, Any], key: str, default: PartArmLabel) -> PartArmLabel:
+    if key not in raw or raw[key] is None or raw[key] == "":
+        return default
+    value = raw[key]
+    if not isinstance(value, str):
+        raise ConfigError(f"option {key} must be a string")
+    label = value.strip().lower()
+    if label not in _PART_ARM_LABELS:
+        raise ConfigError(f"option {key} must be one of home, night, away, unused (got {value!r})")
+    return label  # type: ignore[return-value]
+
+
+def _validate_unique_part_arm_modes(
+    part_arm_1: PartArmLabel,
+    part_arm_2: PartArmLabel,
+    part_arm_3: PartArmLabel,
+) -> None:
+    seen: dict[str, int] = {}
+    for slot, label in enumerate((part_arm_1, part_arm_2, part_arm_3), start=1):
+        if label == "unused":
+            continue
+        if label in seen:
+            raise ConfigError(
+                f"HA mode {label!r} is assigned to both Part-Arm slot "
+                f"{seen[label]} and slot {slot}"
+            )
+        seen[label] = slot
 
 
 def _require_str(raw: Mapping[str, Any], key: str) -> str:
