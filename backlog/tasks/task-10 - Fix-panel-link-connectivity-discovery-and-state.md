@@ -4,7 +4,7 @@ title: Fix panel-link connectivity discovery and state
 status: awaiting-review
 assignee: []
 created_date: '2026-08-05 11:53'
-updated_date: '2026-08-05 12:48'
+updated_date: '2026-08-05 12:50'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -65,5 +65,5 @@ Verification: how we'll know = unit + E2E (FakePanel + RecordingMqttPublisher + 
 Notes/assumptions: Production path in `app.py` / `discovery.py` / `reconnect.py` already publishes retained `texecom_alarm_panel_link` discovery and `texecom/panel_link/state` ON/OFF without touching zone/alarm availability. Running container `app_local_texecom_alarm` still lacks `reconnect.py`/`trigger_snapshot.py` and the publish calls — rebuild/restart the local add-on after merge for HA/broker to see the sensor. `test_reconnect.py` change is ruff format only.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
