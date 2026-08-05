@@ -253,12 +253,12 @@ async def test_reconnect_trigger_budget_after_triggered() -> None:
                 await asyncio.sleep(0.02)
 
             assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
-            assert any(
-                abs(s - 0.05) < 1e-9 for s in sleeps
-            ), f"expected trigger interval in {sleeps}"
-            assert not any(
-                abs(s - 0.01) < 1e-9 for s in sleeps
-            ), f"normal interval leaked: {sleeps}"
+            assert any(abs(s - 0.05) < 1e-9 for s in sleeps), (
+                f"expected trigger interval in {sleeps}"
+            )
+            assert not any(abs(s - 0.01) < 1e-9 for s in sleeps), (
+                f"normal interval leaked: {sleeps}"
+            )
 
             stop.set()
             await asyncio.wait_for(task, timeout=2.0)
