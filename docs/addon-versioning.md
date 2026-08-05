@@ -12,7 +12,7 @@ Do **not** bump it:
 - so the Configuration tab / schema / translations refresh locally
 - for any other local-dev convenience
 
-Inventing release numbers for local reload is forbidden. Use rebuild/reload instead — see [run.md](run.md#reload-local-add-on-without-a-version-bump).
+Inventing release numbers for local reload is forbidden. Use rebuild/reload instead — see [run.md](run.md#refresh-local-add-on-without-a-version-bump).
 
 ## Local development
 
