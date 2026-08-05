@@ -4,7 +4,7 @@ title: Define add-on versioning and release policy
 status: awaiting-review
 assignee: []
 created_date: '2026-08-05 15:50'
-updated_date: '2026-08-05 15:56'
+updated_date: '2026-08-05 15:57'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -57,7 +57,7 @@ Verification: Read-back of all four docs against ACs #1–#3; confirmed config.y
 Notes/assumptions: Local refresh path documented as UI Rebuild + hard-refresh; if Rebuild fails, policy says stop/ask rather than bumping version.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
