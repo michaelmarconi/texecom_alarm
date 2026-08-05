@@ -1,9 +1,10 @@
 ---
 id: TASK-17
 title: 'Part-Arm Configuration radios: Title Case + emoji labels'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-05 19:09'
+updated_date: '2026-08-05 19:11'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
