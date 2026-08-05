@@ -91,8 +91,8 @@ A Home Assistant Add-on that replaces unreliable `the prior MQTT bridge` for a T
 - [ ] **No Device** — MQTT entities ungrouped (Device column empty); discuss discovery `device` block.
 - [ ] **Alarm entity naming** — “Arm Status” / `alarm_control_panel.arm_status` feel wrong; pick better name + entity_id.
 - [ ] **Arm-mode control order** — HA card showed Home, Away, Night, Disarmed; prefer Home, Night, Away, Disarmed if the MQTT platform allows.
-- [ ] **Home arm NAK root cause** — panel rejected `SETAREAARM` mode 2; do not assume open windows are the cause without a daytime corroboration.
-- [ ] **HA alarm card feedback on failed arm** — after NAK, card left Home selected while entity stayed Disarmed; investigate expected MQTT/HA behaviour and whether we should republish state or surface failure.
+- [x] **Home arm NAK root cause** — TASK-14: classified as **panel reject** (app sent configured Home mode byte; framing/mapping OK). Why the panel NAKd still needs daytime corroboration (open zones not assumed).
+- [x] **HA alarm card feedback on failed arm** — TASK-14: on arm NAK, republish live last-known alarm state (retained) so HA does not keep a stuck mode selection.
 - [x] **UDL option clarity** — “Panel UDL password” + usual-1234 helper landed in TASK-15 (default remains `1234` in options).
 - [ ] **Unwalked acceptance paths** — door/window/other zone classes; Away/Night ×3; disarm matrix; live siren + forced disconnect + snapshot; household wrapper/aggregates; production cutover with `the prior MQTT bridge` removed.
 - [ ] **Published release / CHANGELOG / `/ship` cadence** — local no-fake-bump rule is in [addon-versioning.md](addon-versioning.md); when to authorize a real `version` bump and CHANGELOG depth for go-live remains deferred until `/ship` (or an explicit decision).

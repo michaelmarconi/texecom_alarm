@@ -1,7 +1,7 @@
 ---
 id: TASK-14
 title: Diagnose and fix Home arm NAK + failed-arm feedback
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-05 11:54'
 updated_date: '2026-08-05 19:38'
@@ -42,9 +42,9 @@ Corrective for TASK-7. Do not assume open windows are the cause without corrobor
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 When FakePanel NAKs an arm command, the app republishes the current alarm state so HA does not remain on a stuck armed_* selection
-- [ ] #2 Successful ARM_HOME still sends the configured Home Part-Arm mode byte and FakePanel ACK path remains green
-- [ ] #3 Root cause of the live Home NAK is documented in the task final summary (app bug vs panel reject vs mapping) with any code fix applied
+- [x] #1 When FakePanel NAKs an arm command, the app republishes the current alarm state so HA does not remain on a stuck armed_* selection
+- [x] #2 Successful ARM_HOME still sends the configured Home Part-Arm mode byte and FakePanel ACK path remains green
+- [x] #3 Root cause of the live Home NAK is documented in the task final summary (app bug vs panel reject vs mapping) with any code fix applied
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -68,5 +68,5 @@ Verification: pytest → 173 passed; ruff clean. Bugbot stale-snapshot finding f
 Notes/assumptions: AC#3 root cause = panel reject (not app framing/mapping). Feedback gap fixed. Mid-flight state race on NAK republish fixed after Bugbot.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
