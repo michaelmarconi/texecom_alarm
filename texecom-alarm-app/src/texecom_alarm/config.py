@@ -25,9 +25,12 @@ DEFAULT_RECONNECT_NORMAL_ATTEMPTS = 4
 DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS = 2.5
 DEFAULT_RECONNECT_TRIGGER_ATTEMPTS = 18
 DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS = 5.0
+DEFAULT_LOG_LEVEL = "INFO"
 
 PartArmLabel = Literal["home", "night", "away", "unused"]
+LogLevel = Literal["WARNING", "INFO", "DEBUG", "TRACE"]
 _PART_ARM_LABELS = frozenset({"home", "night", "away", "unused"})
+_LOG_LEVELS = frozenset({"WARNING", "INFO", "DEBUG", "TRACE"})
 
 _ENV_KEYS = {
     "panel_host": "TEXECOM_PANEL_HOST",
@@ -45,6 +48,7 @@ _ENV_KEYS = {
     "reconnect_normal_interval_seconds": "TEXECOM_RECONNECT_NORMAL_INTERVAL_SECONDS",
     "reconnect_trigger_attempts": "TEXECOM_RECONNECT_TRIGGER_ATTEMPTS",
     "reconnect_trigger_interval_seconds": "TEXECOM_RECONNECT_TRIGGER_INTERVAL_SECONDS",
+    "log_level": "TEXECOM_LOG_LEVEL",
 }
 
 
@@ -71,6 +75,7 @@ class Settings:
     reconnect_normal_interval_seconds: float = DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS
     reconnect_trigger_attempts: int = DEFAULT_RECONNECT_TRIGGER_ATTEMPTS
     reconnect_trigger_interval_seconds: float = DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS
+    log_level: LogLevel = DEFAULT_LOG_LEVEL
 
     def part_arm_labels(self) -> tuple[PartArmLabel, PartArmLabel, PartArmLabel]:
         return (self.part_arm_1, self.part_arm_2, self.part_arm_3)
@@ -213,7 +218,22 @@ def _parse(raw: Mapping[str, Any]) -> Settings:
             DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
             minimum=0.0,
         ),
+        log_level=_parse_log_level(raw),
     )
+
+
+def _parse_log_level(raw: Mapping[str, Any]) -> LogLevel:
+    if "log_level" not in raw or raw["log_level"] is None or raw["log_level"] == "":
+        return DEFAULT_LOG_LEVEL  # type: ignore[return-value]
+    value = raw["log_level"]
+    if not isinstance(value, str):
+        raise ConfigError("option log_level must be a string")
+    level = value.strip().upper()
+    if level not in _LOG_LEVELS:
+        raise ConfigError(
+            f"option log_level must be one of WARNING, INFO, DEBUG, TRACE (got {value!r})"
+        )
+    return level  # type: ignore[return-value]
 
 
 def _parse_part_arm_label(raw: Mapping[str, Any], key: str, default: PartArmLabel) -> PartArmLabel:

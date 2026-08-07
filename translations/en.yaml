@@ -52,3 +52,9 @@ configuration:
   reconnect_trigger_interval_seconds:
     name: Reconnect interval seconds (after trigger)
     description: Wait between trigger-budget reconnect attempts (default 5).
+  log_level:
+    name: Log level
+    description: >-
+      WARNING (quiet), INFO (default), DEBUG (app handling detail), or TRACE
+      (panel session traffic). Includes the selected level and all more severe
+      messages.
