@@ -1,6 +1,7 @@
 # Spec: zone-monitoring
 
-**Date:** 2026-08-01
+**Date:** 2026-08-01  
+**Amended:** 2026-08-07 (zone Entity ID shape → `_zone_{N}`)  
 **State:** Accepted ✅
 
 ---
@@ -12,6 +13,11 @@ depends entirely on that closed-source, unreliable add-on, which is being remove
 Once it's gone, Home Assistant automations and the household's Security dashboard
 will lose all zone-state visibility unless that dependency is eliminated first.
 
+Separately: publishing zone Entity IDs as `texecom_alarm_{slug}_{N}` makes the
+trailing `_{N}` look like Home Assistant's collision suffix (`_2`, `_3`, …), which
+misleads operators. Trial installs beside the prior MQTT bridge also need Entity IDs that
+do not claim the same bare `texecom_alarm_{slug}` ids.
+
 ## Goal
 
 Home Assistant — the primary consumer, since automations and guard-condition
@@ -20,6 +26,10 @@ Security dashboard, have full zone-state visibility reproduced as native HA
 entities, with zero runtime dependency on `the prior MQTT bridge`, so it can be safely
 uninstalled once this is delivered.
 
+Zone Entity IDs use an explicit `_zone_{N}` disambiguator (readable, unique, and
+side-by-side-friendly with the prior MQTT bridge bare slugs), with stable zone-number
+`unique_id`s so UI renames can stick.
+
 ## Scope
 
 **In scope**
@@ -27,9 +37,13 @@ uninstalled once this is delivered.
 - All ~35 zone entities (door contacts, window contacts, shock sensors, PIR motion
   sensors, and the garage mirror sensor) reproduced as HA `binary_sensor` entities
   reflecting current physical/panel zone state.
-- Entity naming/state compatible with (or accompanied by a documented migration
-  path for) the existing aggregates and automations that consume today's
-  `binary_sensor.texecom_alarm_*` entities.
+- Zone **Entity ID** shape: `binary_sensor.texecom_alarm_{slug}_zone_{N}` (e.g.
+  `binary_sensor.texecom_alarm_ethan_l_win_shk_zone_37`). Stable `unique_id` keyed
+  by zone number (e.g. `texecom_alarm_zone_37`). Friendly **name** remains
+  Title-Cased panel text without `_zone_N`.
+- Entity naming/state accompanied by a documented migration path for consumers of
+  today's `binary_sensor.texecom_alarm_*` (scheme match, not bit-identical legacy
+  IDs; cutover may need household updates).
 - State updates delivered within 2 seconds of a physical trigger/clear, so
   time-sensitive automations (e.g. the 60s auto-arm motion-cancel countdown, the
   "I'm leaving" script's wait for the front door to transition on→off) keep
@@ -52,6 +66,14 @@ uninstalled once this is delivered.
 - Adding new zone types or sensors beyond today's ~35-zone inventory.
 - The protocol decode work itself (Phase 1 packet capture / framing research) —
   that's investigative groundwork, not part of this spec.
+- Bit-identical the prior MQTT bridge Entity IDs or automatic migration of household
+  automations.
+- Panel serial in Entity ID or `unique_id` (unproven command; optional later spike).
+- Install-time “legacy bare slug” Entity ID option — not required here: default
+  `_zone_{N}` already enables side-by-side trial with the prior MQTT bridge, and cutover is
+  covered by the documented migration path.
+- Changing alarm or panel-link Entity IDs (`alarm_control_panel.texecom_alarm_arm_status`,
+  `binary_sensor.texecom_alarm_panel_link`).
 
 ## Acceptance Criteria
 
@@ -86,6 +108,25 @@ uninstalled once this is delivered.
    - **How we'll know:** end-to-end test (stand-in: FakePanel) for last-known zone
      state plus panel-link connectivity sensor; optional manual acceptance test for
      a live connection drop
+6. Given discovery for an in-use zone (e.g. Ethan L Win Shk, zone 37), When Home
+   Assistant creates the entity, Then Entity ID is
+   `binary_sensor.texecom_alarm_{slug}_zone_{N}` (e.g.
+   `binary_sensor.texecom_alarm_ethan_l_win_shk_zone_37`) — not bare `_{N}` and not
+   slug-only without `_zone_{N}`.
+   - **How we'll know:** unit test on discovery payload; end-to-end test
+     (stand-in: FakePanel)
+7. Given the same zone rediscovered after a wipe/restart, When the entity is
+   recreated, Then `unique_id` remains zone-stable (e.g. `texecom_alarm_zone_37`)
+   so a user-renamed Entity ID can stick across rediscovery.
+   - **How we'll know:** unit test on discovery `unique_id`
+8. Given discovery, When the entity appears in Home Assistant, Then the friendly
+   name is Title-Cased panel text without `_zone_N`.
+   - **How we'll know:** unit test on discovery `name`
+9. Given our discovery default Entity ID and a hypothetical the prior MQTT bridge entity
+   `binary_sensor.texecom_alarm_{slug}`, When both use their default ids, Then ours
+   is `…_{slug}_zone_{N}` and does not claim the bare `…_{slug}` id.
+   - **How we'll know:** unit test asserting `default_entity_id` shape (no live
+     dual-bridge required)
 
 ## User Stories
 
@@ -106,9 +147,11 @@ uninstalled once this is delivered.
   visible.
 - Integration restart: zone entities should re-sync to the panel's current state
   on startup rather than defaulting to an incorrect on/off value.
-- Entity ID/naming migration: if new entity IDs differ from today's
-  `binary_sensor.texecom_alarm_*` naming, a documented migration path must exist
-  so dependent automations aren't silently broken.
+- Entity ID/naming migration: zone Entity IDs use
+  `texecom_alarm_{slug}_zone_{N}` (not bit-identical to the prior MQTT bridge bare slugs, and
+  not the prior `_{N}`-only suffix). Documented migration / household updates remain
+  required at cutover; trial side-by-side with the prior MQTT bridge must not claim the same
+  bare `…_{slug}` Entity IDs.
 - Co-located sensors: two sensors on the same physical opening (e.g. a window
   contact and a shock sensor on the same window) must be reported as independent
   entities, not merged or conflated.
@@ -121,17 +164,21 @@ uninstalled once this is delivered.
   correctly.
 - No runtime dependency on `the prior MQTT bridge` — it will be uninstalled once this
   capability is delivered.
-- Entity naming/state values must be compatible with (or have a documented
-  migration for) all consumers listed in `docs/ha-alarm-usage-spec.md`.
+- Entity naming/state values must use the `texecom_alarm_*` scheme with explicit
+  `_zone_{N}` on zone Entity IDs, with a documented migration for consumers listed
+  in `docs/ha-alarm-usage-spec.md` (not bit-identical legacy IDs).
 
 ## Open Questions
 
 - ~~Should new zone entity IDs exactly match today's `binary_sensor.texecom_alarm_*`
-  naming, or is a documented rename/migration acceptable?~~ **Answered 2026-08-05:**
-  Use the `texecom_alarm_*` scheme (not bit-identical legacy IDs). Discovery publishes
-  `texecom_alarm_{slug}_{zone_number}` via `object_id`/`unique_id` plus
-  `default_entity_id` so HA keeps the prefix and each zone stays unique; cutover may
-  need household automation/entity updates later (acceptable for this stage).
+  naming, or is a documented rename/migration acceptable?~~ **Answered 2026-08-05;
+  amended 2026-08-07:** Use the `texecom_alarm_*` scheme (not bit-identical legacy
+  IDs). Zone Entity IDs are `texecom_alarm_{slug}_zone_{N}` via discovery
+  `default_entity_id` (and matching topic/`object_id` as needed). `unique_id` is
+  zone-stable (e.g. `texecom_alarm_zone_{N}`). Friendly name is Title-Cased panel
+  text without `_zone_N`. The prior `texecom_alarm_{slug}_{N}` shape is rejected
+  because raw `_{N}` looks like HA's collision suffix. Cutover may need household
+  automation/entity updates; side-by-side trial with the prior MQTT bridge is intentional.
 
 ## Spike Candidates
 
@@ -139,6 +186,8 @@ uninstalled once this is delivered.
   list/count programmatically, versus requiring zones to be manually specified in
   configuration. (Raised during the spec interview — needs protocol-level
   investigation, likely during Phase 1, before Phase 2 build starts.)
+- Whether a stable numeric panel serial can be read for device/`unique_id`
+  namespacing (the prior MQTT bridge uses a separate serial command; not validated here).
 
 ## Review
 
@@ -147,3 +196,7 @@ uninstalled once this is delivered.
 | 1 | 2026-08-01 | Issues found | 2 |
 | 2 | 2026-08-01 | Clear | — |
 | 3 | 2026-08-04 | Clear | — |
+| 4 | 2026-08-07 | Issues found | 1 |
+| 5 | 2026-08-07 | Clear | — |
+
+
