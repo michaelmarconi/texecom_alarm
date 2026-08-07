@@ -64,6 +64,7 @@ class FakePanel:
         self.authenticated = False
         self.inject_bytes: bytes = b""
         self.drop_next_command_responses = 0
+        self.drop_login_responses = 0
         self.last_command: int | None = None
         self.commands_seen: list[int] = []
         self.keepalive_attempts = 0
@@ -210,6 +211,11 @@ class FakePanel:
             self.plusplusplus_on_next_command = False
             writer.write(b"+++")
             await writer.drain()
+            return
+
+        if cmd == CMD_LOGIN and self.drop_login_responses > 0:
+            self.drop_login_responses -= 1
+            logger.debug("fake_panel_dropped_login_response")
             return
 
         if cmd != CMD_LOGIN and self.drop_next_command_responses > 0:

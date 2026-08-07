@@ -152,14 +152,14 @@ async def test_run_publishes_offline_when_discovery_fails_after_online() -> None
 @pytest.mark.asyncio
 async def test_publisher_publish_requires_connection() -> None:
     pub = AiomqttPublisher("127.0.0.1", 1)
-    with pytest.raises(RuntimeError, match="not connected"):
+    with pytest.raises(RuntimeError, match="not connected|MQTT publisher is not connected"):
         await pub.publish("t", "p")
 
 
 @pytest.mark.asyncio
 async def test_publisher_abort_requires_connection() -> None:
     pub = AiomqttPublisher("127.0.0.1", 1)
-    with pytest.raises(RuntimeError, match="not connected"):
+    with pytest.raises(RuntimeError, match="not connected|MQTT publisher is not connected"):
         await pub.abort()
 
 
@@ -229,7 +229,7 @@ async def test_publisher_abort_raises_when_no_sock() -> None:
     client = MagicMock()
     client._client = paho
     pub._client = client
-    with pytest.raises(RuntimeError, match="unable to abort"):
+    with pytest.raises(RuntimeError, match="unable to abort|Unable to abort"):
         await pub.abort()
 
 

@@ -12,6 +12,8 @@ from texecom_alarm.protocol.frame import (
     CMD_GET_AREA_FLAGS,
     CMD_GET_ZONE_STATE,
     CMD_GETDATETIME,
+    CMD_GETPANELIDENTIFICATION,
+    CMD_GETZONEDETAILS,
     CMD_LOGIN,
     CMD_SET_AREA_ARM,
     CMD_SET_AREA_DISARM,
@@ -26,6 +28,19 @@ from texecom_alarm.protocol.frame import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Human labels for panel commands that appear in operator-facing errors.
+_CMD_LABELS: dict[int, str] = {
+    CMD_LOGIN: "LOGIN",
+    CMD_GET_ZONE_STATE: "GetZoneState",
+    CMD_GETZONEDETAILS: "GETZONEDETAILS",
+    CMD_GETPANELIDENTIFICATION: "GETPANELIDENTIFICATION",
+    CMD_GETDATETIME: "GETDATETIME (keepalive)",
+    CMD_GET_AREA_FLAGS: "GetAreaFlags",
+    CMD_SET_AREA_ARM: "SETAREAARM",
+    CMD_SET_AREA_DISARM: "SETAREADISARM",
+    CMD_SETEVENTMESSAGES: "SETEVENTMESSAGES",
+}
 
 
 class ProtocolError(Exception):
@@ -62,6 +77,40 @@ class PanelClient:
         self._authenticated = False
         self._message_queue: asyncio.Queue[Frame] = asyncio.Queue()
         self._io_lock = asyncio.Lock()
+        self._pending_cmd: int | None = None
+
+    @staticmethod
+    def command_label(cmd: int) -> str:
+        return _CMD_LABELS.get(cmd, f"command {cmd}")
+
+    @staticmethod
+    def timeout_message(cmd: int, *, host: str, port: int) -> str:
+        """Operator-readable timeout for a panel command that got no reply."""
+        label = PanelClient.command_label(cmd)
+        if cmd == CMD_LOGIN:
+            return (
+                f"Panel at {host}:{port} did not answer LOGIN in time. "
+                "Usually another device still holds the single ComIP connection "
+                "(Texecom app, another add-on, or a stuck previous session), "
+                "or the panel is briefly busy — stop other clients and retry."
+            )
+        if cmd == CMD_GETDATETIME:
+            return (
+                f"Panel at {host}:{port} did not answer keepalive ({label}). "
+                "The session may be dead or the panel overloaded."
+            )
+        return (
+            f"Panel at {host}:{port} did not answer {label} in time. "
+            "Check panel power/network and that nothing else holds ComIP."
+        )
+
+    @staticmethod
+    def login_failure_message(payload: bytes) -> str:
+        """Operator-readable LOGIN rejection (panel answered but did not accept)."""
+        return (
+            "Panel rejected LOGIN — check the UDL password in add-on Configuration. "
+            f"(panel reply: {payload!r})"
+        )
 
     @property
     def authenticated(self) -> bool:
@@ -72,7 +121,14 @@ class PanelClient:
             "panel_connect",
             extra={"host": self.host, "port": self.port},
         )
-        self._reader, self._writer = await asyncio.open_connection(self.host, self.port)
+        try:
+            self._reader, self._writer = await asyncio.open_connection(self.host, self.port)
+        except OSError as exc:
+            raise OSError(
+                f"Could not open a network connection to the panel at "
+                f"{self.host}:{self.port}: {exc}. "
+                "Check panel_host/panel_port, LAN routing, and that the panel is powered."
+            ) from exc
         self._buf.clear()
         self._authenticated = False
         self._message_queue = asyncio.Queue()
@@ -107,7 +163,7 @@ class PanelClient:
             self._authenticated = True
             logger.debug("panel_login_ok")
             return
-        raise ProtocolError(f"LOGIN failed: {payload!r}")
+        raise ProtocolError(self.login_failure_message(payload))
 
     async def keepalive(self) -> bytes:
         """Send GETDATETIME; on short timeout retry once with the same sequence."""
@@ -137,8 +193,14 @@ class PanelClient:
         # (same length-first pattern as multi-byte reads like GETZONEDETAILS).
         if len(payload) != count:
             if len(payload) == 1 and payload[0] == NAK:
-                raise ProtocolError("GetZoneState NAK")
-            raise ProtocolError(f"GetZoneState: expected {count} status bytes, got {len(payload)}")
+                raise ProtocolError(
+                    "Panel rejected reading zone states (GetZoneState NAK). "
+                    "Try again; if it keeps failing, check the panel connection."
+                )
+            raise ProtocolError(
+                f"Panel returned an unexpected zone-state reply "
+                f"(wanted {count} status bytes, got {len(payload)})."
+            )
         return payload
 
     async def get_area_flags(self, start: int, count: int, *, area_size: int = 1) -> bytes:
@@ -162,8 +224,14 @@ class PanelClient:
         payload = await self.send_command(CMD_GET_AREA_FLAGS, bytes([start, count]))
         if len(payload) != expected:
             if len(payload) == 1 and payload[0] == NAK:
-                raise ProtocolError("GetAreaFlags NAK")
-            raise ProtocolError(f"GetAreaFlags: expected {expected} flag bytes, got {len(payload)}")
+                raise ProtocolError(
+                    "Panel rejected reading area/arm flags (GetAreaFlags NAK). "
+                    "Try again; if it keeps failing, check the panel connection."
+                )
+            raise ProtocolError(
+                f"Panel returned an unexpected area-flags reply "
+                f"(wanted {expected} bytes, got {len(payload)})."
+            )
         return payload
 
     async def set_event_messages(self) -> None:
@@ -173,7 +241,10 @@ class PanelClient:
         logger.debug("panel_set_event_messages", extra={"mask": events})
         payload = await self.send_command(CMD_SETEVENTMESSAGES, body)
         if len(payload) >= 1 and payload[0] == NAK:
-            raise ProtocolError("SETEVENTMESSAGES NAK")
+            raise ProtocolError(
+                "Panel rejected event subscription (SETEVENTMESSAGES NAK). "
+                "Zone/area live updates may not arrive until this succeeds."
+            )
         logger.debug("panel_set_event_messages_ok")
 
     async def set_area_arm(self, mode: int) -> None:
@@ -182,7 +253,10 @@ class PanelClient:
         logger.debug("panel_set_area_arm", extra={"mode": mode & 0xFF})
         payload = await self.send_command(CMD_SET_AREA_ARM, body)
         if len(payload) >= 1 and payload[0] == NAK:
-            raise ProtocolError("SETAREAARM NAK")
+            raise ProtocolError(
+                "Panel rejected the arm command (SETAREAARM NAK). "
+                "The panel may be busy, already armed differently, or blocking the request."
+            )
         logger.debug("panel_set_area_arm_ok", extra={"mode": mode & 0xFF})
 
     async def set_area_disarm(self) -> None:
@@ -190,7 +264,10 @@ class PanelClient:
         logger.debug("panel_set_area_disarm")
         payload = await self.send_command(CMD_SET_AREA_DISARM, bytes([0x01]))
         if len(payload) >= 1 and payload[0] == NAK:
-            raise ProtocolError("SETAREADISARM NAK")
+            raise ProtocolError(
+                "Panel rejected the disarm command (SETAREADISARM NAK). "
+                "The panel may be busy or already disarmed."
+            )
         logger.debug("panel_set_area_disarm_ok")
 
     async def recv_message(self, *, timeout: float | None = None) -> Frame:
@@ -198,7 +275,7 @@ class PanelClient:
         if not self._message_queue.empty():
             return self._message_queue.get_nowait()
         if self._reader is None:
-            raise ProtocolError("not connected")
+            raise ProtocolError("Not connected to the panel — cannot wait for zone/area messages.")
         wait_timeout = self.response_timeout if timeout is None else timeout
         deadline = asyncio.get_running_loop().time() + wait_timeout
         # Poll in short slices so MQTT-driven send_command can acquire _io_lock.
@@ -208,7 +285,10 @@ class PanelClient:
                 return self._message_queue.get_nowait()
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
-                raise TimeoutError("timed out waiting for message")
+                raise TimeoutError(
+                    f"No panel message within {wait_timeout:g}s "
+                    f"(idle wait on {self.host}:{self.port})."
+                )
             slice_timeout = min(remaining, _poll)
             async with self._io_lock:
                 if not self._message_queue.empty():
@@ -233,33 +313,42 @@ class PanelClient:
     ) -> bytes:
         async with self._io_lock:
             if self._writer is None or self._reader is None:
-                raise ProtocolError("not connected")
+                raise ProtocolError(
+                    "Not connected to the panel — cannot send commands. "
+                    "Wait for a successful login or check panel_host."
+                )
             seq = self._next_seq()
             frame = encode_command(cmd, body, sequence=seq)
             attempt = 0
-            while True:
-                self._writer.write(frame)
-                await self._writer.drain()
-                logger.log(
-                    TRACE_LEVEL,
-                    "panel_tx",
-                    extra={
-                        "cmd": cmd,
-                        "seq": seq,
-                        "attempt": attempt,
-                        "bytes": len(frame),
-                    },
-                )
-                try:
-                    return await self._await_response(cmd, seq)
-                except TimeoutError:
-                    attempt += 1
-                    if attempt > retries:
-                        raise
-                    logger.debug(
-                        "panel_command_retry",
-                        extra={"cmd": cmd, "seq": seq, "attempt": attempt},
+            self._pending_cmd = cmd
+            try:
+                while True:
+                    self._writer.write(frame)
+                    await self._writer.drain()
+                    logger.log(
+                        TRACE_LEVEL,
+                        "panel_tx",
+                        extra={
+                            "cmd": cmd,
+                            "seq": seq,
+                            "attempt": attempt,
+                            "bytes": len(frame),
+                        },
                     )
+                    try:
+                        return await self._await_response(cmd, seq)
+                    except TimeoutError:
+                        attempt += 1
+                        if attempt > retries:
+                            raise TimeoutError(
+                                self.timeout_message(cmd, host=self.host, port=self.port)
+                            ) from None
+                        logger.debug(
+                            "panel_command_retry",
+                            extra={"cmd": cmd, "seq": seq, "attempt": attempt},
+                        )
+            finally:
+                self._pending_cmd = None
 
     def _next_seq(self) -> int:
         seq = self._seq
@@ -271,7 +360,9 @@ class PanelClient:
         while True:
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
-                raise TimeoutError(f"no response to cmd {expected_cmd}")
+                raise TimeoutError(
+                    self.timeout_message(expected_cmd, host=self.host, port=self.port)
+                )
             frame = await self._recv_frame(timeout=remaining)
             if frame.msg_type == TYPE_MESSAGE:
                 logger.debug(
@@ -289,27 +380,41 @@ class PanelClient:
             if frame.sequence != expected_seq:
                 continue
             if not frame.body or frame.body[0] != expected_cmd:
-                raise ProtocolError(f"response cmd {frame.body[:1]!r} != expected {expected_cmd}")
+                raise ProtocolError(
+                    f"Panel reply did not match the waiting command "
+                    f"(got {frame.body[:1]!r}, expected {self.command_label(expected_cmd)})."
+                )
             return frame.body[1:]
 
     async def _recv_frame(self, *, timeout: float) -> Frame:
         """Read the next valid frame, skipping non-protocol bytes (ADR-002)."""
         reader = self._reader
         if reader is None:
-            raise ProtocolError("not connected")
+            raise ProtocolError("Not connected to the panel — cannot read from the session.")
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
         skipped = 0
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
-                raise TimeoutError("timed out waiting for frame")
+                pending = self._pending_cmd
+                if pending is not None:
+                    raise TimeoutError(
+                        self.timeout_message(pending, host=self.host, port=self.port)
+                    )
+                raise TimeoutError(
+                    f"Timed out waiting for data from the panel at " f"{self.host}:{self.port}."
+                )
 
             frame, consumed = try_decode_frame(self._buf)
             if consumed > 0:
                 if frame is None and consumed == 3 and bytes(self._buf[:3]) == b"+++":
                     del self._buf[:consumed]
-                    raise ForcedDisconnect("panel sent +++")
+                    raise ForcedDisconnect(
+                        f"Panel at {self.host}:{self.port} ended the session (sent +++). "
+                        "This often happens around arm/disarm or a real alarm trigger; "
+                        "the add-on will reconnect."
+                    )
                 del self._buf[:consumed]
                 if frame is None:
                     # Modem/non-frame piping: accumulate silently at WARNING–DEBUG;
@@ -337,7 +442,18 @@ class PanelClient:
             try:
                 chunk = await asyncio.wait_for(reader.read(4096), timeout=remaining)
             except TimeoutError:
-                raise TimeoutError("timed out waiting for frame") from None
+                pending = self._pending_cmd
+                if pending is not None:
+                    raise TimeoutError(
+                        self.timeout_message(pending, host=self.host, port=self.port)
+                    ) from None
+                raise TimeoutError(
+                    f"Timed out waiting for data from the panel at " f"{self.host}:{self.port}."
+                ) from None
             if not chunk:
-                raise ForcedDisconnect("socket closed by peer")
+                raise ForcedDisconnect(
+                    f"Panel at {self.host}:{self.port} closed the network connection. "
+                    "Another client may have taken ComIP, or the panel restarted; "
+                    "the add-on will reconnect."
+                )
             self._buf.extend(chunk)

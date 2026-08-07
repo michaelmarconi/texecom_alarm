@@ -77,14 +77,20 @@ class AiomqttPublisher:
         qos: int = 0,
     ) -> None:
         if self._client is None:
-            raise RuntimeError("MQTT publisher not connected")
+            raise RuntimeError(
+                "MQTT publisher is not connected — cannot publish. "
+                "Check mqtt_host / broker credentials in Configuration."
+            )
         data = payload.encode("utf-8") if isinstance(payload, str) else payload
         await self._client.publish(topic, data, qos=qos, retain=retain)
         logger.debug("mqtt_publish", extra={"topic": topic, "retain": retain})
 
     async def subscribe(self, topic: str) -> None:
         if self._client is None:
-            raise RuntimeError("MQTT publisher not connected")
+            raise RuntimeError(
+                "MQTT publisher is not connected — cannot publish. "
+                "Check mqtt_host / broker credentials in Configuration."
+            )
         await self._client.subscribe(topic)
         logger.debug("mqtt_subscribed", extra={"topic": topic})
 
@@ -92,7 +98,10 @@ class AiomqttPublisher:
     def inbound_messages(self) -> AsyncIterator[Any]:
         """Async iterator of inbound MQTT messages (aiomqtt ``Message`` objects)."""
         if self._client is None:
-            raise RuntimeError("MQTT publisher not connected")
+            raise RuntimeError(
+                "MQTT publisher is not connected — cannot publish. "
+                "Check mqtt_host / broker credentials in Configuration."
+            )
         return self._client.messages
 
     async def disconnect(self) -> None:
@@ -110,7 +119,10 @@ class AiomqttPublisher:
         """
         client = self._client
         if client is None:
-            raise RuntimeError("MQTT publisher not connected")
+            raise RuntimeError(
+                "MQTT publisher is not connected — cannot publish. "
+                "Check mqtt_host / broker credentials in Configuration."
+            )
         paho = getattr(client, "_client", None)
         sock = getattr(paho, "_sock", None) if paho is not None else None
         if sock is None and paho is not None:
@@ -123,6 +135,6 @@ class AiomqttPublisher:
                 sock_close()
                 logger.debug("mqtt_aborted_via_sock_close")
                 return
-            raise RuntimeError("unable to abort MQTT connection without clean disconnect")
+            raise RuntimeError("Unable to abort the MQTT connection without a clean disconnect.")
         sock.close()
         logger.debug("mqtt_aborted")
