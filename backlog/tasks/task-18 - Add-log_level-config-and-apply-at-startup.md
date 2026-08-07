@@ -1,9 +1,10 @@
 ---
 id: TASK-18
 title: Add log_level config and apply at startup
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-07 17:22'
+updated_date: '2026-08-07 17:25'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
