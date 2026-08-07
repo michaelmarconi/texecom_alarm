@@ -1,10 +1,10 @@
 ---
 id: TASK-19
 title: Instrument DEBUG handling and TRACE panel traffic
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-07 17:22'
-updated_date: '2026-08-07 17:35'
+updated_date: '2026-08-07 17:41'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -51,6 +51,12 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/protocol/client.py (m
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Instrumented TRACE panel tx/rx + compact modem skip notices; DEBUG handling verified via FakePanel log-capture tests (AC4–AC6).
+Changed files: texecom-alarm-app/src/texecom_alarm/protocol/client.py, texecom-alarm-app/tests/test_diagnostics_logging.py
+Verification: FakePanel + captured log handler (AC4–AC6); pytest -q --cov=texecom_alarm --cov-fail-under=90 → 190 passed, 93.75% coverage; ruff 0.8.4 check+format clean. AC7 skipped (manual checkpoint).
+Notes/assumptions: Existing DEBUG zone/MQTT and arm/disarm outcome lines already satisfied AC4; only protocol/client.py needed TRACE tx/rx and moving resync off DEBUG. Replaced per-byte panel_frame_resync DEBUG spam with one TRACE line panel_resync skipped N bytes.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
