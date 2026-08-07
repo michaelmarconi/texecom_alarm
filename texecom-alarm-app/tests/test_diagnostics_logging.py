@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -9,11 +10,12 @@ import pytest
 from tests.fake_panel import FakePanel, FakeZone
 from tests.recording_mqtt import RecordingMqttPublisher
 
+from texecom_alarm.app import _listen_panel_messages, _SharedAlarmState
 from texecom_alarm.arm_commands import handle_alarm_command
 from texecom_alarm.config import Settings
 from texecom_alarm.logging_setup import TRACE_LEVEL, configure_logging
 from texecom_alarm.protocol.client import PanelClient
-from texecom_alarm.protocol.frame import MSG_ZONE
+from texecom_alarm.protocol.frame import MSG_OUTPUT, MSG_ZONE
 from texecom_alarm.zone_state import handle_zone_message
 
 # Modem-style piping observed in SPIKE-002 / ADR-002.
@@ -229,7 +231,7 @@ async def test_modem_skip_does_not_dump_raw_piping_below_trace(
 async def test_trace_emits_compact_resync_skip_notice(
     restore_root_logging: None,
 ) -> None:
-    """AC6: TRACE shows at most a compact skip notice, not a raw modem dump."""
+    """AC6: TRACE shows one compact skip notice with hex, not a stream dump."""
     configure_logging("TRACE")
     capture, root = _attach_capture()
     panel = FakePanel(udl_password="1234")
@@ -248,12 +250,57 @@ async def test_trace_emits_compact_resync_skip_notice(
         ]
         assert skip_msgs, f"expected compact resync notice at TRACE, got {app_msgs!r}"
         assert any(r.levelno == TRACE_LEVEL for r in app_recs if r.getMessage() in skip_msgs)
-        joined = " ".join(skip_msgs).lower()
-        assert "ath0" not in joined
-        assert "atz" not in joined
-        assert _MODEM_JUNK.hex() not in " ".join(app_msgs)
-        # Compact: one notice naming skipped byte count, not a raw stream dump.
-        assert any(re.search(r"skipped\s+\d+\s+bytes", m) for m in skip_msgs)
+        # One notice: count + hex of the skipped slice (hunt aid); not per-byte spam.
+        assert len(skip_msgs) == 1, f"expected one compact skip notice, got {skip_msgs!r}"
+        assert any(re.search(r"skipped\s+\d+\s+bytes\s+hex=", m) for m in skip_msgs)
+        assert _MODEM_JUNK.hex() in " ".join(skip_msgs)
+        await client.close()
+    finally:
+        root.removeHandler(capture)
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_trace_logs_ignored_push_subtypes(
+    restore_root_logging: None,
+) -> None:
+    """TRACE names ignored push types (e.g. OUTPUT) with body hex for protocol hunts."""
+    configure_logging("TRACE")
+    capture, root = _attach_capture()
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = await _logged_in_client(panel)
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        capture.records.clear()
+        task = asyncio.create_task(
+            _listen_panel_messages(
+                client,
+                mqtt,
+                settings=_settings(),
+                topic_prefix="texecom",
+                in_use_zones={1},
+                alarm_state=_SharedAlarmState(),
+                idle_timeout=0.2,
+            )
+        )
+        body = bytes([MSG_OUTPUT, 0x01, 0x02])
+        await panel.inject_push_body(body)
+        for _ in range(50):
+            if any("ignored for MQTT" in r.getMessage() for r in capture.records):
+                break
+            await asyncio.sleep(0.02)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+        app_msgs = _messages(_app_records(capture.records))
+        assert any("OUTPUT" in m and "ignored for MQTT" in m for m in app_msgs), app_msgs
+        assert any(body.hex() in m for m in app_msgs)
         await client.close()
     finally:
         root.removeHandler(capture)

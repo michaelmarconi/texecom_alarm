@@ -145,6 +145,14 @@ class FakePanel:
         writer.write(encode_frame(TYPE_MESSAGE, 0, body))
         await writer.drain()
 
+    async def inject_push_body(self, body: bytes) -> None:
+        """Push a raw unsolicited ``'M'`` body (for TRACE ignored-event tests)."""
+        writer = self._writer
+        if writer is None or writer.is_closing():
+            raise RuntimeError("FakePanel has no connected client")
+        writer.write(encode_frame(TYPE_MESSAGE, 0, body))
+        await writer.drain()
+
     async def force_disconnect(self) -> None:
         """Close the current TCP client session (mid-session drop for reconnect tests)."""
         writer = self._writer

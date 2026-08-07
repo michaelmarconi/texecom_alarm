@@ -394,6 +394,7 @@ class PanelClient:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
         skipped = 0
+        skipped_bytes = bytearray()
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
@@ -415,17 +416,26 @@ class PanelClient:
                         "This often happens around arm/disarm or a real alarm trigger; "
                         "the add-on will reconnect."
                     )
+                discarded = bytes(self._buf[:consumed])
                 del self._buf[:consumed]
                 if frame is None:
-                    # Modem/non-frame piping: accumulate silently at WARNING–DEBUG;
-                    # emit one compact TRACE notice when a valid frame follows.
+                    # Non-frame bytes (modem piping, bad CRC lead-in, etc.): silent at
+                    # WARNING–DEBUG; one compact TRACE notice (count + hex) when a
+                    # valid frame follows — not a continuous stream dump.
                     skipped += consumed
+                    skipped_bytes.extend(discarded)
                     continue
                 if skipped:
+                    # Cap hex so a long skip stays one compact line (TRACE hunt aid).
+                    _hex_cap = 64
+                    hex_part = bytes(skipped_bytes[:_hex_cap]).hex()
+                    if len(skipped_bytes) > _hex_cap:
+                        hex_part = f"{hex_part}…(+{len(skipped_bytes) - _hex_cap}B)"
                     logger.log(
                         TRACE_LEVEL,
-                        "panel_resync skipped %s bytes",
+                        "panel_resync skipped %s bytes hex=%s",
                         skipped,
+                        hex_part,
                     )
                 logger.log(
                     TRACE_LEVEL,
