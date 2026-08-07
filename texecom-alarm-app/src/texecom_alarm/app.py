@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from texecom_alarm.area_state import handle_area_message, publish_area_state_snapshot
 from texecom_alarm.arm_commands import handle_alarm_command
 from texecom_alarm.config import Settings, load_settings
-from texecom_alarm.logging_setup import configure_logging
+from texecom_alarm.logging_setup import TRACE_LEVEL, configure_logging
 from texecom_alarm.mqtt.discovery import (
     AVAILABILITY_OFFLINE,
     alarm_command_topic,
@@ -21,7 +21,14 @@ from texecom_alarm.mqtt.discovery import (
 )
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
 from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient, ProtocolError
-from texecom_alarm.protocol.frame import MSG_AREA, MSG_LOG, MSG_ZONE
+from texecom_alarm.protocol.frame import (
+    MSG_AREA,
+    MSG_DEBUG,
+    MSG_LOG,
+    MSG_OUTPUT,
+    MSG_USER,
+    MSG_ZONE,
+)
 from texecom_alarm.reconnect import publish_panel_link_state, reconnect_after_disconnect
 from texecom_alarm.trigger_snapshot import TriggerActivityBuffer, maybe_publish_trigger_snapshot
 from texecom_alarm.zone_state import handle_zone_message, publish_zone_state_snapshot
@@ -32,6 +39,19 @@ logger = logging.getLogger(__name__)
 # Panel drops passive listen-only sessions after ~60s; ~15s GETDATETIME keeps alive
 # (docs/protocol-reference.md). Used as recv_message idle timeout → keepalive.
 _KEEPALIVE_IDLE_TIMEOUT = 15.0
+
+_MSG_SUBTYPE_LABELS: dict[int, str] = {
+    MSG_DEBUG: "DEBUG",
+    MSG_ZONE: "ZONE",
+    MSG_AREA: "AREA",
+    MSG_OUTPUT: "OUTPUT",
+    MSG_USER: "USER",
+    MSG_LOG: "LOG",
+}
+
+
+def _msg_subtype_label(subtype: int) -> str:
+    return _MSG_SUBTYPE_LABELS.get(subtype, f"unknown({subtype})")
 
 
 @dataclass
@@ -374,8 +394,20 @@ async def _listen_panel_messages(
                 # Record type/group when present; LOG never publishes MQTT state.
                 if len(body) >= 3:
                     buffer.record_log(body[1], body[2])
+                    logger.log(
+                        TRACE_LEVEL,
+                        "panel_event LOG type=%s group=%s (kept for trigger snapshot; "
+                        "not used for alarm MQTT state) body=%s",
+                        body[1],
+                        body[2],
+                        body.hex(),
+                    )
                 else:
-                    logger.debug("log_message_short", extra={"body": body.hex()})
+                    logger.log(
+                        TRACE_LEVEL,
+                        "panel_event LOG short/unusual body=%s",
+                        body.hex(),
+                    )
             elif subtype == MSG_AREA:
                 new_payload = await handle_area_message(
                     mqtt,  # type: ignore[arg-type]
@@ -393,7 +425,13 @@ async def _listen_panel_messages(
                     )
                     alarm_state.payload = new_payload
             else:
-                logger.debug("panel_message_ignored", extra={"subtype": subtype})
+                # OUTPUT / USER / DEBUG / unknown — not decoded for MQTT yet.
+                logger.log(
+                    TRACE_LEVEL,
+                    "panel_event %s ignored for MQTT (not decoded as zone/area state) " "body=%s",
+                    _msg_subtype_label(subtype),
+                    body.hex(),
+                )
     except ForcedDisconnect:
         return
 

@@ -33,7 +33,8 @@ with a known household event timestamp without a separate sniffer.
 - Instrumentation so those events actually appear at the stated levels (not only
   a config knob with empty DEBUG/TRACE).
 - Modem / non-frame piping: suppressed at WARNING, INFO, and DEBUG; at TRACE,
-  compact skip notices only (not raw modem dumps).
+  one compact skip notice per resync burst (byte count + hex of the skipped
+  slice, truncated if long — not a continuous stream dump).
 - Ability to leave TRACE on while hunting a fault and find matching lines around a
   known event time (e.g. a PIR in Home Assistant Activity).
 
@@ -54,7 +55,7 @@ with a known household event timestamp without a separate sniffer.
 | **WARNING** | Quietest production | Arm rejected; command failure | `alarm_command_arm_rejected` · `alarm_command_failed: … NAK` · other warnings/errors only |
 | **INFO** | Day-to-day (default) | Start, enumerate, reconnect, connectivity | Start line · `enumerated_zones` · reconnect ok/degraded · connectivity live/degraded · plus all WARNING+ |
 | **DEBUG** | Did we handle that? | Study PIR open/clear; arm command | Zone/area handling → MQTT outcome · arm/disarm command path outcomes · snapshot/reconnect steps · plus INFO+ |
-| **TRACE** | Hunt wire/session truth | Zombie hunt; quiet keepalives | DEBUG+ · panel tx/rx (commands and unsolicited) · keepalive pairs · compact `panel_resync skipped N bytes` for modem/non-frames |
+| **TRACE** | Hunt wire/session truth | Zombie hunt; quiet keepalives | DEBUG+ · panel tx/rx (commands and unsolicited) · keepalive pairs · compact `panel_resync skipped N bytes hex=…` for non-frames |
 
 **Severity rule:** choosing a level includes that level and all more severe
 messages (e.g. INFO includes WARNING and ERROR; TRACE includes everything).
@@ -105,7 +106,8 @@ so an operator can see what hit the session.
 
 Given WARNING, INFO, or DEBUG, When non-frame / modem-style piping is skipped,
 Then logs do not dump that raw piping. Given TRACE, When the same skip happens,
-Then at most a compact skip notice appears (not a raw modem stream).
+Then one compact skip notice appears with the skipped byte count and hex of that
+slice (truncated if long) — not a continuous modem stream dump.
 
 - **How we'll know:** unit or integration test (stand-in: bytes that force resync /
   skip + captured logs)
