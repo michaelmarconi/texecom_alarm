@@ -1,6 +1,6 @@
 # Plan
 
-**State:** Approved ✅
+**State:** Draft 📝
 
 ---
 
@@ -8,7 +8,7 @@
 
 | Component | Effort | Status | Notes |
 |---|---|---|---|
-| texecom-alarm-app | L | planned ✅ | Accept follow-ups TASK-10–14 done through TASK-13; TASK-15–17 config polish done; TASK-14 (Home arm NAK) next. Prior wave TASK-1–9 done. |
+| texecom-alarm-app | L | planned ✅ | TASK-1–17 done. Diagnostics-logging wave authored: TASK-18 (log_level config), TASK-19 (DEBUG/TRACE instrumentation), TASK-20 checkpoint. panel-link-liveness still Draft — not in this wave. |
 
 ---
 
