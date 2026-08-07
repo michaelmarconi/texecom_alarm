@@ -4,7 +4,7 @@ title: Add log_level config and apply at startup
 status: awaiting-review
 assignee: []
 created_date: '2026-08-07 17:22'
-updated_date: '2026-08-07 17:30'
+updated_date: '2026-08-07 17:33'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -56,5 +56,5 @@ Verification: unit tests (schema tokens, default INFO, INFO/DEBUG/TRACE filterin
 Notes/assumptions: Supervisor UI name set to "Log level" (spec left label open); DOCS.md + translations updated for DoD config docs
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
