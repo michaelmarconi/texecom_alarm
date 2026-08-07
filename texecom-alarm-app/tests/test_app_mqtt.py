@@ -234,9 +234,32 @@ async def test_publisher_abort_raises_when_no_sock() -> None:
 
 
 def test_main_invokes_asyncio_run() -> None:
-    with patch("texecom_alarm.app.asyncio.run") as run_mock:
+    settings = Settings(
+        panel_host="10.0.0.2",
+        panel_port=10001,
+        udl_password="1234",
+        mqtt_host="mqtt.local",
+        mqtt_port=1883,
+        mqtt_username="",
+        mqtt_password="",
+        mqtt_topic_prefix="texecom",
+        part_arm_1="unused",
+        part_arm_2="unused",
+        part_arm_3="unused",
+        log_level="DEBUG",
+    )
+    with (
+        patch("texecom_alarm.app.load_settings", return_value=settings) as load_mock,
+        patch("texecom_alarm.app.configure_logging") as configure_mock,
+        patch("texecom_alarm.app.asyncio.run") as run_mock,
+    ):
         main()
+        load_mock.assert_called_once_with()
+        configure_mock.assert_called_once_with("DEBUG")
         run_mock.assert_called_once()
+        coro = run_mock.call_args.args[0]
+        assert asyncio.iscoroutine(coro)
+        coro.close()
 
 
 @pytest.mark.asyncio
