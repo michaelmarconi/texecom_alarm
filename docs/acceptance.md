@@ -131,7 +131,7 @@ A Home Assistant Add-on that replaces unreliable `the prior MQTT bridge` for a T
 - [ ] **NAK / failed-command UI** — more-info pill can disagree with status text.
 - [ ] **Texecom iOS App coexistence** — survive ≠ sync; Local vs cloud; Remote Access spam.
 - [ ] **Panel piping noise** — does it stop when this add-on is stopped?
-- [ ] **DEBUG logging for zone/area activity** — log level / event logging.
+- [ ] **DEBUG logging for zone/area activity** — superseded by Draft [`spec-diagnostics-logging.md`](specs/spec-diagnostics-logging.md) (WARNING/INFO/DEBUG/TRACE config + instrumentation).
 - [ ] **Rename Supervisor add-on** to “Texecom Alarm App”.
 - [ ] **Implement Accepted specs** — continuous-operation; `_zone_{N}` naming (`/correction` → plan/build).
 - [ ] **More-info arm order** — HA frontend-fixed (limitation).
