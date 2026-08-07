@@ -24,6 +24,7 @@ options:
   reconnect_normal_interval_seconds: 2.5
   reconnect_trigger_attempts: 18
   reconnect_trigger_interval_seconds: 5
+  log_level: INFO
 schema:
   panel_host: str
   panel_port: port
@@ -42,3 +43,5 @@ schema:
   reconnect_normal_interval_seconds: float(0,)
   reconnect_trigger_attempts: int(1,10000)
   reconnect_trigger_interval_seconds: float(0,)
+  # list(...) tokens are the Configuration radio labels (AC1).
+  log_level: list(WARNING|INFO|DEBUG|TRACE)

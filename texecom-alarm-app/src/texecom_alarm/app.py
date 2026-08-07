@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from texecom_alarm.area_state import handle_area_message, publish_area_state_snapshot
 from texecom_alarm.arm_commands import handle_alarm_command
 from texecom_alarm.config import Settings, load_settings
+from texecom_alarm.logging_setup import configure_logging
 from texecom_alarm.mqtt.discovery import (
     AVAILABILITY_OFFLINE,
     alarm_command_topic,
@@ -342,11 +343,9 @@ async def _idle_forever() -> None:
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
-    asyncio.run(run())
+    cfg = load_settings()
+    configure_logging(cfg.log_level)
+    asyncio.run(run(cfg))
 
 
 if __name__ == "__main__":
