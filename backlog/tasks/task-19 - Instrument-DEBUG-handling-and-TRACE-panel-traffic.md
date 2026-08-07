@@ -47,3 +47,10 @@ Open calls accepted at plan time: live TRACE hunt (AC7) is checkpoint manual DoD
 <!-- SECTION:PLAN:BEGIN -->
 Files likely affected: texecom-alarm-app/src/texecom_alarm/protocol/client.py (modify), texecom-alarm-app/src/texecom_alarm/zone_state.py (modify), texecom-alarm-app/src/texecom_alarm/area_state.py (modify), texecom-alarm-app/src/texecom_alarm/arm_commands.py (modify), texecom-alarm-app/src/texecom_alarm/reconnect.py (modify), texecom-alarm-app/src/texecom_alarm/app.py (modify), texecom-alarm-app/tests/test_diagnostics_logging.py (create), texecom-alarm-app/tests/fake_panel.py (modify if needed). 1. DEBUG: ensure zone/area handle→MQTT and arm/disarm outcomes log at DEBUG (AC4). 2. TRACE: log panel tx/rx (command and unsolicited frames) at TRACE (AC5). 3. Resync path: no raw modem dumps at WARNING–DEBUG; TRACE emits compact skipped-N-bytes style notice only (AC6). 4. Integration tests with FakePanel + captured log handler asserting DEBUG vs TRACE content and modem-skip behaviour. Test strategy: how we'll know = integration test (stand-in: FakePanel + log capture); pytest texecom-alarm-app/tests/test_diagnostics_logging.py.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
