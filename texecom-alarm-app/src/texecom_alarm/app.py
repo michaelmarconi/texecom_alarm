@@ -20,7 +20,7 @@ from texecom_alarm.mqtt.discovery import (
     publish_zone_discovery,
 )
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
-from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient
+from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient, ProtocolError
 from texecom_alarm.protocol.frame import MSG_AREA, MSG_LOG, MSG_ZONE
 from texecom_alarm.reconnect import publish_panel_link_state, reconnect_after_disconnect
 from texecom_alarm.trigger_snapshot import TriggerActivityBuffer, maybe_publish_trigger_snapshot
@@ -48,6 +48,8 @@ async def run(
     mqtt: object | None = None,
     idle: Callable[[], Awaitable[None]] | None = None,
     login_delay: float | None = None,
+    startup_retry_interval: float | None = None,
+    startup_sleep: Callable[[float], Awaitable[None]] | None = None,
 ) -> None:
     """Connect, enumerate, discover, snapshot zone+alarm state, subscribe, listen."""
     cfg = settings if settings is not None else load_settings()
@@ -75,8 +77,17 @@ async def run(
     try:
         logger.debug("app_start")
         if owns_panel:
-            await panel_client.connect()
-            await panel_client.login()
+            await _connect_and_login_with_retry(
+                panel_client,
+                host=cfg.panel_host,
+                port=cfg.panel_port,
+                interval=(
+                    startup_retry_interval
+                    if startup_retry_interval is not None
+                    else cfg.reconnect_normal_interval_seconds
+                ),
+                sleep=startup_sleep,
+            )
 
         zones, zone_count = await enumerate_zones(panel_client)
         logger.info("enumerated_zones", extra={"count": len(zones), "zone_count": zone_count})
@@ -161,17 +172,65 @@ async def run(
                     retain=True,
                 )
             except Exception:
-                logger.exception("mqtt_offline_publish_failed")
+                logger.exception(
+                    "Could not publish MQTT offline before shutdown — "
+                    "Home Assistant may briefly show a stale online status."
+                )
         try:
             await mqtt_client.disconnect()
         except Exception:
-            logger.exception("mqtt_disconnect_failed")
+            logger.exception("Could not disconnect from the MQTT broker cleanly during shutdown.")
         if owns_panel:
             try:
                 await panel_client.close()
             except Exception:
-                logger.exception("panel_close_failed")
+                logger.exception(
+                    "Could not close the panel network connection cleanly during shutdown."
+                )
         logger.debug("app_stop")
+
+
+async def _connect_and_login_with_retry(
+    panel: PanelClient,
+    *,
+    host: str,
+    port: int,
+    interval: float,
+    sleep: Callable[[float], Awaitable[None]] | None = None,
+) -> None:
+    """Keep retrying first connect/login until the panel accepts (continuous-operation)."""
+    sleeper = sleep if sleep is not None else asyncio.sleep
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            await panel.connect()
+            await panel.login()
+            if attempt > 1:
+                logger.info(
+                    "Connected to the panel at %s:%s after %s attempt(s).",
+                    host,
+                    port,
+                    attempt,
+                )
+            return
+        except (TimeoutError, OSError, ProtocolError, ForcedDisconnect) as exc:
+            logger.error(
+                "Could not log in to the panel at %s:%s (attempt %s): %s "
+                "Keeping the add-on running and retrying in %g seconds. "
+                "If this persists, stop any other app using the panel (Texecom Connect / "
+                "another add-on) — only one ComIP client is allowed.",
+                host,
+                port,
+                attempt,
+                exc,
+                interval,
+            )
+            try:
+                await panel.close()
+            except Exception:
+                logger.exception("Could not close the failed panel connection before retrying.")
+            await sleeper(interval)
 
 
 async def _listen_alarm_commands(
@@ -200,7 +259,10 @@ async def _listen_alarm_commands(
                 get_current_alarm_state=lambda: alarm_state.payload,
             )
         except Exception:
-            logger.exception("alarm_command_failed", extra={"topic": topic})
+            logger.exception(
+                "Unexpected failure while handling an MQTT alarm command on topic %s.",
+                topic,
+            )
 
 
 async def _listen_with_reconnect(
@@ -233,7 +295,10 @@ async def _listen_with_reconnect(
         except Exception:
             # Non-recoverable listen failure: mark panel-link degraded, never
             # alarm/zone availability (ADR-004). Cancellation is BaseException.
-            logger.exception("panel_listen_failed")
+            logger.exception(
+                "Panel listen loop failed unexpectedly — marking Alarm Panel Connected "
+                "as disconnected and stopping this listen cycle."
+            )
             await publish_panel_link_state(
                 mqtt,  # type: ignore[arg-type]
                 topic_prefix=topic_prefix,
@@ -242,8 +307,9 @@ async def _listen_with_reconnect(
             raise
         last_alarm_payload = alarm_state.payload
         logger.info(
-            "panel_forced_disconnect",
-            extra={"last_alarm_payload": last_alarm_payload},
+            "Panel ended the monitoring session (forced disconnect); "
+            "last alarm state was %s. Reconnecting…",
+            last_alarm_payload,
         )
         previous_payload = last_alarm_payload
         last_alarm_payload = await reconnect_after_disconnect(
@@ -343,9 +409,28 @@ async def _idle_forever() -> None:
 
 
 def main() -> None:
-    cfg = load_settings()
+    try:
+        cfg = load_settings()
+    except Exception as exc:
+        logging.basicConfig(level=logging.INFO)
+        logging.getLogger("texecom_alarm").error(
+            "Cannot start: add-on configuration is invalid — %s. "
+            "Open the Texecom Alarm Configuration tab in Supervisor, fix the highlighted "
+            "options, and start the add-on again.",
+            exc,
+        )
+        raise SystemExit(1) from exc
     configure_logging(cfg.log_level)
-    asyncio.run(run(cfg))
+    try:
+        asyncio.run(run(cfg))
+    except Exception as exc:
+        logger.exception(
+            "Texecom Alarm stopped because of an unexpected error: %s. "
+            "If this keeps happening after a restart, copy the traceback "
+            "above when asking for help.",
+            exc,
+        )
+        raise
 
 
 if __name__ == "__main__":

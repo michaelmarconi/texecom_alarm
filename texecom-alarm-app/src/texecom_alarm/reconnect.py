@@ -96,13 +96,9 @@ async def reconnect_after_disconnect(
 
     await publish_panel_link_state(mqtt, topic_prefix=topic_prefix, live=False)
     logger.info(
-        "panel_reconnect_start",
-        extra={
-            "profile": profile.name,
-            "attempts": profile.attempts,
-            "interval_seconds": profile.interval_seconds,
-            "last_alarm_payload": last_alarm_payload,
-        },
+        "Reconnecting to the panel (%s profile: up to %s spaced attempts, then keep trying).",
+        profile.name,
+        profile.attempts,
     )
 
     attempt = 0
@@ -115,7 +111,7 @@ async def reconnect_after_disconnect(
         try:
             await panel.close()
         except Exception:
-            logger.exception("panel_reconnect_close_failed")
+            logger.exception("Could not close the panel connection before a reconnect attempt.")
 
         await sleeper(profile.interval_seconds)
 
@@ -139,14 +135,18 @@ async def reconnect_after_disconnect(
             await panel.set_event_messages()
             await publish_panel_link_state(mqtt, topic_prefix=topic_prefix, live=True)
             logger.info(
-                "panel_reconnect_ok",
-                extra={"profile": profile.name, "attempt": attempt, "alarm": alarm_payload},
+                "Panel reconnect succeeded on attempt %s (%s profile); alarm state is %s.",
+                attempt,
+                profile.name,
+                alarm_payload,
             )
             return alarm_payload
         except Exception:
             logger.exception(
-                "panel_reconnect_attempt_failed",
-                extra={"profile": profile.name, "attempt": attempt},
+                "Reconnect attempt %s (%s profile) failed — will keep trying. "
+                "If this continues, stop other ComIP clients and check panel power/network.",
+                attempt,
+                profile.name,
             )
             # Named budget is informational; keep retrying indefinitely (ADR-004).
             continue

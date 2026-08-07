@@ -79,8 +79,10 @@ async def handle_alarm_command(
         await panel.set_area_arm(mode_byte)
     except ProtocolError as exc:
         logger.warning(
-            "alarm_command_arm_rejected",
-            extra={"mode": ha_mode, "byte": mode_byte, "reason": str(exc)},
+            "Panel rejected arm request for mode %s: %s. "
+            "Home Assistant will be refreshed with the current alarm state.",
+            ha_mode,
+            exc,
         )
         live_state = get_current_alarm_state() if get_current_alarm_state is not None else None
         if mqtt is not None and topic_prefix is not None and live_state is not None:

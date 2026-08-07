@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 from tests.fake_panel import FakePanel, FakeZone
 
+from texecom_alarm.logging_setup import TRACE_LEVEL, configure_logging
 from texecom_alarm.protocol.client import PanelClient
 from texecom_alarm.zones import Zone, enumerate_zones
 
@@ -64,3 +67,35 @@ async def test_enumerate_zones_queries_panel_reported_count(panel: FakePanel) ->
 
     assert panel.zone_detail_queries == [1, 2, 3, 4]
     await client.close()
+
+
+@pytest.mark.asyncio
+async def test_enumerate_zones_debug_logging_avoids_logrecord_name_collision(
+    panel: FakePanel,
+) -> None:
+    """DEBUG/TRACE must not pass reserved LogRecord keys via logger extra=."""
+    root = logging.getLogger()
+    before_level = root.level
+    before_handlers = list(root.handlers)
+    try:
+        configure_logging("DEBUG")
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+        zones, _ = await enumerate_zones(client)
+        assert len(zones) == 2
+        await client.close()
+
+        configure_logging("TRACE")
+        assert logging.getLogger().isEnabledFor(TRACE_LEVEL)
+    finally:
+        root.handlers.clear()
+        for handler in before_handlers:
+            root.addHandler(handler)
+        root.setLevel(before_level)

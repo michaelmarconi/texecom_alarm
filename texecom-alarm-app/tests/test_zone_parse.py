@@ -14,9 +14,9 @@ def test_parse_zone_count_from_bytes() -> None:
 
 
 def test_parse_zone_count_rejects_short_and_bad() -> None:
-    with pytest.raises(ProtocolError, match="cannot parse"):
+    with pytest.raises(ProtocolError, match="cannot parse|Cannot read zone count"):
         parse_zone_count("Elite")
-    with pytest.raises(ProtocolError, match="cannot parse"):
+    with pytest.raises(ProtocolError, match="cannot parse|Cannot read zone count"):
         parse_zone_count("Elite xyz ENG")
     with pytest.raises(ProtocolError, match="non-positive"):
         parse_zone_count("Elite 0 ENG")
@@ -33,7 +33,7 @@ def test_parse_zone_details_length_variants() -> None:
     z41 = parse_zone_details(bytes([4]) + bytes(8) + name, zone_number=3)
     assert z41.zone_type == 4 and z41.name == "FRONT DOOR"
 
-    with pytest.raises(ProtocolError, match="unexpected response length"):
+    with pytest.raises(ProtocolError, match="unexpected response length|unexpected zone-details"):
         parse_zone_details(b"\x01\x02", zone_number=1)
 
 

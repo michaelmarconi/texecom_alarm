@@ -71,7 +71,7 @@ async def test_login_nak_raises(panel: FakePanel) -> None:
         response_timeout=0.5,
     )
     await client.connect()
-    with pytest.raises(ProtocolError, match="LOGIN failed"):
+    with pytest.raises(ProtocolError, match="LOGIN|UDL|password"):
         await client.login()
     await client.close()
 
@@ -79,7 +79,7 @@ async def test_login_nak_raises(panel: FakePanel) -> None:
 @pytest.mark.asyncio
 async def test_send_command_requires_connection() -> None:
     client = PanelClient("127.0.0.1", 1, udl_password="1234")
-    with pytest.raises(ProtocolError, match="not connected"):
+    with pytest.raises(ProtocolError, match="Not connected|not connected"):
         await client.send_command(CMD_GETDATETIME)
 
 
@@ -172,7 +172,7 @@ async def test_get_zone_state_nak_when_length_mismatches() -> None:
     try:
         client = await _logged_in_client(panel)
         panel.zone_state_override = bytes([0x15])  # NAK-shaped, wrong length for count=2
-        with pytest.raises(ProtocolError, match="GetZoneState NAK"):
+        with pytest.raises(ProtocolError, match="GetZoneState NAK|rejected reading zone"):
             await client.get_zone_state(1, 2)
         await client.close()
     finally:
@@ -212,7 +212,7 @@ async def test_get_zone_state_length_mismatch_raises() -> None:
     try:
         client = await _logged_in_client(panel)
         panel.zone_state_override = b"\x00\x00"  # wrong length for count=1
-        with pytest.raises(ProtocolError, match="GetZoneState"):
+        with pytest.raises(ProtocolError, match="GetZoneState|zone-state"):
             await client.get_zone_state(1, 1)
         await client.close()
     finally:
@@ -335,7 +335,7 @@ async def test_unexpected_command_frame_then_response(panel: FakePanel) -> None:
 async def test_wrong_response_cmd_raises(panel: FakePanel) -> None:
     client = await _logged_in_client(panel)
     panel.wrong_cmd_before_response = True
-    with pytest.raises(ProtocolError, match="response cmd"):
+    with pytest.raises(ProtocolError, match="response cmd|did not match"):
         await client.keepalive()
     await client.close()
 
@@ -374,7 +374,7 @@ async def test_forced_disconnect_plusplusplus(panel: FakePanel) -> None:
 async def test_forced_disconnect_peer_close(panel: FakePanel) -> None:
     client = await _logged_in_client(panel)
     panel.close_on_next_command = True
-    with pytest.raises(ForcedDisconnect, match="closed by peer"):
+    with pytest.raises(ForcedDisconnect, match="closed by peer|closed the network"):
         await client.keepalive()
     await client.close()
 

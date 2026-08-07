@@ -7,9 +7,9 @@
 declare APP_EXIT_CODE=${1}
 
 if [[ "${APP_EXIT_CODE}" -ne 0 ]] && [[ "${APP_EXIT_CODE}" -ne 256 ]]; then
-  bashio::log.warning "Halt app with exit code ${APP_EXIT_CODE}"
+  bashio::log.error "Texecom Alarm stopped unexpectedly (exit code ${APP_EXIT_CODE}). Scroll up for the Python error — Supervisor will show this add-on as error until it is started again."
   echo "${APP_EXIT_CODE}" > /run/s6-linux-init-container-results/exitcode
   exec /run/s6/basedir/bin/halt
 fi
 
-bashio::log.info "Service restart after closing"
+bashio::log.info "Texecom Alarm service closed cleanly; s6 may restart it."

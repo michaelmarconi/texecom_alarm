@@ -32,15 +32,20 @@ def parse_zone_count(identification: bytes | str) -> int:
     )
     parts = text.split()
     if len(parts) < 2:
-        raise ProtocolError(f"GETPANELIDENTIFICATION: cannot parse zone count from {text!r}")
+        raise ProtocolError(
+            f"Cannot read zone count from the panel identification string {text!r}. "
+            "The panel reply did not look like a Premier Elite identification."
+        )
     try:
         count = int(parts[1])
     except ValueError as exc:
         raise ProtocolError(
-            f"GETPANELIDENTIFICATION: cannot parse zone count from {text!r}"
+            f"Cannot read zone count from the panel identification string {text!r}."
         ) from exc
     if count <= 0:
-        raise ProtocolError(f"GETPANELIDENTIFICATION: non-positive zone count {count}")
+        raise ProtocolError(
+            f"Panel reported a non-positive zone count ({count}) — cannot enumerate zones."
+        )
     return count
 
 
@@ -54,7 +59,10 @@ def parse_zone_details(payload: bytes, *, zone_number: int) -> Zone:
     elif n == 41:
         zone_type, text = payload[0], payload[9:]
     else:
-        raise ProtocolError(f"GETZONEDETAILS: unexpected response length {n}")
+        raise ProtocolError(
+            f"Panel returned an unexpected zone-details reply for zone {zone_number} "
+            f"(length {n} bytes)."
+        )
     name = text.replace(b"\x00", b" ").decode("ascii", errors="replace").strip()
     return Zone(number=zone_number, zone_type=zone_type, name=name)
 
@@ -96,7 +104,11 @@ async def enumerate_zones(client: PanelClient) -> tuple[list[Zone], int]:
         in_use.append(zone)
         logger.debug(
             "zone_in_use",
-            extra={"zone": number, "zone_type": zone.zone_type, "name": zone.name},
+            extra={
+                "zone": number,
+                "zone_type": zone.zone_type,
+                "zone_name": zone.name,
+            },
         )
 
     logger.debug("zone_enumerate_done", extra={"in_use": len(in_use)})
