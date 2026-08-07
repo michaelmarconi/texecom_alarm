@@ -1,6 +1,6 @@
 # Acceptance
 
-**Date:** 2026-08-05
+**Date:** 2026-08-07
 **State:** Draft 📝
 <!-- State is exactly one of: Draft 📝 | Accepted ✅ | Deferred ⏸️ -->
 
@@ -12,11 +12,11 @@ A Home Assistant Add-on that replaces unreliable `the prior MQTT bridge` for a T
 
 | # | Scenario | Result | Notes |
 |---|----------|--------|-------|
-| 1 | Fix-forward discovery / inventory | ✅ pass | After HA DB+registry wipe: 42 MQTT entities on device, prefixed IDs, Title Case, Panel Link ON |
-| 2 | Zone open/clear (live) | ⚠️ partial | Earlier PIR pass (~2–6s); door/window/other/shock still not walked |
-| 3 | Arm Home from HA (live) | ⚠️ partial | Succeeded once (`armed_home`); later attempts NAK’d (zones clear); ACK timeout on success path |
-| 4 | Disarm from HA (live) | ❌ fail | `SETAREADISARM NAK` ×2; UI did nothing |
-| 5 | External / Texecom App state sync | ❌ fail | App/keypad-path changes left MQTT stale while Panel Link stayed ON |
+| 1 | Fix-forward discovery / inventory | ✅ pass | Reconfirmed 2026-08-07 on MQTT device Texecom Alarm (Premier Elite); Supervisor “Home Assistant App” metrics device is separate |
+| 2 | Zone open/clear (live) | ✅ pass | Recorder-confirmed 2026-08-07 ~17:08 BST: door, interior window, kitchen slide clear, multiple PIRs within ~1–5s; Panel Link ON; shock not walked |
+| 3 | Arm Home from HA (live) | ⚠️ partial | Succeeded once (`armed_home`); later attempts NAK’d (zones clear); ACK timeout on success path — parked this re-walk |
+| 4 | Disarm from HA (live) | ❌ fail | `SETAREADISARM NAK` ×2; UI did nothing — parked this re-walk |
+| 5 | External / Texecom App state sync | ❌ fail | App/keypad-path changes left MQTT stale while Panel Link stayed ON — parked this re-walk |
 | 6 | Texecom iOS App coexistence (spot check) | ⚠️ partial | Idle+command cycle: add-on survived; app Home→Disarm not reflected in MQTT; brief app spinners |
 | 7 | HA aggregates / wrapper / HomeKit path | 🚫 blocked | Local HA only; household config not walked |
 | 8 | Away / Night ×3, disarm matrix, trigger+outage, cutover | 🚫 blocked | Not walked |
@@ -27,21 +27,21 @@ A Home Assistant Add-on that replaces unreliable `the prior MQTT bridge` for a T
 
 - **What we're proving:** TASK-10–12 discovery (prefixed IDs, device block, Title Case, Panel Link, alarm naming) shows correctly in HA after a clean rediscovery.
 - **Examples:** Given a wiped entity/device registry + DB; When the add-on republishes discovery; Then zones/alarm/panel-link sit under MQTT device Texecom Alarm with `texecom_alarm_*` entity IDs.
-- **You:** Confirmed device nesting, Front Door naming, Panel Link connected; noted more-info arm order Home→Away→Night (HA frontend-fixed).
-- **I check:** Registry 42/42 on device with unique_ids; broker discovery matched; unique-id UI banner contradicted by registry (false alarm).
+- **You:** Confirmed device nesting, Front Door naming, Panel Link connected; noted more-info arm order Home→Away→Night (HA frontend-fixed). On 2026-08-07 re-walk: confirmed inventory under MQTT / Premier Elite device (not the Supervisor add-on metrics device).
+- **I check:** Registry 42/42 on device with unique_ids; broker discovery matched; unique-id UI banner contradicted by registry (false alarm). Re-walk: discovery retained for Front Door / Kitchen L Slide / Ethans Rm L Wind (`zone/1`, `20`, `13`).
 - **How we know:** Pass if HA matches broker/registry after clean rediscovery.
-- **Result:** pass — required wiping HA DB **and** entity/device registries (DB alone left orphaned short IDs). IDE restart needed full Supervisor bounce. More-info arm button order cannot be set via MQTT `supported_features` list order.
+- **Result:** pass — required wiping HA DB **and** entity/device registries (DB alone left orphaned short IDs). IDE restart needed full Supervisor bounce. More-info arm button order cannot be set via MQTT `supported_features` list order. Two HA devices both named “Texecom Alarm” confused the walk until clarified (MQTT product device vs Supervisor process metrics).
 
 ## Scenario: Zone open/clear (live)
 
-**Status:** Partial ⚠️
+**Status:** Pass ✅
 
 - **What we're proving:** Physical trigger/clear updates HA promptly (~2s) for representative sensor classes.
 - **Examples:** Given a PIR (and ideally door/window/other); When opened/activated then cleared; Then the matching entity flips within ~2 seconds.
-- **You:** Earlier evening: brief PIR walk; shock skipped; door/window/other not fully exercised. Not re-walked after rediscovery.
-- **I check:** Earlier MQTT watch captured PIR on→off within ~2–6s.
-- **How we know:** Pass per class exercised; partial if only some classes done.
-- **Result:** partial — PIR only (prior walk). Other classes still open.
+- **You:** Earlier mid-walk interiors looked dead (during Mosquitto/LWT churn). Later Activity looked correct; declined a re-walk — asked for independent recorder/log review.
+- **I check:** HA `home-assistant_v2.db` recorder (BST = UTC+1). **Front Door** On→Off 16:40:39→44 and 17:08:42→43 (Δ≈1–4s). **Ethans Rm L Wind** On→Off 17:08:24→26 (Δ≈2.3s) — clears the prior interior Fail. **Kitchen L Slide** ON from startup snapshot (open at connect) → live Off 17:08:56 when closed. **PIRs** (Gf Hallway, Kitchen, Michael Stdy, Playroom, Ff Hallway) multiple On→Off cycles ~2–6s. **Panel Link** stayed ON after connect. Shock sensors never went On (not exercised). Earlier Fail coincided with `texecom/status=offline` after Mosquitto bounce — not an interior-zone product gap.
+- **How we know:** Pass per class exercised; partial if only some classes done; fail for a class if physical open never reaches HA while Panel Link is ON.
+- **Result:** pass — door, interior window, interior contact clear, and PIR classes evidenced in recorder without a second house walk; shock still unwalked (optional class).
 
 ## Scenario: Arm Home from HA (live)
 
@@ -117,20 +117,24 @@ A Home Assistant Add-on that replaces unreliable `the prior MQTT bridge` for a T
 - ❌ HA Disarm NAK’d; App disarm left HA stale until add-on restart + area snapshot.
 - 🔬 App coexistence spot check: we kept ComIP through app Home→Disarm; MQTT did not track app arm; “Remote Access Started” spam likely our standing ComIP/UDL session (log type 53 class).
 - ⚠️ Home arm later NAK’d with no open zones; piping from panel noted — check if pip stops when add-on is stopped.
-- 🌙 Stopped further live testing for fatigue; product gaps listed under Still open.
+- 🚪 2026-08-07 zone re-walk: inventory Pass; early interior Fail was infra (LWT offline). Later Activity + recorder review: door / Ethans window / Kitchen slide clear / PIRs Pass — no second house walk.
+- 🧭 Clarified two “Texecom Alarm” devices (MQTT product vs Supervisor metrics); practitioner wants Supervisor add-on renamed “Texecom Alarm App”.
+- 🌙 Product gaps listed under Still open; Draft kept for triage / resume. Arm/disarm still parked.
 
 ## Still open
 
+- [x] **Interior contact live updates** — closed 2026-08-07 via HA recorder: Ethans Rm L Wind On→Off ~2.3s; Kitchen L Slide live clear; prior Fail attributed to Mosquitto bounce / retained offline LWT, not missing ZONE pushes.
 - [ ] **Intermittent Home arm NAK** — succeeded once, later rejected with zones clear; ACK timeout observed on the success path; piping may correlate.
-- [ ] **HA Disarm → SETAREADISARM NAK** — cannot disarm from HA tonight.
+- [ ] **HA Disarm → SETAREADISARM NAK** — cannot disarm from HA.
 - [ ] **External/app arm-disarm not reflected in MQTT** while Panel Link ON (stale-while-live).
 - [ ] **NAK / failed-command UI** — more-info can stay on Home while state is Disarmed (TASK-14 republish incomplete for this UX).
 - [ ] **Texecom iOS App coexistence** — need durable design so app + add-on both work (survive and sync); Local vs cloud paths; not “app holds ComIP” as the only model.
 - [ ] **Remote Access Started log spam** — likely our always-on ComIP LOGIN / type-53 session markers; confirm and decide if acceptable.
 - [ ] **Panel piping noise** — check whether it stops when this add-on is not running.
 - [ ] **DEBUG logging for zone/area activity** — not seeing expected DEBUG lines for entering/leaving areas, doors opening/closing, etc.; sort out log level / event logging later.
+- [ ] **Rename Supervisor add-on** to “Texecom Alarm App” (`config.yaml` `name`) so it is not confused with the MQTT device also called Texecom Alarm.
 - [ ] **More-info arm order** Home→Away→Night — HA frontend-fixed; use Lovelace `states:` if household cares (limitation).
-- [ ] **Unwalked acceptance paths** — door/window/other/shock zones; Away/Night ×3; full disarm matrix; keypad-disarm-after-arm MQTT proof; live siren + forced disconnect + snapshot; household wrapper/aggregates; production cutover with `the prior MQTT bridge` removed.
+- [ ] **Unwalked acceptance paths** — shock/other unused zone classes; Away/Night ×3; full disarm matrix; keypad-disarm-after-arm MQTT proof; live siren + forced disconnect + snapshot; household wrapper/aggregates; production cutover with `the prior MQTT bridge` removed.
 - [ ] **Published release / CHANGELOG / `/ship` cadence** — see [addon-versioning.md](addon-versioning.md); real version bump deferred to `/ship` or an explicit decision.
 - [x] **Part-Arm Configuration radio labels** — TASK-17 (limitation accepted for accept checklist).
 - [x] **Panel-link connectivity discovery** — verified after rebuild + clean rediscovery (was stale image / orphaned registry on first walk).

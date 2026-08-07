@@ -1,7 +1,7 @@
 # Spec: continuous-operation
 
 **Date:** 2026-08-07  
-**State:** Draft 📝
+**State:** Accepted ✅
 
 ---
 
@@ -31,8 +31,7 @@ because the panel link is recovering.
   remain dead waiting for a manual restart.
 - While the panel link is recovering, zone and alarm entities stay available
   (app process is up); the separate panel-link / freshness signal reports
-  degraded, consistent with existing zone-monitoring and alarm-control specs
-  (ADR-004).
+  degraded, consistent with existing zone-monitoring and alarm-control specs.
 - When the panel becomes reachable again, monitoring resumes (state re-synced,
   panel-link live) without an operator restarting the add-on.
 - Supervisor **Watchdog** remains a last-resort safety net for true process
@@ -81,8 +80,8 @@ Given a true process crash (unhandled bug), When Watchdog is enabled, Then
 Supervisor may restart the app — but transient panel failures must not depend on
 that path (they must not exit the process).
 
-- **How we'll know:** unit/integration test that startup panel failures do not
-  exit the process; Watchdog behaviour itself is smoke / manual only
+- **How we'll know:** unit test that startup panel failures do not exit the
+  process; Watchdog behaviour itself is smoke / manual only
 
 ---
 
@@ -111,11 +110,21 @@ that path (they must not exit the process).
 ## Constraints
 
 - Zone and alarm entity **availability** must remain governed solely by whether
-  the app process is running (MQTT Last-Will), never by panel-link health
-  (ADR-004; already required by `spec-zone-monitoring` / `spec-alarm-control`).
+  the app process is running (broker Last-Will / process-offline signal), never by
+  panel-link health — already required by `spec-zone-monitoring` /
+  `spec-alarm-control`.
 - Panel-link / freshness remains a **separate** signal from entity availability.
-- Single ComIP TCP session (ADR-001) still applies — retry cannot assume a second
-  simultaneous client.
-- Reconnect patience after real triggers vs ordinary disconnects remains the
-  asymmetric policy already decided (ADR-002) for post-start recovery; startup
-  recovery must be at least as persistent (keep trying; do not give up and exit).
+- The panel accepts only one monitoring client connection at a time — retry cannot
+  assume a second simultaneous session.
+- Reconnect patience after real alarm triggers vs ordinary disconnects remains
+  asymmetric for post-start recovery (longer/more patient after a trigger);
+  startup recovery must be at least as persistent (keep trying; do not give up and
+  exit).
+
+## Review
+
+| # | Date | Verdict | Issues |
+|---|------|---------|--------|
+| 1 | 2026-08-07 | Issues found | 2 |
+| 2 | 2026-08-07 | Clear | — |
+

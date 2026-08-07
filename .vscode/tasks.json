@@ -4,7 +4,10 @@
     {
       "label": "Start Home Assistant",
       "type": "shell",
-      "command": "supervisor_run",
+      "command": "./scripts/ha-cold-start.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
       "group": {
         "kind": "test",
         "isDefault": true
@@ -12,6 +15,19 @@
       "presentation": {
         "reveal": "always",
         "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Reset HA entities (MQTT + registries)",
+      "type": "shell",
+      "command": "./scripts/ha-entity-reset.sh --yes",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
       },
       "problemMatcher": []
     }
