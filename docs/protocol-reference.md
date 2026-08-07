@@ -13,6 +13,7 @@ Behaviour may differ on other panel models/firmware.
 - [SPIKE-002](spikes/spike-002-arm-home-triggered-framing/SPIKE.md) — arm_home / triggered-event framing and the collision crash
 - [SPIKE-005](spikes/spike-005-arm-disarm-command-framing/SPIKE.md) — send-side arm/disarm command framing
 - Live panel probes 2026-08-04 — `GETAREADETAILS`, multi-class ZONE event mission (door / window contact / shock / sliding door / garage), idle-session behaviour
+- Live panel observations 2026-08-07–08 — Part-Arm Night vs Home disarm follow-up (AREA delivery, mid-command frame resync, OUTPUT/LOG accompaniment) against the production Connect client
 - `davidMbrooke/texecom-connect` (`texecomConnect.py`, MIT/Apache-2.0) — prior-art source inspection, cited where it informed a finding
 - Community report: `the prior MQTT bridge` HA thread, user Ben.S, 2020 — cited where it corroborates a finding
 
@@ -78,7 +79,7 @@ confirmed (SPIKE-005)** — see the notes below the table.
 | 1 | `LOGIN` | UDL password | Panel ACK/NAK. This panel's password is the factory default `1234`, not blank (SPIKE-001). |
 | 3 | `GETZONEDETAILS` | zone number (1 byte) | Returns zone type + area bitmap + name/text. 34/35/41-byte response depending on firmware. |
 | 6 | `SETAREAARM` *(provisional name)* | `[mode] 01` — mode byte `00`=Away (×2), `01`=Night (×3), `02`=Home (×1) | **Confirmed shared "set arm mode" command, all three modes (SPIKE-005).** Same command byte for all three, differing only in the body's first byte. Home's mode byte (`02`) was determined by testing the natural next value in the sequence directly against the live panel — not blind guesswork: the command structure itself was already proven safe (used identically for Away/Night), only the untested mode-byte value was in question, and the result was independently corroborated three ways before being treated as confirmed: a clean ACK, an event sequence (`in exit` → `part armed` → settled at AREA state `7`) matching SPIKE-002's own independent prior observation of a keypad-driven Home arm, and direct visual confirmation via the household's Texecom Connect app ("part-armed to Home"). Disarmed immediately after with the same `cmd=8, body=01` used for the other modes. |
-| 8 | `SETAREADISARM` *(provisional name)* | `01` — identical across all observations (Away and Night alike) | **Confirmed live (SPIKE-005), reproduced multiple times, mode-independent.** Sent by `the prior MQTT bridge` immediately before an `AREA event: state=disarmed`. The exact same command is used to disarm a fully-armed panel, to cancel an in-progress Away arm, and to cancel an in-progress Night arm (all confirmed) — one disarm command handles every case. ACK'd (`0x06`) every time. |
+| 8 | `SETAREADISARM` *(provisional name)* | `01` — identical across all observations (Away, Night, and Home) | **Confirmed live (SPIKE-005), reproduced multiple times, mode-independent.** Same command disarms a fully-armed panel, cancels in-progress exit, and disarms Part-Arm Night or Home. ACK'd (`0x06`) every time. **AREA `disarmed` after ACK is not uniform by prior mode** — see AREA section (Night/Away observed; Home unsettled on the event path as of 2026-08-07–08). |
 | 13 | `GETLCDDISPLAY` | — | Not yet exercised against this panel. |
 | 15 | `GETLOGPOINTER` | — | Not yet exercised against this panel. |
 | 22 | `GETPANELIDENTIFICATION` | — | Returns a 32-byte string: panel type, zone count, unknown field, firmware version. This panel: `'Elite 88     ENG->SW V6.02.02LS1'` → 88 zones. |
@@ -162,17 +163,40 @@ Untested: whether a hypothetical Part Arm 3 slot would settle at `8`, and whethe
 fixed or configuration-dependent (see the scoping note above — Part Arm slot assignment itself is
 known to be configuration-dependent, so this numbering should not be assumed universal either).
 
-**Disarm producing a distinct AREA event is now strongly, though not universally, confirmed.**
-SPIKE-002 found "no distinct AREA event" for disarm (only the generic USER event + LOG type 31 pair).
-SPIKE-005 has since observed a distinct `AREA event: state=disarmed` (`raw=020100`) at the moment of
-disarm in every one of its captures — both completed Away/Night arm cycles, and both
-cancelled-during-exit cases — all issued over the network via `the prior MQTT bridge` (command byte `8`). Both
-sets of findings are live and empirical — recorded here per this document's own policy, not resolved
-in favour of either yet. The likely explanation remains that SPIKE-002's no-event disarm was via
-keypad, and the panel only emits this AREA event for network/app-originated disarms — now backed by
-several consistent network-issued observations, but still not cross-checked against a fresh keypad
-disarm on this same panel/firmware to be certain. Flagged as an open question, not a contradiction to
-pick a winner on yet.
+**Disarm and AREA `disarmed` — mode-dependent on this panel.**
+
+`SETAREADISARM` (`cmd=8`, body `01`) is mode-independent: the same bytes disarm from Away,
+Night, or Home and cancel an in-progress exit. The panel ACK (`0x06`) confirms command
+acceptance; it does **not** carry the resulting arm state. Clients that publish HA alarm
+state from AREA pushes (or from `GetAreaFlags`) must still observe a subsequent state source.
+
+| Prior mode | AREA `disarmed` (`raw=020100` / equivalent) after network `SETAREADISARM` | Notes |
+|---|---|---|
+| Away (full arm) | Observed (SPIKE-005, `the prior MQTT bridge` captures) | |
+| Night (Part-Arm 1, mode byte `01`) | Observed (SPIKE-005; reproduced 2026-08-08 on the production client) | Intact AREA handled on the event path; MQTT alarm state advances to `disarmed`. |
+| Home (Part-Arm 2, mode byte `02`) | **Not observed** on the application event path across multiple reproduced 2026-08-07–08 cycles | Command still ACK'd. Settled Home remains visible until a later `GetAreaFlags` snapshot (e.g. after reconnect). |
+| Keypad-originated disarm | Often no distinct AREA (SPIKE-002) | USER/LOG accompaniment only in those captures. |
+
+**Home (Part-Arm 2) disarm framing disruption (2026-08-07–08, reproduced):** while awaiting the
+`SETAREADISARM` response after a settled Home arm, the TCP stream repeatedly presents **nine
+non-frame bytes** that a CRC/start-byte resync must discard before the next valid Connect frame.
+Captured discarded payloads share the lead-in `03 08 25 01` and trailing timestamp bytes with the
+intact `LOG` type=`3` / group=`8` burst that follows the ACK — i.e. **Connect LOG-body-shaped
+debris**, not Hayes/AT modem text (`ATH0` / `ATZ`). Across those same Home cycles, no AREA
+`disarmed` event reached the application message handler. Equivalent Night→disarm cycles on the
+same client and panel **did not** exhibit that nine-byte discard and **did** deliver AREA
+`disarmed` (plus LOG type=`42` group=`5`, matching the SPIKE-005 disarm signature).
+
+**Interpretation (open):** the send-side command for Home disarm is not wrong. Either (a) this
+panel/firmware omits or corrupts the AREA `disarmed` push specifically after Part-Arm 2 / Home, or
+(b) a Home-specific post-disarm collision destroys that frame before a correct decode. The
+correlation with the nine-byte LOG-shaped discard favours (b) or a panel-side multiplex fault
+concentrated on the Home path; it is **not** yet proven which. Historical note: `the prior MQTT bridge`
+never implemented Home arm, so its reliable AREA-on-disarm captures (Away/Night) do not contradict
+a Home-only defect.
+
+**OUTPUT events** (`0x03`) accompany both arm-settle and disarm for Night and Home alike
+(output/relay bookkeeping). They are not a substitute for AREA arm-state.
 
 ### LOG event types
 
@@ -197,19 +221,21 @@ Confirmed against this panel (via live capture) unless marked "prior art only":
 | 113 | "Remote Command" (inferred) | Inferred, not documented. Originally seen only with the phone app (SPIKE-002); SPIKE-005 has now also observed it (group=`9`) immediately after both a `the prior MQTT bridge`-issued Arm Night and a directly-tested Arm Home — so it is not app-specific after all. See the arm-mode signature note below. |
 | 207 | unknown | Observed live (SPIKE-005): group=`6`, immediately after type `113`/group `9` and before the `part armed` AREA event, on every `the prior MQTT bridge`-issued Arm Night. Not seen for Arm Away or Arm Home. Meaning not decoded. |
 | 208 | unknown | Observed live (SPIKE-005): group=`6`, in the same position as `207` but following the directly-tested Arm Home instead of Arm Night. Sequential with `207` — see the arm-mode signature note below. |
-| 42 | unknown, likely a mode/action-specific marker rather than a client-specific one | Observed live (SPIKE-005): group=`5` immediately after **every** `the prior MQTT bridge`-issued Disarm (Away or Night alike — mode-independent), group=`6` immediately after a `the prior MQTT bridge`-issued Arm **Away** specifically (not seen for Arm Night/Home, which produce 113/207/208 instead — see below). Not seen in SPIKE-002. |
+| 42 | unknown, likely a mode/action-specific marker rather than a client-specific one | Observed live (SPIKE-005): group=`5` immediately after **every** `the prior MQTT bridge`-issued Disarm (Away or Night alike — mode-independent), group=`6` immediately after a `the prior MQTT bridge`-issued Arm **Away** specifically (not seen for Arm Night/Home, which produce 113/207/208 instead — see below). Reproduced 2026-08-08 on Night→disarm via the production client (group=`5`). **Not** observed in the Home→disarm cycles of 2026-08-07–08 where AREA `disarmed` was also absent. Not seen in SPIKE-002. |
 
-**Arm-mode LOG signatures (SPIKE-005, provisional):** the LOG type/group pair immediately following an
-arm command appears to encode *which arm mode* fired, not just *which client* issued it — revising the
-earlier "42 is `the prior MQTT bridge`-specific, 53/113 is app-specific" hypothesis:
-- Disarm (any prior mode): type `42` group `5` — mode-independent.
+**Arm-mode LOG signatures (provisional):** the LOG type/group pair immediately following an
+arm or disarm command appears to encode *which arm mode* fired (or that a disarm occurred), not
+only *which client* issued it — revising an earlier client-specific hypothesis:
+- Disarm after Away or Night: type `42` group `5` — observed with AREA `disarmed` (SPIKE-005;
+  2026-08-08 Night).
+- Disarm after Home: type `42` group `5` **not** observed in 2026-08-07–08 cycles; LOG type=`3`
+  group=`8` bookkeeping still appears after the ACK.
 - Arm Away: type `42` group `6`.
 - Arm Night: type `113` group `9`, then type `207` group `6`.
-- Arm Home: type `113` group `9`, then type `208` group `6` — one sequential step up from Night's `207`,
-  matching the pattern already seen in the mode byte itself (`01`=Night, `02`=Home).
+- Arm Home: type `113` group `9`, then type `208` group `6` — one sequential step up from Night's
+  `207`, matching the mode byte sequence (`01`=Night, `02`=Home).
 
-This is based on a small number of observations from one client (`the prior MQTT bridge`) and should be treated
-as a working hypothesis, not a confirmed encoding.
+Treat as a working hypothesis pending wider reproduction (including Away on the production client).
 
 Each LOG event also carries a **group** byte whose meaning is not yet decoded (values 0, 3, 4, 5, 6, 7,
 8, 9, 16, 17, 18 observed so far) — open question.
@@ -241,6 +267,11 @@ Each LOG event also carries a **group** byte whose meaning is not yet decoded (v
   regardless of whether they are actively issuing arm/disarm commands.
 - **Protocol-format collisions around arm/disarm/trigger events** — see the dedicated section above;
   this is the dominant real-world crash cause, not send timing.
+- **Part-Arm Home (slot 2) disarm vs Night (slot 1)** — same `SETAREADISARM` bytes and ACK; Night
+  reliably yields AREA `disarmed` on the event path; settled Home disarm repeatedly does not, and
+  coincides with a nine-byte Connect LOG-shaped non-frame discard while awaiting the disarm
+  response (see AREA section). Clients must not assume AREA-on-disarm is uniform across Part-Arm
+  modes on this firmware.
 - **Forced disconnect on a real trigger**, with a recovery window measured in tens of seconds to at
   least a minute — see ADR-002.
 
@@ -256,6 +287,10 @@ Each LOG event also carries a **group** byte whose meaning is not yet decoded (v
 - Whether any *other* unexercised command (beyond `GETAREADETAILS`, now ruled out) can auto-detect
   Part-Arm slot roles remains open — today the Home/Night-to-slot mapping must be per-installation
   configuration.
+- After network disarm from settled **Home** (Part-Arm 2): does the panel omit AREA `disarmed`, or
+  is the frame destroyed by ComIP/multiplex collision (nine-byte LOG-shaped discard)? Raw
+  whole-stream capture during Home→disarm (before application resync) would distinguish panel
+  omission from client-side loss. Away→disarm on the production client is not yet re-verified.
 
 ## How to add to this document
 
