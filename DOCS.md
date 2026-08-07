@@ -115,6 +115,22 @@ Tunable — based on a single observed trigger recovery window.
 Seconds between trigger-budget reconnect attempts. Default: `5` (about 90s for
 the default attempt count).
 
+### Option: `log_level`
+
+How much detail the Add-on writes to its logs. Supervisor `list(...)` tokens are
+the Configuration radio labels: `WARNING`, `INFO`, `DEBUG`, or `TRACE`. Default:
+`INFO`.
+
+| Level | Typical use |
+|-------|-------------|
+| `WARNING` | Quiet production — warnings and errors only |
+| `INFO` | Day-to-day (default) — start, enumerate, reconnect, connectivity |
+| `DEBUG` | App-meaningful zone/area/command handling |
+| `TRACE` | Full panel session traffic (below DEBUG severity) |
+
+Choosing a level includes that level and all more severe messages. Changing this
+option follows the Add-on's existing options-apply rules (restart when required).
+
 ## What it publishes (MQTT discovery)
 
 Once implemented, the Add-on will create entities that behave like any other
