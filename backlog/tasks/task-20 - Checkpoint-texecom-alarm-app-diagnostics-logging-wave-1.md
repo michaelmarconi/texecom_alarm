@@ -23,6 +23,13 @@ ordinal: 15000
 - [ ] #3 DEBUG/TRACE/modem-skip integration coverage from TASK-19 is green
 <!-- AC:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 spec-diagnostics-logging AC1–AC6 satisfied by TASK-18/19
