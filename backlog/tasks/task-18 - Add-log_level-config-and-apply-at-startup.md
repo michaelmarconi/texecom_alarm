@@ -1,10 +1,10 @@
 ---
 id: TASK-18
 title: Add log_level config and apply at startup
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-07 17:22'
-updated_date: '2026-08-07 17:33'
+updated_date: '2026-08-07 17:34'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -35,9 +35,9 @@ Open calls accepted at plan time: panel-link-liveness deferred; AC7 manual on ch
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 config.yaml schema list tokens for log_level are exactly WARNING, INFO, DEBUG, TRACE
-- [ ] #2 Unset/default configuration starts the app at INFO
-- [ ] #3 Selecting DEBUG or TRACE at startup results in that effective logging level
+- [x] #1 config.yaml schema list tokens for log_level are exactly WARNING, INFO, DEBUG, TRACE
+- [x] #2 Unset/default configuration starts the app at INFO
+- [x] #3 Selecting DEBUG or TRACE at startup results in that effective logging level
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -56,5 +56,5 @@ Verification: unit tests (schema tokens, default INFO, INFO/DEBUG/TRACE filterin
 Notes/assumptions: Supervisor UI name set to "Log level" (spec left label open); DOCS.md + translations updated for DoD config docs
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
