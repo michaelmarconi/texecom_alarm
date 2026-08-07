@@ -4,7 +4,7 @@ title: Instrument DEBUG handling and TRACE panel traffic
 status: awaiting-review
 assignee: []
 created_date: '2026-08-07 17:22'
-updated_date: '2026-08-07 17:41'
+updated_date: '2026-08-07 17:43'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -58,5 +58,5 @@ Verification: FakePanel + captured log handler (AC4–AC6); pytest -q --cov=texe
 Notes/assumptions: Existing DEBUG zone/MQTT and arm/disarm outcome lines already satisfied AC4; only protocol/client.py needed TRACE tx/rx and moving resync off DEBUG. Replaced per-byte panel_frame_resync DEBUG spam with one TRACE line panel_resync skipped N bytes.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
