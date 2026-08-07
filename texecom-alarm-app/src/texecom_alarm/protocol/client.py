@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from texecom_alarm.logging_setup import TRACE_LEVEL
 from texecom_alarm.protocol.frame import (
     ACK,
     AREA_FLAGS_COUNT,
@@ -239,9 +240,15 @@ class PanelClient:
             while True:
                 self._writer.write(frame)
                 await self._writer.drain()
-                logger.debug(
-                    "panel_command_sent",
-                    extra={"cmd": cmd, "seq": seq, "attempt": attempt},
+                logger.log(
+                    TRACE_LEVEL,
+                    "panel_tx",
+                    extra={
+                        "cmd": cmd,
+                        "seq": seq,
+                        "attempt": attempt,
+                        "bytes": len(frame),
+                    },
                 )
                 try:
                     return await self._await_response(cmd, seq)
@@ -305,17 +312,25 @@ class PanelClient:
                     raise ForcedDisconnect("panel sent +++")
                 del self._buf[:consumed]
                 if frame is None:
+                    # Modem/non-frame piping: accumulate silently at WARNING–DEBUG;
+                    # emit one compact TRACE notice when a valid frame follows.
                     skipped += consumed
-                    logger.debug(
-                        "panel_frame_resync",
-                        extra={"skipped_total": skipped},
-                    )
                     continue
                 if skipped:
-                    logger.debug(
-                        "panel_frame_resync_complete",
-                        extra={"bytes_skipped": skipped},
+                    logger.log(
+                        TRACE_LEVEL,
+                        "panel_resync skipped %s bytes",
+                        skipped,
                     )
+                logger.log(
+                    TRACE_LEVEL,
+                    "panel_rx",
+                    extra={
+                        "msg_type": frame.msg_type,
+                        "seq": frame.sequence,
+                        "bytes": len(frame.body),
+                    },
+                )
                 return frame
 
             # Need more bytes.
