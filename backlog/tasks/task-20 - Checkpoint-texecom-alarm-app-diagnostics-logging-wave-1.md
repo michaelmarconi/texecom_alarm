@@ -27,7 +27,7 @@ ordinal: 15000
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
