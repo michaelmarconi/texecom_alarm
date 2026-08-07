@@ -1,7 +1,7 @@
 ---
 id: TASK-19
 title: Instrument DEBUG handling and TRACE panel traffic
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-07 17:22'
 updated_date: '2026-08-07 17:43'
@@ -37,9 +37,9 @@ Open calls accepted at plan time: live TRACE hunt (AC7) is checkpoint manual DoD
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 At DEBUG, a FakePanel zone change or arm/disarm produces handling/outcome log lines without requiring raw frame dumps
-- [ ] #2 At TRACE, FakePanel unsolicited or command traffic produces panel tx/rx (or equivalent session) log lines
-- [ ] #3 Non-frame/modem-style skips do not dump raw piping at INFO/DEBUG; TRACE shows at most a compact skip notice
+- [x] #1 At DEBUG, a FakePanel zone change or arm/disarm produces handling/outcome log lines without requiring raw frame dumps
+- [x] #2 At TRACE, FakePanel unsolicited or command traffic produces panel tx/rx (or equivalent session) log lines
+- [x] #3 Non-frame/modem-style skips do not dump raw piping at INFO/DEBUG; TRACE shows at most a compact skip notice
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -58,5 +58,5 @@ Verification: FakePanel + captured log handler (AC4–AC6); pytest -q --cov=texe
 Notes/assumptions: Existing DEBUG zone/MQTT and arm/disarm outcome lines already satisfied AC4; only protocol/client.py needed TRACE tx/rx and moving resync off DEBUG. Replaced per-byte panel_frame_resync DEBUG spam with one TRACE line panel_resync skipped N bytes.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
