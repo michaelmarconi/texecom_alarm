@@ -1,9 +1,10 @@
 ---
 id: TASK-20
 title: 'Checkpoint: texecom-alarm-app diagnostics-logging wave 1'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-07 17:22'
+updated_date: '2026-08-07 17:44'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
