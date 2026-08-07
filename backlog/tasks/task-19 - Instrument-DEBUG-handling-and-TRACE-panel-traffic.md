@@ -1,9 +1,10 @@
 ---
 id: TASK-19
 title: Instrument DEBUG handling and TRACE panel traffic
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-07 17:22'
+updated_date: '2026-08-07 17:34'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
