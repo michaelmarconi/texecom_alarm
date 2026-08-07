@@ -1,10 +1,10 @@
 ---
 id: TASK-20
 title: 'Checkpoint: texecom-alarm-app diagnostics-logging wave 1'
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-07 17:22'
-updated_date: '2026-08-07 17:44'
+updated_date: '2026-08-07 17:45'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
@@ -26,8 +26,12 @@ ordinal: 15000
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-## Build phase
-phase: executing
+## Verification result
+verdict: pass
+- texecom-alarm-app tests pass: pass — pytest exit 0; 190 passed; coverage 93.75% (≥90)
+- log_level schema tokens + default INFO: pass — config.yaml list(WARNING|INFO|DEBUG|TRACE) default INFO; test_logging_level.py asserts schema tokens, default INFO, and all four levels
+- DEBUG/TRACE/modem-skip integration coverage: pass — test_diagnostics_logging.py covers DEBUG zone/arm handling, TRACE panel_tx/rx, and modem-skip silence below TRACE / compact TRACE notice; included in green suite
+Notes: DoD OK — AC1–AC6 via TASK-18/19; AC7 manual; docs/plan.md scope map notes diagnostics-logging wave (TASK-18/19/20).
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
