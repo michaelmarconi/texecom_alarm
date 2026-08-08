@@ -16,9 +16,8 @@ over MQTT discovery — with reliable reconnect behaviour and Home arm mode supp
 3. Start the Add-on and confirm it reaches `started` in the logs.
 
 **Important — single panel TCP session:** the ComIP / Connect network module
-accepts only **one** client connection. Stop any other bridge (for example
-`the prior MQTT bridge`) before starting this Add-on, or login and zone enumeration will
-fail.
+accepts only **one** client connection. Stop any other app using that panel
+connection before starting this add-on, or login and zone discovery will fail.
 
 ## Configuration
 
@@ -155,7 +154,8 @@ Assistant configuration — not inside this Add-on.
 ## Support
 
 - Project docs: [README](README.md), [architecture](docs/architecture.md),
-  [protocol reference](docs/protocol-reference.md)
+  [protocol reference](docs/protocol-reference.md),
+  [legal stance](docs/legal-stance.md)
 - Issues: use the GitHub repository linked from `config.yaml` `url`
 
 ## Changelog & Releases
@@ -168,4 +168,5 @@ Add-on icon: [Home security icons created by juicy_fish - Flaticon](https://www.
 
 ## License
 
-See the repository licence (to be added before public Store distribution).
+Code is licensed under the [MIT License](LICENSE). The add-on icon remains under
+Flaticon terms (see Credits).

@@ -1,5 +1,14 @@
 # Texecom Connect Protocol Reference
 
+> **Observational — not an official Texecom specification.**  
+> This document records what was **seen on the wire** and in panel responses while probing a
+> household Premier Elite installation for Home Assistant interoperability. It was **not**
+> derived from Texecom’s confidential protocol manuals, NDA packs, or other official materials,
+> and it is **not** endorsed by Texecom.  
+> Facts taken from public prior art (open-source clients, community reports) are cited and marked
+> when not yet independently confirmed on this panel.  
+> Full project position: [Legal stance — protocol interoperability](legal-stance.md).
+
 **Status:** Living document — updated whenever a spike, experiment, or implementation work discovers
 something new about the wire protocol. Do not treat this as complete or final; treat gaps as gaps,
 not as "not applicable."
@@ -14,8 +23,8 @@ Behaviour may differ on other panel models/firmware.
 - [SPIKE-005](spikes/spike-005-arm-disarm-command-framing/SPIKE.md) — send-side arm/disarm command framing
 - Live panel probes 2026-08-04 — `GETAREADETAILS`, multi-class ZONE event mission (door / window contact / shock / sliding door / garage), idle-session behaviour
 - Live panel observations 2026-08-07–08 — Part-Arm Night vs Home disarm follow-up (AREA delivery, mid-command frame resync, OUTPUT/LOG accompaniment) against the production Connect client
-- `davidMbrooke/texecom-connect` (`texecomConnect.py`, MIT/Apache-2.0) — prior-art source inspection, cited where it informed a finding
-- Community report: `the prior MQTT bridge` HA thread, user Ben.S, 2020 — cited where it corroborates a finding
+- `davidMbrooke/texecom-connect` (`texecomConnect.py`, MIT/Apache-2.0) — public prior-art source inspection, cited where it informed a finding (not Texecom confidential docs)
+- Community report: HA forum thread on panel/MQTT bridging, user Ben.S, 2020 — cited where it corroborates a finding
 
 ## Framing
 
