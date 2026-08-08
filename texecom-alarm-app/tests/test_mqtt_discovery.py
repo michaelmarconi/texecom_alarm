@@ -94,7 +94,7 @@ def test_alarm_supported_features_order_home_night_away() -> None:
     payload = alarm_discovery_payload(topic_prefix="texecom", settings=settings)
     assert payload["supported_features"] == ["arm_home", "arm_night", "arm_away"]
 
-    remapped = _settings(part_arm_1="home", part_arm_2="away", part_arm_3="night")
+    remapped = _settings(part_arm_1="home", part_arm_2="unused", part_arm_3="night")
     remapped_payload = alarm_discovery_payload(topic_prefix="texecom", settings=remapped)
     assert remapped_payload["supported_features"] == ["arm_home", "arm_night", "arm_away"]
 

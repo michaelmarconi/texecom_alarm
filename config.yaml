@@ -35,10 +35,11 @@ schema:
   mqtt_password: password?
   mqtt_topic_prefix: str
   # list(...) tokens are the Configuration radio labels (no separate label/value).
-  # Python canonicalises these (and legacy lowercase) to home|night|away|unused.
-  part_arm_1: list(Home 🏠|Night 🌙|Away 🔒|Unused)
-  part_arm_2: list(Home 🏠|Night 🌙|Away 🔒|Unused)
-  part_arm_3: list(Home 🏠|Night 🌙|Away 🔒|Unused)
+  # Python canonicalises these (and legacy lowercase) to home|night|unused.
+  # Away is excluded (ADR-008): Away always uses full-arm mode byte 0.
+  part_arm_1: list(Home 🏠|Night 🌙|Unused)
+  part_arm_2: list(Home 🏠|Night 🌙|Unused)
+  part_arm_3: list(Home 🏠|Night 🌙|Unused)
   reconnect_normal_attempts: int(1,10000)
   reconnect_normal_interval_seconds: float(0,)
   reconnect_trigger_attempts: int(1,10000)
