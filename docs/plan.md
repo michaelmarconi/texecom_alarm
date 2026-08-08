@@ -1,6 +1,6 @@
 # Plan
 
-**State:** Draft 📝
+**State:** Approved ✅
 
 ---
 
@@ -14,4 +14,6 @@
 
 ## Review
 
-<!-- Populated by /review. Do not edit manually. -->
+| # | Date | Verdict | Issues |
+|---|------|---------|--------|
+| 1 | 2026-08-08 | Clear | — |
