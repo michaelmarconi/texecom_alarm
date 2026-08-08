@@ -162,6 +162,10 @@ Assistant configuration — not inside this Add-on.
 
 See [CHANGELOG.md](CHANGELOG.md). Versions follow Semantic Versioning.
 
+## Credits
+
+Add-on icon: [Home security icons created by juicy_fish - Flaticon](https://www.flaticon.com/free-icons/home-security).
+
 ## License
 
 See the repository licence (to be added before public Store distribution).
