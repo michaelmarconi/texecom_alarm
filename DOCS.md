@@ -1,177 +1,115 @@
 # Texecom Alarm
 
-Bridge a Texecom Premier Elite panel (ComIP / Texecom Connect) to Home Assistant
-over MQTT discovery — with reliable reconnect behaviour and Home arm mode support.
+Connect a Texecom Premier Elite alarm panel to Home Assistant over MQTT.
 
-> **Status:** under active development. The Add-on shell and configuration surface
-> are wired; panel protocol and MQTT entity publishing land via the implementation
-> plan.
+Arm and disarm from Home Assistant (including **Home** and **Night**), see which
+zones are open or closed, and tell whether the link to the panel is healthy.
+
+## Before you start
+
+- A Texecom Premier Elite panel with a network module (ComIP / Texecom Connect)
+- An MQTT broker Home Assistant can use (for example the Mosquitto add-on)
+- Only **one** app may talk to the panel at a time — stop anything else that is
+  already connected to the panel before you start this add-on
 
 ## Installation
 
-1. Add this repository as a Local Add-on (Supervisor Local Apps / apps
-   development) or, once published, install from the Add-on Store repository URL.
-2. Install **Texecom Alarm**, then open **Configuration** and set the options
-   below.
-3. Start the Add-on and confirm it reaches `started` in the logs.
-
-**Important — single panel TCP session:** the ComIP / Connect network module
-accepts only **one** client connection. Stop any other app using that panel
-connection before starting this add-on, or login and zone discovery will fail.
+1. Install **Texecom Alarm**.
+2. Open **Configuration** and fill in the options below.
+3. Start the add-on and check the log for a successful panel login.
 
 ## Configuration
 
-All options below are Supervisor `config.yaml` / `options.json` keys. Required
-fields must be non-empty before the bridge can start.
+### Panel
 
-### Option: `panel_host`
+| Option | What it is |
+|--------|------------|
+| **Panel host** | IP address or hostname of the panel’s network module on your LAN. **Required.** |
+| **Panel port** | Network port for the panel connection. Default: `10001`. |
+| **Panel UDL password** | Password used to log in to the panel (same idea as Wintex / Connect). Default is often `1234` — ask your installer if login fails. |
 
-Hostname or IP address of the panel's ComIP / Texecom Connect module on the LAN.
-**Required.**
+### MQTT
 
-### Option: `panel_port`
+| Option | What it is |
+|--------|------------|
+| **MQTT host** | Your MQTT broker (for example `core-mosquitto`). **Required.** |
+| **MQTT port** | Broker port. Default: `1883`. |
+| **MQTT username / password** | Optional. Leave blank if your broker does not need a login. |
+| **MQTT topic prefix** | Root name for topics this add-on publishes. Default: `texecom`. |
 
-TCP port for the ComIP / Connect session. Default: `10001`.
+### Part-Arm slots (Home and Night)
 
-### Option: `udl_password`
+Your engineer may have set up **Part-Arm** modes on the panel (for example “at
+home” or “night”). These three options tell the add-on which Part-Arm slot
+matches which Home Assistant button:
 
-**Panel UDL password** — the panel login used by Wintex / Connect clients
-(UDL = User Data Link). Default is usually `1234`, but check with your engineer if
-login fails. Default in the Add-on schema: `1234`. Treated as a secret in the
-Supervisor UI.
+| Option | Choose |
+|--------|--------|
+| **Part-Arm slot 1** | **Home 🏠**, **Night 🌙**, or **Unused** |
+| **Part-Arm slot 2** | Same choices |
+| **Part-Arm slot 3** | Same choices |
 
-### Option: `mqtt_host`
+Defaults are all **Unused**. Set them to match how your panel was programmed —
+every installation is different.
 
-MQTT broker hostname or IP. Standing runtime dependency for discovery and state
-publishing. **Required.**
+**Away** is always full arm on the panel. You do not map Away to a Part-Arm slot.
 
-### Option: `mqtt_port`
+Do not assign the same Home Assistant mode (Home or Night) to more than one slot.
 
-MQTT broker port. Default: `1883`.
+### Reconnect behaviour
 
-### Option: `mqtt_username`
+If the panel connection drops, the add-on retries automatically. After a normal
+disconnect it retries more quickly; after a real alarm trigger it waits longer
+and tries more times (panels often block the network briefly while sirens run).
 
-Optional MQTT username. Leave empty when the broker allows anonymous clients.
+You can leave the defaults unless you have a reason to change them.
 
-### Option: `mqtt_password`
+| Option | Default | Meaning |
+|--------|---------|---------|
+| Reconnect attempts (normal) | `4` | How many quick retries after an ordinary drop |
+| Reconnect interval (normal) | `2.5` seconds | Wait between those retries |
+| Reconnect attempts (after trigger) | `18` | Longer retry budget after an alarm |
+| Reconnect interval (after trigger) | `5` seconds | Wait between those retries |
 
-Optional MQTT password. Leave empty when unused. Treated as a secret in the
-Supervisor UI.
+### Logging
 
-### Option: `mqtt_topic_prefix`
+| Level | When to use it |
+|-------|----------------|
+| **WARNING** | Quiet — warnings and errors only |
+| **INFO** | Everyday use (default) |
+| **DEBUG** | More detail when something looks wrong |
+| **TRACE** | Full panel traffic — for diagnosing tricky connection issues |
 
-Root prefix for discovery and state topics this Add-on publishes. Default:
-`texecom`.
+## What appears in Home Assistant
 
-### Option: `part_arm_1` / `part_arm_2` / `part_arm_3`
+- An **alarm control panel** (Away, Night, Home, and Disarm)
+- A **sensor for each zone** the panel reports as in use
+- **Alarm Panel Connected** — shows whether the link to the panel is healthy
+- A short **last-trigger** summary of what happened just before an alarm
 
-Which HA arm button (**Home** / **Night**) each engineer-configured **Part-Arm
-slot** should use — or **Unused** if the slot isn't configured on your panel.
-**Away is not a Part-Arm option** — Away always uses the panel's full-arm mode
-(mode byte `0`).
+Zone names come from the panel when the add-on starts — you do not maintain a
+zone list by hand.
 
-Supervisor `list(...)` tokens are the Configuration radio labels (there is no
-separate label/value). Schema options are therefore the display tokens
-`Home 🏠`, `Night 🌙`, or `Unused` (defaults `Unused`). Python still
-canonicalises those selections — and any legacy lowercase `home` / `night` /
-`unused` values — to `home|night|unused` for shared arm-command mapping
-(`cmd=6`). A persisted legacy `away` / `Away 🔒` value on a slot is coerced to
-`unused` at load with a warning (Away remains available as full arm).
+If the panel link drops, alarm and zone entities stay available with their last
+known state. Use **Alarm Panel Connected** to tell live data from a stale link.
 
-Defaults (map each slot for your installation — do not assume a household layout):
+## Automations stay in Home Assistant
 
-| Option | Default |
-|--------|---------|
-| `part_arm_1` | `Unused` |
-| `part_arm_2` | `Unused` |
-| `part_arm_3` | `Unused` |
-
-Under the hood the Add-on still issues the confirmed shared arm command (`cmd=6`)
-with mode byte equal to the Part-Arm slot number for Home/Night (slot 1 → byte
-`1`, slot 2 → byte `2`, slot 3 → byte `3`). Away always uses the confirmed
-full-arm mode byte `0`. Unused slots are not offered as HA arm targets.
-Part-Arm roles cannot be auto-detected from `GETAREADETAILS` — set these fields
-to match your panel's engineer layout. Do not assign the same HA mode to more
-than one slot.
-
-### Option: `reconnect_normal_attempts`
-
-How many reconnect tries are treated as the "normal" budget after an ordinary
-panel disconnect (for example around arm/disarm). Integer ≥ `1`. Default: `4`.
-Tunable — not a final hardcoded value (ADR-002). After this many attempts the
-Add-on keeps retrying at the same interval rather than exiting.
-
-### Option: `reconnect_normal_interval_seconds`
-
-Seconds to wait between normal-budget reconnect attempts. Default: `2.5`
-(about 10s for the default attempt count). May be a fraction.
-
-### Option: `reconnect_trigger_attempts`
-
-Reconnect try count for the longer budget used when the last decoded alarm
-state was `triggered` before the disconnect. Integer ≥ `1`. Default: `18`.
-Tunable — based on a single observed trigger recovery window.
-
-### Option: `reconnect_trigger_interval_seconds`
-
-Seconds between trigger-budget reconnect attempts. Default: `5` (about 90s for
-the default attempt count).
-
-### Option: `log_level`
-
-How much detail the Add-on writes to its logs. Supervisor `list(...)` tokens are
-the Configuration radio labels: `WARNING`, `INFO`, `DEBUG`, or `TRACE`. Default:
-`INFO`.
-
-| Level | Typical use |
-|-------|-------------|
-| `WARNING` | Quiet production — warnings and errors only |
-| `INFO` | Day-to-day (default) — start, enumerate, reconnect, connectivity |
-| `DEBUG` | App-meaningful zone/area/command handling |
-| `TRACE` | Full panel session traffic (below DEBUG severity) |
-
-Choosing a level includes that level and all more severe messages. Changing this
-option follows the Add-on's existing options-apply rules (restart when required).
-
-## What it publishes (MQTT discovery)
-
-Once implemented, the Add-on will create entities that behave like any other
-MQTT-discovered device:
-
-- One `alarm_control_panel` (Away / Night / Home / disarm)
-- One `binary_sensor` per **used** zone reported by the panel (unused slots are
-  omitted)
-- A dedicated connectivity `binary_sensor` named **Alarm Panel Connected**
-  (separate from entity availability; MQTT `unique_id` /
-  `binary_sensor.texecom_alarm_panel_link` stays stable — rebuild/rediscovery
-  may be needed for an existing install to pick up the new friendly name)
-- A short **last-trigger snapshot** of recent activity before a trigger
-
-Entity availability follows the Add-on process (MQTT Last-Will). A dropped panel
-link must **not** mark the alarm or zone entities unavailable — use **Alarm
-Panel Connected** to tell live data from stale data.
-
-## Household automations stay in Home Assistant
-
-Arming rules, notifications, and HomeKit exposure belong in your own Home
-Assistant configuration — not inside this Add-on.
+Notifications, HomeKit, and household arming rules belong in your own Home
+Assistant setup — not inside this add-on.
 
 ## Support
 
-- Project docs: [README](README.md), [architecture](docs/architecture.md),
-  [protocol reference](docs/protocol-reference.md),
-  [legal stance](docs/legal-stance.md)
-- Issues: use the GitHub repository linked from `config.yaml` `url`
-
-## Changelog & Releases
-
-See [CHANGELOG.md](CHANGELOG.md). Versions follow Semantic Versioning.
+- Overview: [README](README.md)
+- Issues: use the GitHub repository linked from the add-on store listing
 
 ## Credits
 
 Add-on icon: [Home security icons created by juicy_fish - Flaticon](https://www.flaticon.com/free-icons/home-security).
 
 ## License
+
+Copyright © 2026 Michael Marconi.
 
 Code is licensed under the [MIT License](LICENSE). The add-on icon remains under
 Flaticon terms (see Credits).
