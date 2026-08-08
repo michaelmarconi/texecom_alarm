@@ -1,9 +1,10 @@
 ---
 id: TASK-22
 title: Rename Panel Link to Alarm Panel Connected
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-08 09:52'
+updated_date: '2026-08-08 10:05'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
