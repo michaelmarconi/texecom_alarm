@@ -1,10 +1,10 @@
 ---
 id: TASK-21
 title: Remove Away from Part-Arm options; keep Away as full arm
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-08 09:52'
-updated_date: '2026-08-08 10:04'
+updated_date: '2026-08-08 10:05'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -36,9 +36,9 @@ Corrective for TASK-1 / TASK-7 / TASK-11 / TASK-15 / TASK-17.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 part_arm_1/2/3 schema and Supervisor helpers offer Home, Night, and Unused only — Away is absent
-- [ ] #2 ARM_AWAY always uses full-arm mode byte 0; assigning Away on a Part-Arm slot is impossible after load (legacy Away coerces to Unused with a warning)
-- [ ] #3 Home and Night still map to configured Part-Arm slots; unit tests cover remapping and reject Away as a Part-Arm label
+- [x] #1 part_arm_1/2/3 schema and Supervisor helpers offer Home, Night, and Unused only — Away is absent
+- [x] #2 ARM_AWAY always uses full-arm mode byte 0; assigning Away on a Part-Arm slot is impossible after load (legacy Away coerces to Unused with a warning)
+- [x] #3 Home and Night still map to configured Part-Arm slots; unit tests cover remapping and reject Away as a Part-Arm label
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -67,5 +67,5 @@ Verification: how we'll know = unit tests for schema/Settings parse + arm mode-b
 Notes/assumptions: none (live Configuration radio check remains accept/smoke after rebuild, not CI)
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
