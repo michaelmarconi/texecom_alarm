@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -18,7 +19,7 @@ DEFAULT_UDL_PASSWORD = "1234"  # noqa: S105 — panel factory default, overridab
 DEFAULT_PART_ARM_1 = "unused"
 DEFAULT_PART_ARM_2 = "unused"
 DEFAULT_PART_ARM_3 = "unused"
-# Confirmed SPIKE-005 full-arm Away mode byte when Away is not on a Part-Arm slot.
+# Confirmed SPIKE-005 full-arm Away mode byte (ADR-008: Away is never a Part-Arm slot).
 FULL_ARM_AWAY_MODE_BYTE = 0
 # Tunable reconnect budgets (ADR-002) — not final hardcodes; SPIKE-002 one data point.
 DEFAULT_RECONNECT_NORMAL_ATTEMPTS = 4
@@ -27,10 +28,12 @@ DEFAULT_RECONNECT_TRIGGER_ATTEMPTS = 18
 DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS = 5.0
 DEFAULT_LOG_LEVEL = "INFO"
 
-PartArmLabel = Literal["home", "night", "away", "unused"]
+PartArmLabel = Literal["home", "night", "unused"]
 LogLevel = Literal["WARNING", "INFO", "DEBUG", "TRACE"]
-_PART_ARM_LABELS = frozenset({"home", "night", "away", "unused"})
+_PART_ARM_LABELS = frozenset({"home", "night", "unused"})
 _LOG_LEVELS = frozenset({"WARNING", "INFO", "DEBUG", "TRACE"})
+
+logger = logging.getLogger(__name__)
 
 _ENV_KEYS = {
     "panel_host": "TEXECOM_PANEL_HOST",
@@ -83,21 +86,25 @@ class Settings:
     def mode_byte_for_ha_mode(self, ha_mode: str) -> int | None:
         """Return cmd=6 mode byte for an HA arm mode, or None if not available.
 
-        Part-Arm slot N uses confirmed mode byte N. When Away is not assigned to
-        any slot, full-arm Away uses mode byte 0 (SPIKE-005).
+        Away always uses full-arm mode byte 0 (ADR-008 / SPIKE-005). Home and
+        Night resolve only through configured Part-Arm slots (slot N → byte N).
         """
+        if ha_mode == "away":
+            return FULL_ARM_AWAY_MODE_BYTE
         for slot, label in enumerate(self.part_arm_labels(), start=1):
             if label == ha_mode:
                 return slot
-        if ha_mode == "away":
-            return FULL_ARM_AWAY_MODE_BYTE
         return None
 
     def ha_mode_for_part_arm_slot(self, slot: int) -> str | None:
-        """Return the HA mode label for Part-Arm slot 1/2/3, or None if unused."""
+        """Return the HA mode label for Part-Arm slot 1/2/3, or None if unused.
+
+        Away is never a Part-Arm label (ADR-008); legacy Away values are treated
+        as unused.
+        """
         labels = {1: self.part_arm_1, 2: self.part_arm_2, 3: self.part_arm_3}
         label = labels.get(slot)
-        if label is None or label == "unused":
+        if label is None or label == "unused" or label == "away":
             return None
         return label
 
@@ -105,15 +112,13 @@ class Settings:
         """MQTT discovery ``supported_features`` for in-use Part-Arm modes.
 
         Order is always Home → Night → Away (HA card best-effort). Unused slots
-        contribute no arm target. Away remains available via the full-arm mode
-        byte when not assigned to a Part-Arm slot.
+        contribute no arm target. Away is always offered via the full-arm mode
+        byte (ADR-008) — never via a Part-Arm slot assignment.
         """
-        available: set[str] = set()
+        available: set[str] = {"away"}
         for label in self.part_arm_labels():
-            if label != "unused":
+            if label in ("home", "night"):
                 available.add(label)
-        if "away" not in available:
-            available.add("away")
         return [f"arm_{mode}" for mode in ("home", "night", "away") if mode in available]
 
 
@@ -242,15 +247,23 @@ def _parse_part_arm_label(raw: Mapping[str, Any], key: str, default: PartArmLabe
     value = raw[key]
     if not isinstance(value, str):
         raise ConfigError(f"option {key} must be a string")
-    # Canonical schema values are lowercase (home|night|away|unused). Also accept
+    # Canonical schema values are lowercase (home|night|unused). Also accept
     # Title Case + emoji (e.g. "Home 🏠") if somehow present. First whitespace
-    # token after lower() is enough.
+    # token after lower() is enough. Legacy Away on a slot coerces to Unused
+    # (ADR-008) — Away is always full arm, never a Part-Arm assignment.
     stripped = value.strip()
     if not stripped:
         return default
     label = stripped.lower().split(None, 1)[0]
+    if label == "away":
+        logger.warning(
+            "Part-Arm option %s had legacy Away; coercing to Unused. "
+            "Away always uses full arm (mode byte 0) and cannot occupy a Part-Arm slot.",
+            key,
+        )
+        return "unused"
     if label not in _PART_ARM_LABELS:
-        raise ConfigError(f"option {key} must be one of home, night, away, unused (got {value!r})")
+        raise ConfigError(f"option {key} must be one of home, night, unused (got {value!r})")
     return label  # type: ignore[return-value]
 
 

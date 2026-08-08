@@ -44,14 +44,14 @@ async def handle_alarm_command(
     topic_prefix: str | None = None,
     get_current_alarm_state: Callable[[], str | None] | None = None,
 ) -> None:
-    """Translate ARM_*/DISARM MQTT payloads into shared panel commands (ADR-005).
+    """Translate ARM_*/DISARM MQTT payloads into shared panel commands (ADR-008).
 
     Does not publish optimistic armed_* on success — MQTT state comes from
     AREA/snapshot updates. On panel NAK for arm, republishes the live last-known
     alarm state (via get_current_alarm_state at NAK time) so HA does not leave a
     stuck mode selection and mid-flight retained updates are not overwritten.
     Unknown payloads and HA modes not available from the Part-Arm mapping are
-    ignored (logged, no panel send).
+    ignored (logged, no panel send). Away always uses full-arm mode byte 0.
     """
     text = payload.decode("utf-8") if isinstance(payload, bytes) else payload
     text = text.strip()

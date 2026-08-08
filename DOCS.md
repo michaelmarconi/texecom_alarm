@@ -65,15 +65,18 @@ Root prefix for discovery and state topics this Add-on publishes. Default:
 
 ### Option: `part_arm_1` / `part_arm_2` / `part_arm_3`
 
-Which HA arm button (Home / Night / Away) each engineer-configured **Part-Arm
-slot** should use — or Unused if the slot isn't configured on your panel.
+Which HA arm button (**Home** / **Night**) each engineer-configured **Part-Arm
+slot** should use — or **Unused** if the slot isn't configured on your panel.
+**Away is not a Part-Arm option** — Away always uses the panel's full-arm mode
+(mode byte `0`).
 
 Supervisor `list(...)` tokens are the Configuration radio labels (there is no
 separate label/value). Schema options are therefore the display tokens
-`Home 🏠`, `Night 🌙`, `Away 🔒`, or `Unused` (defaults `Unused`). Python still
+`Home 🏠`, `Night 🌙`, or `Unused` (defaults `Unused`). Python still
 canonicalises those selections — and any legacy lowercase `home` / `night` /
-`away` / `unused` values — to `home|night|away|unused` for shared arm-command
-mapping (`cmd=6`).
+`unused` values — to `home|night|unused` for shared arm-command mapping
+(`cmd=6`). A persisted legacy `away` / `Away 🔒` value on a slot is coerced to
+`unused` at load with a warning (Away remains available as full arm).
 
 Defaults (map each slot for your installation — do not assume a household layout):
 
@@ -84,12 +87,12 @@ Defaults (map each slot for your installation — do not assume a household layo
 | `part_arm_3` | `Unused` |
 
 Under the hood the Add-on still issues the confirmed shared arm command (`cmd=6`)
-with mode byte equal to the Part-Arm slot number (slot 1 → byte `1`, slot 2 →
-byte `2`, slot 3 → byte `3`). Away that is not assigned to any Part-Arm slot uses
-the confirmed full-arm mode byte `0`. Unused slots are not offered as HA arm
-targets. Part-Arm roles cannot be auto-detected from `GETAREADETAILS` — set these
-fields to match your panel's engineer layout. Do not assign the same HA mode to
-more than one slot.
+with mode byte equal to the Part-Arm slot number for Home/Night (slot 1 → byte
+`1`, slot 2 → byte `2`, slot 3 → byte `3`). Away always uses the confirmed
+full-arm mode byte `0`. Unused slots are not offered as HA arm targets.
+Part-Arm roles cannot be auto-detected from `GETAREADETAILS` — set these fields
+to match your panel's engineer layout. Do not assign the same HA mode to more
+than one slot.
 
 ### Option: `reconnect_normal_attempts`
 
