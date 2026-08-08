@@ -141,13 +141,15 @@ MQTT-discovered device:
 - One `alarm_control_panel` (Away / Night / Home / disarm)
 - One `binary_sensor` per **used** zone reported by the panel (unused slots are
   omitted)
-- A dedicated **panel-link connectivity** sensor (separate from entity
-  availability)
+- A dedicated connectivity `binary_sensor` named **Alarm Panel Connected**
+  (separate from entity availability; MQTT `unique_id` /
+  `binary_sensor.texecom_alarm_panel_link` stays stable — rebuild/rediscovery
+  may be needed for an existing install to pick up the new friendly name)
 - A short **last-trigger snapshot** of recent activity before a trigger
 
 Entity availability follows the Add-on process (MQTT Last-Will). A dropped panel
-link must **not** mark the alarm or zone entities unavailable — use the
-connectivity sensor to tell live data from stale data.
+link must **not** mark the alarm or zone entities unavailable — use **Alarm
+Panel Connected** to tell live data from stale data.
 
 ## Household automations stay in Home Assistant
 

@@ -119,6 +119,7 @@ def test_connectivity_discovery_payload_shape() -> None:
     assert payload["unique_id"] == CONNECTIVITY_OBJECT_ID
     assert payload["object_id"] == CONNECTIVITY_OBJECT_ID
     assert payload["default_entity_id"] == "binary_sensor.texecom_alarm_panel_link"
+    assert payload["name"] == "Alarm Panel Connected"
     assert payload["device"] == EXPECTED_DEVICE
     assert payload["state_topic"] == "texecom/panel_link/state"
     assert payload["device_class"] == "connectivity"
@@ -169,6 +170,7 @@ async def test_publish_connectivity_discovery_retained() -> None:
         msgs[0].payload if isinstance(msgs[0].payload, str) else msgs[0].payload.decode()
     )
     assert payload["unique_id"] == CONNECTIVITY_OBJECT_ID
+    assert payload["name"] == "Alarm Panel Connected"
     assert payload["device_class"] == "connectivity"
     assert payload["availability_topic"] == "texecom/status"
 
