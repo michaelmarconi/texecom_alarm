@@ -61,6 +61,10 @@ Install-time options (Supervisor `config.yaml` / `options.json`) will include
 panel host/port, UDL password, MQTT broker settings, and the Part-Arm
 slot-to-HA-mode mapping (ADR-005). See [DOCS.md](DOCS.md) as options land.
 
+## Credits
+
+Add-on icon: [Home security icons created by juicy_fish - Flaticon](https://www.flaticon.com/free-icons/home-security).
+
 ## License
 
 TODO: Add licence (required before public Add-on Store distribution).
