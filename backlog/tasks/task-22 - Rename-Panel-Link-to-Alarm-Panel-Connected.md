@@ -1,7 +1,7 @@
 ---
 id: TASK-22
 title: Rename Panel Link to Alarm Panel Connected
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-08 09:52'
 updated_date: '2026-08-08 10:07'
@@ -35,9 +35,9 @@ Coverage gap for panel-link-liveness AC4 / RISK-013.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Connectivity discovery payload friendly name is Alarm Panel Connected (not Panel Link)
-- [ ] #2 Unit/discovery tests assert the new name (and any updated unique_id/object_id scheme)
-- [ ] #3 DOCS.md describes the connectivity entity using Alarm Panel Connected
+- [x] #1 Connectivity discovery payload friendly name is Alarm Panel Connected (not Panel Link)
+- [x] #2 Unit/discovery tests assert the new name (and any updated unique_id/object_id scheme)
+- [x] #3 DOCS.md describes the connectivity entity using Alarm Panel Connected
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -65,5 +65,5 @@ Verification: how we'll know = unit/discovery assertions that payload name is Al
 Notes/assumptions: Kept unique_id/object_id/default_entity_id as texecom_alarm_panel_link (no migration) — no code evidence that HA requires an ID change; DOCS.md notes rebuild/rediscovery may be needed for live installs to refresh the label. Pre-existing ruff format drift in untouched app.py/client.py/test_reconnect.py left alone.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
