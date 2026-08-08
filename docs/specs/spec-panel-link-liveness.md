@@ -1,7 +1,7 @@
 # Spec: panel-link-liveness
 
 **Date:** 2026-08-07  
-**State:** Draft 📝
+**State:** Accepted ✅
 
 ---
 

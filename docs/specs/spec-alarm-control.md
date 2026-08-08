@@ -43,8 +43,7 @@ normal arm/disarm cycles or an actual alarm trigger.
 - A dedicated connectivity/freshness signal reporting whether the panel link is
   currently live or degraded, independent of the `alarm_control_panel`/zone
   entities' own state — those entities' availability is governed solely by whether
-  the app itself is running (via the broker's standard process-offline signal),
-  never by panel-link health.
+  the app itself is running, never by panel-link health.
 - Operation fully independent of `the prior MQTT bridge`, which will be uninstalled once this
   capability is delivered.
 
@@ -136,11 +135,14 @@ normal arm/disarm cycles or an actual alarm trigger.
 
 - No runtime dependency on `the prior MQTT bridge` — it will be uninstalled once this
   capability is delivered.
-- The mapping between HA's `arm_home`/`arm_night` labels and the panel's
-  physical Part-Arm slot number (which of up to three engineer-configured
-  slots each maps to) must be a documented, per-installation configuration
-  value — never hardcoded to this household's own panel layout. Different
-  Premier Elite installations can and do configure these slots differently.
+- Away (`arm_away`) always maps to the panel's full-arm command (mode byte `0`),
+  never to a Part-Arm slot. The mapping between HA's `arm_home` / `arm_night`
+  labels and the panel's physical Part-Arm slot numbers (up to three
+  engineer-configured slots) must be a documented, per-installation configuration
+  value — never hardcoded to this household's own panel layout. Each Part-Arm
+  config choice is Home, Night, or Unused only; Away must not appear as a
+  Part-Arm option. Different Premier Elite installations can and do configure
+  these slots differently.
 - The `house_alarm_panel` wrapper entity's guard-condition and notification logic is
   not reimplemented here — this spec only needs to keep the underlying entity's
   forwarding contract (state in, command out) intact.
@@ -164,6 +166,10 @@ normal arm/disarm cycles or an actual alarm trigger.
   see `docs/protocol-reference.md`. Auto-detection via this command is not
   available; the Home/Night-to-slot mapping remains a manual add-on config value
   unless a different unexercised command is later found to expose it.
+- ~~May Away be assigned to a Part-Arm slot in add-on config?~~
+  **Answered 2026-08-08:** No. Away is always full arm; Part-Arm radios are
+  Home / Night / Unused only. Assigning Away to a slot produced a live false
+  `disarmed` after Part-Arm settle (slot 3 → state 8 unmapped).
 
 ## Spike Candidates
 
@@ -192,3 +198,5 @@ normal arm/disarm cycles or an actual alarm trigger.
 | 2 | 2026-08-03 | Clear | — |
 | 3 | 2026-08-04 | Issues found | 1 |
 | 4 | 2026-08-04 | Clear | — |
+| 5 | 2026-08-08 | Issues found | 2 |
+| 6 | 2026-08-08 | Clear | — |
