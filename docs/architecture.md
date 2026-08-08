@@ -1,8 +1,8 @@
 # Architecture
 
-<!-- Synthesised by /architecture on 2026-08-04 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-002-use-frame-resync-and-asymmetric-reconnect-for-panel-protocol-collisions.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-005-use-confirmed-shared-arm-disarm-commands-with-configurable-part-arm-mapping.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-007-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md -->
+<!-- Synthesised by /architecture on 2026-08-08 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-002-use-frame-resync-and-asymmetric-reconnect-for-panel-protocol-collisions.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md -->
 
-**Date:** 2026-08-04
+**Date:** 2026-08-08
 **State:** Accepted ✅
 
 ## Overview
@@ -50,9 +50,10 @@ Building this commits the project to:
   than after an ordinary arm or disarm.
 - Publishing to Home Assistant purely via MQTT discovery, with all household-specific
   arming and notification logic staying entirely outside this app.
-- Issuing arm and disarm with the empirically confirmed shared command mechanism, and
-  sourcing which Part-Arm slot means Home/Night/Away from per-installation
-  configuration rather than hardcoding this household's engineer layout.
+- Issuing arm and disarm with the empirically confirmed shared command mechanism.
+  Away always uses the panel's full-arm mode; Home and Night map to Part-Arm slots
+  from per-installation configuration (Home / Night / Unused only — Away is never a
+  Part-Arm option), rather than hardcoding this household's engineer layout.
 
 **Diagram colours:** blue = this system (authored components and local storage); grey =
 external people and systems.
@@ -143,7 +144,8 @@ Home Assistant, taking over the role `the prior MQTT bridge` plays today.
 shape is ADR-003; the language itself was decided directly during the original
 architecture session (2026-08-03), building on the framing/CRC/resync/decode and
 arm/disarm command work validated live against the panel in SPIKE-001, SPIKE-002, and
-SPIKE-005 — it is not yet backed by its own ADR (see Open questions).
+SPIKE-005 (production command mapping is ADR-008; Python itself is not yet backed by
+its own ADR — see Open questions).
 **Exposes:** Home Assistant MQTT discovery topics and their paired state/command
 topics for: one `alarm_control_panel` entity; one `binary_sensor` entity per in-use
 zone; one dedicated connectivity/freshness `binary_sensor` reporting panel-link health
@@ -152,14 +154,15 @@ alarm entity (ADR-004). No HTTP API, no HA config-flow, no entity-registry prese
 beyond what HA's own MQTT integration creates from these discovery payloads (ADR-003).
 **Consumes:**
 - Texecom Connect protocol over TCP to the panel's ComIP module (ADR-001, ADR-002,
-  ADR-005, ADR-006, ADR-007).
+  ADR-006, ADR-008, ADR-009).
 - The household's MQTT broker, as a standing runtime dependency (ADR-003) — the same
   broker `the prior MQTT bridge` already uses today.
 - App configuration (panel host/port, UDL password, MQTT broker settings, and the
-  Part-Arm slot-to-HA-mode mapping) via the HA Supervisor's
+  Home/Night→Part-Arm slot mapping) via the HA Supervisor's
   `config.yaml`/`options.json`/`bashio::config` mechanism, already scaffolded in this
-  repo (ADR-005 requires the mapping to be install-time configuration; the exact option
-  shape is still open — see Open questions).
+  repo (ADR-008 requires Home/Night→slot to be install-time configuration with Away
+  excluded from Part-Arm options; the exact option shape is still open — see Open
+  questions).
 
 Key behaviours:
 
@@ -176,7 +179,7 @@ Key behaviours:
   unsolicited ZONE push events. Publishes MQTT state for in-use zones from that
   snapshot before treating entities as current. Not a substitute for push updates;
   FakePanel (or equivalent) must speak the same read for CI.
-- **Startup / reconnect area-flags snapshot** (ADR-007): after LOGIN (and again after
+- **Startup / reconnect area-flags snapshot** (ADR-009): after LOGIN (and again after
   a reconnect re-LOGIN), sends `GetAreaFlags` (cmd `11`) with body `[start][count]`
   (this Elite 88: `start=0`, `count=72`, `area_size=1` derived from zone count 88) and
   receives `count * area_size` flag bytes. Per-area bits decode with priority
@@ -184,14 +187,15 @@ Key behaviours:
   Armed or PartArmed (+ PartArm1/2/3 slot); else Disarmed — the same meaning used
   when interpreting live AREA events for settled states. Publishes MQTT alarm state
   for in-use areas from that snapshot before treating the alarm entity as current.
-  Part-Arm slot → HA Home/Night/Away remains install-time config (ADR-005), not
-  auto-detected from the snapshot. Not a substitute for push updates; FakePanel (or
-  equivalent) must speak the same read for CI. Exit/entry (`arming`/`pending`) may
-  still depend on live AREA pushes until corroborated in the flag block.
+  Part-Arm slot → HA Home/Night remains install-time config (ADR-008); Away is full
+  arm, not a Part-Arm label — not auto-detected from the snapshot. Not a substitute
+  for push updates; FakePanel (or equivalent) must speak the same read for CI.
+  Exit/entry (`arming`/`pending`) may still depend on live AREA pushes until
+  corroborated in the flag block.
 - **Event subscription and steady-state decode**: sends `SETEVENTMESSAGES` to
   subscribe to `ZONE`/`AREA`/`OUTPUT`/`USER`/`LOG` push messages, then decodes each
   unsolicited message into the corresponding zone/alarm state and publishes it as an
-  MQTT state update — no steady-state polling (the ADR-006 and ADR-007 snapshots are
+  MQTT state update — no steady-state polling (the ADR-006 and ADR-009 snapshots are
   startup / reconnect only).
 - **Idle keepalive and ordinary collision recovery**: sends a safe read-only command
   (e.g. `GETDATETIME`) periodically; on a 2–3s timeout, resends with the same sequence
@@ -218,14 +222,16 @@ Key behaviours:
 - **Cutover dependency** (ADR-001): because the panel's ComIP module accepts only one
   TCP client at a time, `the prior MQTT bridge` must be fully stopped — not merely idle —
   before this app's first connection attempt.
-- **Arm/disarm command handling** (ADR-005): accepts `arm_away` / `arm_night` /
+- **Arm/disarm command handling** (ADR-008): accepts `arm_away` / `arm_night` /
   `arm_home` / `disarm` on the `alarm_control_panel` MQTT command topic and issues the
-  confirmed shared Connect-protocol commands — `cmd=6` with a configurable mode byte
-  for arm (this household's defaults are `00`/`01`/`02` = Away/Night/Home, overridable
-  per install), and `cmd=8, body=01` for mode-independent disarm (including
-  cancel-during-exit). The mode-byte mapping is never hardcoded to this household's
-  Part-Arm layout; `GETAREADETAILS` cannot auto-detect Night/Home slot roles and must
-  not be treated as a source for that mapping.
+  confirmed shared Connect-protocol commands — `cmd=6` with a mode byte for arm, and
+  `cmd=8, body=01` for mode-independent disarm (including cancel-during-exit). Away
+  always uses the panel full-arm mode byte (`00` on the investigated household), never
+  a Part-Arm slot index. Home and Night mode bytes are the Part-Arm slot numbers from
+  install-time configuration (Home / Night / Unused only — Away must not appear as a
+  Part-Arm option). Home/Night→slot is never hardcoded to this household's layout;
+  `GETAREADETAILS` cannot auto-detect Night/Home slot roles and must not be treated as
+  a source for that mapping.
 
 ## Key flows
 
@@ -258,9 +264,10 @@ and never reach the discovery-publish step, so Home Assistant never sees a dead 
 for them. The `GetZoneState` snapshot (ADR-006) supplies correct initial open/closed
 values for in-use zones on every start (and after reconnect), so zone entities do not
 wait for the next physical change or rely on retained MQTT alone. The `GetAreaFlags`
-snapshot (ADR-007) supplies correct initial armed/disarmed/part-armed/in-alarm state
-for the alarm entity the same way — Part-Arm slot → HA Home/Night/Away still comes
-from install-time configuration (ADR-005), not from the snapshot itself.
+snapshot (ADR-009) supplies correct initial armed/disarmed/part-armed/in-alarm state
+for the alarm entity the same way — Part-Arm slot → HA Home/Night still comes from
+install-time configuration (ADR-008); Away is full arm, not a Part-Arm label from the
+snapshot itself.
 
 ### Steady-state zone and alarm reporting
 
@@ -282,7 +289,7 @@ flowchart LR
 ```
 
 There is no client-tunable steady-state poll cadence here — after the ADR-006 zone
-and ADR-007 area-flags startup / reconnect snapshots, ongoing state changes arrive as
+and ADR-009 area-flags startup / reconnect snapshots, ongoing state changes arrive as
 unsolicited pushes only once `SETEVENTMESSAGES` has been sent, and the panel's own
 reporting latency was observed to fall within the same wall-clock second as the
 physical action in SPIKE-002.
@@ -319,7 +326,7 @@ Most collisions never reach the "forced disconnect" branch at all — resync alo
 keeps the session alive through an ordinary arm/disarm's corrupted-byte burst, as
 SPIKE-002 demonstrated twice. Only a real trigger has been confirmed to force a full
 disconnect. After a forced disconnect recovers, Resume re-runs LOGIN, the ADR-006
-zone-state snapshot, the ADR-007 area-flags snapshot, and `SETEVENTMESSAGES` before
+zone-state snapshot, the ADR-009 area-flags snapshot, and `SETEVENTMESSAGES` before
 live reporting continues. The `alarm_control_panel` entity itself is unaffected by
 this whole flow — it keeps reporting `triggered` throughout; only the dedicated
 connectivity `binary_sensor` reflects the degraded/recovering link (ADR-004).
@@ -327,8 +334,9 @@ connectivity `binary_sensor` reflects the degraded/recovering link (ADR-004).
 ### Arm/disarm command
 
 Household arm/disarm arrives via the unchanged `house_alarm_panel` wrapper onto this
-app's MQTT command topic; the app maps the HA arm mode through install-time Part-Arm
-configuration and issues the confirmed Connect-protocol command (ADR-005).
+app's MQTT command topic; the app maps Away to full arm and Home/Night through
+install-time Part-Arm slot configuration, then issues the confirmed Connect-protocol
+command (ADR-008).
 
 ```mermaid
 flowchart LR
@@ -346,9 +354,20 @@ flowchart LR
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
 ```
 
-Away, Night, Home, and Disarm are all implementable from SPIKE-005 / ADR-005. The
-only install-specific input is which mode byte corresponds to which HA arm mode —
-documented add-on options, not code.
+Away, Night, Home, and Disarm are all implementable from SPIKE-005 / ADR-008. Away is
+always the full-arm mode byte; the only install-specific input is which Part-Arm slot
+is Home vs Night (Unused allowed) — documented add-on options, not code. Away must not
+appear on that Part-Arm option surface.
+
+## Outside systems & tests
+
+| Outside system | In CI | What CI may claim | Live-only |
+|---|---|---|---|
+| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), frame resync, reconnect paths; silent-session scenarios once SPIKE-008 lands | Real Away/Night/Home arm sequences, trigger-time forced disconnect recovery, quiet-house false-positive rate for silent-death detection |
+| MQTT broker | Hermetic / test broker (or FakePanel + recording MQTT client) | Discovery payloads, state/command publish/subscribe, connectivity sensor and last-trigger snapshot attributes | Household HA entity behaviour, wrapper/HomeKit/automations |
+
+CI never targets the live household panel or a production broker account. Product
+validation of live behaviour belongs at `/accept` (optional go-live smoke at `/ship`).
 
 ## Security, operations, scope, and open questions
 
@@ -417,14 +436,20 @@ module accepts only one TCP client at a time (ADR-001).
   can't be reached at startup (ADR-001's Option C) is an explicit open follow-on, not
   part of this architecture — there is currently no offline/static fallback at all.
 - **How exit/entry (arming/pending) appear in the area-flags snapshot** versus only
-  on live AREA pushes was not observed in SPIKE-007's Disarmed-only run (ADR-007
+  on live AREA pushes was not observed in SPIKE-007's Disarmed-only run (ADR-009
   follow-on). This architecture still uses live AREA pushes for those transients
   until corroborated. → optional follow-up probe; not a blocker for settled-state
   snapshot.
-- **Concrete shape of the Part-Arm mapping add-on options** (ADR-005 follow-on) —
+- **Concrete shape of the Part-Arm mapping add-on options** (ADR-008 follow-on) —
   e.g. three discrete fields versus a single ordered list — is not decided; only that
-  the mapping must be configurable is fixed. → design during `/plan` / build of the
-  app's config surface; do not treat any one shape as already mandated.
+  Home/Night→slot must be configurable and Away must be excluded from Part-Arm options
+  is fixed. → design during `/plan` / build of the app's config surface; do not treat
+  any one shape as already mandated.
+- **Silent panel-path death detection** (RISK-012 / SPIKE-008; `spec-panel-link-liveness`)
+  — how to detect a previously healthy session that has stopped delivering trustworthy
+  updates (idle probe, traffic absence, periodic corroboration, or a combination)
+  without false degraded flaps on quiet houses is not yet investigated. → run `/spike`
+  (SPIKE-008) before treating a specific detection design as architecture-settled.
 - **Com Port / reporting isolation** (RISK-011 / ADR-002 secondary mitigation) remains
   an optional installer-level probe: it has not been checked on this panel, and must
   not be assumed to shorten or eliminate the trigger-time forced disconnect
@@ -441,3 +466,4 @@ module accepts only one TCP client at a time (ADR-001).
 | 4 | 2026-08-04 | Issues found | 1 |
 | 5 | 2026-08-04 | Clear | — |
 | 6 | 2026-08-04 | Clear | — |
+| 7 | 2026-08-08 | Clear | — |
