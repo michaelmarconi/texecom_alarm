@@ -114,7 +114,9 @@ def decode_area_ha_state(
     """Decode GetAreaFlags bytes for one area into an HA alarm payload (ADR-007).
 
     Priority: Alarm → triggered; Armed/FullArmed/ForceArmed/PartArmed → armed_*;
-    PartArmed + PartArm slot → Night/Home/Away via inverted Settings; else disarmed.
+    PartArmed + PartArm slot → Night/Home via inverted Settings; else disarmed.
+    Away is never a Part-Arm label (ADR-008); unmapped Part-Arm slots fall back
+    to armed_away as a conservative full-arm label.
     """
     alarm = flag_bit(flags, FLAG_ALARM, area_size=area_size, area_number=area_number)
     armed = flag_bit(flags, FLAG_ARMED, area_size=area_size, area_number=area_number)

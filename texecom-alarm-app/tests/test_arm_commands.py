@@ -81,16 +81,17 @@ async def test_unknown_payload_is_ignored() -> None:
 
 @pytest.mark.asyncio
 async def test_remapped_part_arm_slots_change_mode_bytes() -> None:
+    """Home/Night use configured slots; ARM_AWAY always full-arm byte 0 (ADR-008)."""
     panel = MagicMock()
     panel.set_area_arm = AsyncMock()
-    settings = _settings(part_arm_1="home", part_arm_2="away", part_arm_3="night")
+    settings = _settings(part_arm_1="home", part_arm_2="unused", part_arm_3="night")
 
     await handle_alarm_command(panel, settings, "ARM_HOME")
     panel.set_area_arm.assert_awaited_once_with(1)
 
     panel.set_area_arm.reset_mock()
     await handle_alarm_command(panel, settings, "ARM_AWAY")
-    panel.set_area_arm.assert_awaited_once_with(2)
+    panel.set_area_arm.assert_awaited_once_with(0)
 
     panel.set_area_arm.reset_mock()
     await handle_alarm_command(panel, settings, "ARM_NIGHT")

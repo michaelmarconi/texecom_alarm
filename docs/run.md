@@ -91,6 +91,11 @@ ha apps rebuild local_texecom_alarm
 # or: ha apps update local_texecom_alarm
 ```
 
+After rebuild, Configuration Part-Arm radios should show **Home / Night / Unused**
+only (Away excluded — ADR-008). If an older options file still has Away on a
+slot, the app coerces that slot to Unused at load and logs a warning; Away
+continues to arm via full-arm mode byte `0`.
+
 ## Down
 
 1. Stop `supervisor_run` (Ctrl+C in its terminal, or kill the pid recorded by cold-start).

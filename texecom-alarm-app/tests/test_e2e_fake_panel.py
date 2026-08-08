@@ -724,7 +724,7 @@ async def test_e2e_mqtt_arm_uses_remapped_part_arm_slots() -> None:
             mqtt_password="",
             mqtt_topic_prefix="texecom",
             part_arm_1="home",
-            part_arm_2="away",
+            part_arm_2="unused",
             part_arm_3="night",
         )
         stop = asyncio.Event()
@@ -757,10 +757,10 @@ async def test_e2e_mqtt_arm_uses_remapped_part_arm_slots() -> None:
 
         await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
         for _ in range(100):
-            if panel.last_arm_body == bytes([0x02, 0x01]):
+            if panel.last_arm_body == bytes([0x00, 0x01]):
                 break
             await asyncio.sleep(0.02)
-        assert panel.last_arm_body == bytes([0x02, 0x01])
+        assert panel.last_arm_body == bytes([0x00, 0x01])
 
         await mqtt.push_inbound("texecom/alarm/command", "ARM_NIGHT")
         for _ in range(100):
