@@ -4,7 +4,7 @@ title: Rename Panel Link to Alarm Panel Connected
 status: awaiting-review
 assignee: []
 created_date: '2026-08-08 09:52'
-updated_date: '2026-08-08 10:06'
+updated_date: '2026-08-08 10:07'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -65,5 +65,5 @@ Verification: how we'll know = unit/discovery assertions that payload name is Al
 Notes/assumptions: Kept unique_id/object_id/default_entity_id as texecom_alarm_panel_link (no migration) — no code evidence that HA requires an ID change; DOCS.md notes rebuild/rediscovery may be needed for live installs to refresh the label. Pre-existing ruff format drift in untouched app.py/client.py/test_reconnect.py left alone.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
