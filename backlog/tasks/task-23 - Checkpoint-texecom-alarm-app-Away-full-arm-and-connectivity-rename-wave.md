@@ -1,9 +1,10 @@
 ---
 id: TASK-23
 title: 'Checkpoint: texecom-alarm-app Away-full-arm and connectivity rename wave'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-08 09:52'
+updated_date: '2026-08-08 10:07'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
