@@ -1,6 +1,6 @@
 # Agent Instructions
 
-<!-- Synthesised by /constitute on 2026-08-04 from: ADR-001, ADR-002, ADR-003, ADR-004, ADR-005, ADR-006, ADR-007 -->
+<!-- Synthesised by /constitute on 2026-08-08 from: ADR-001, ADR-002, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009 -->
 <!-- Re-run /constitute after any new ADR is accepted. -->
 
 ## Project
@@ -55,17 +55,6 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - The app must keep a short rolling memory of recent zone/panel activity so it can produce a "what happened right before this trigger" snapshot that survives a subsequent outage.
 - Anything consuming the alarm/zone entity state (dashboards, automations) can be shown a stale value for as long as an outage lasts, with currency only communicated via the separate connectivity signal — this should be documented/exposed prominently rather than assumed to be obvious.
 
-### ADR-005: Use confirmed shared arm/disarm commands with configurable Part-Arm mapping for panel control
-
-**Decision:** Use the empirically confirmed shared arm and disarm commands for production, and treat which arm mode maps to which underlying Part-Arm slot as a per-installation configuration value rather than a hardcoded constant.
-
-**Constraints:**
-- The app must issue arm and disarm using the confirmed shared command mechanism, not invent per-mode command families or leave Home unimplemented pending further capture work.
-- The mapping from Home Assistant's Home/Night (and Away) labels to the panel's physical Part-Arm slots must be a documented, install-time configuration value — never baked to this household's own engineer layout.
-- The app must not assume the panel can auto-report each Part-Arm slot's Night/Home role at startup via the area-details query already tested — that path was ruled out; mapping remains manual configuration unless a future decision finds another source.
-- Disarm is mode-independent: one confirmed disarm command covers fully armed states and cancelling an in-progress exit for every arm mode.
-- The exact shape of the add-on configuration surface for that mapping (e.g. three fields vs a single ordered list) is not decided by this ADR — only that the mapping must be configurable.
-
 ### ADR-006: Use panel zone-state snapshot for startup re-sync
 
 **Decision:** After login (and again after a reconnect re-login), the app must ask the panel for a full current-state snapshot of every zone slot and publish that to MQTT for in-use zones before relying on entity state; live change events then keep those entities updated.
@@ -75,9 +64,22 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - Snapshot status encoding must stay aligned with live zone-change event encoding so open/closed meaning does not diverge.
 - Test doubles used in CI must speak the same snapshot read so startup re-sync is verifiable without the live panel.
 - Client, FakePanel, and tests must implement this snapshot command family (extra round-trip at startup is required).
-- ADR-006 itself does not decide area/alarm arm-state startup snapshot — that is settled separately by ADR-007.
+- ADR-006 itself does not decide area/alarm arm-state startup snapshot — that is settled separately by ADR-009.
 
-### ADR-007: Use panel area-flags snapshot for alarm startup re-sync
+### ADR-008: Use confirmed shared arm/disarm commands with Away as full arm and configurable Home/Night Part-Arm mapping for panel control
+
+**Decision:** Keep the confirmed shared arm and disarm commands. Away always uses the panel’s full-arm mode. Only Home and Night map to engineer Part-Arm slots via install-time configuration; each Part-Arm option is Home, Night, or Unused — never Away.
+
+**Constraints:**
+- The app must issue arm and disarm using the confirmed shared command mechanism, including Home — not invent per-mode command families.
+- Away must always map to full arm, never to a Part-Arm slot number.
+- Home and Night must map to Part-Arm slots through documented install-time configuration — never hardcoded to one household’s engineer layout.
+- Part-Arm configuration choices are Home, Night, or Unused only; Away must not appear as a Part-Arm option.
+- The app must not assume the panel auto-reports Part-Arm Night/Home roles via the area-details query already tested.
+- Disarm remains mode-independent: one confirmed disarm covers armed states and cancelling an in-progress exit for every arm mode.
+- The exact shape of the add-on configuration surface for Home/Night→slot mapping is not decided by this ADR — only that the mapping must be configurable and that Away is excluded from it.
+
+### ADR-009: Use panel area-flags snapshot for alarm startup re-sync
 
 **Decision:** After login (and again after a reconnect re-login), the app must ask the panel for a current area-flags snapshot, derive each in-use area’s armed/disarmed/part-armed/in-alarm status from that snapshot, and publish that to MQTT before relying on alarm entity state; live area/log change events then keep the entity updated.
 
@@ -85,7 +87,7 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - Startup and post-reconnect flows must include a panel area/arm-state snapshot after login — not push-only and not MQTT-retain-only for correctness of the alarm entity.
 - Snapshot status meaning must stay aligned with how live area events are interpreted so armed/disarmed/part-armed/in-alarm does not diverge between startup and steady state.
 - Test doubles used in CI must speak the same area-flags read so alarm startup re-sync is verifiable without the live panel.
-- Part-Arm slot → Home/Night/Away labels remain install-time configuration; the snapshot reports which part-arm slot is active, not which HA mode name that slot carries.
+- When the snapshot reports a Part-Arm slot, Home/Night labels come from install-time configuration (ADR-008); Away is full arm, not a Part-Arm label. The snapshot reports which slot is active, not which HA mode name that slot carries.
 - Client, FakePanel, and tests must implement this snapshot command family and flag decode (extra round-trip at startup is required).
 - Exit/entry transient states may still depend on live area pushes — the Disarmed-only spike run did not prove those appear in the flag block.
 
@@ -100,15 +102,21 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - **[ADR-004]** Before marking the `alarm_control_panel` or any zone `binary_sensor` entity "unavailable" due to a panel-link/reconnect problem: stop and ask a human — availability must be governed solely by whether the app process itself is running (via MQTT Last-Will), never by panel connection health.
 - **[ADR-004]** Before adding a fixed-timeout auto-escalation to "unavailable" for stale panel-link data: stop and ask a human — this ADR explicitly rejected that approach as reintroducing the same problem on a delay; the exact staleness bound (if any) is left open, not decided.
 - **[ADR-004]** Before assuming Com Port isolation shortens or eliminates the trigger-time forced disconnect: stop and ask a human — this remains an untested, open follow-on question, not resolved by any ADR.
-- **[ADR-005]** Before hardcoding this household's Part-Arm slot layout (Away/Night/Home mode values) into the app: stop and ask a human — that would violate this decision; the mapping must be install-time configuration.
-- **[ADR-005]** Before implementing auto-detection of Part-Arm slot roles via the area-details query already tested, or treating that query as a source of Night/Home names: stop and ask a human — that path was ruled out by this ADR.
-- **[ADR-005]** Before inventing a different per-mode arm command family, or shipping without Home arm because further capture work is pending: stop and ask a human — this ADR requires the confirmed shared command mechanism including Home.
-- **[ADR-005]** Before treating a specific add-on option shape for the mode-to-slot mapping (e.g. three fields vs one ordered list) as already decided by this ADR: stop and ask a human — only configurability was decided; the concrete surface is still open.
 - **[ADR-006]** Before shipping zone state on restart via push-only updates or MQTT retain alone, without a panel zone-state snapshot after login: stop and ask a human — that would violate this decision.
 - **[ADR-006]** Before inventing a different open/closed encoding for the startup snapshot than for live zone-change events: stop and ask a human — this ADR requires one shared status encoding.
 - **[ADR-006]** Before treating physical open/close flip corroboration as already proven by this ADR: stop and ask a human — the spike skipped that optional check; residual confidence is a separate acceptance call if needed.
-- **[ADR-007]** Before shipping alarm state on restart via push-only updates or MQTT retain alone, without a panel area/arm-state snapshot after login: stop and ask a human — that would violate this decision.
-- **[ADR-007]** Before inventing a different armed/disarmed/part-armed/in-alarm meaning for the startup snapshot than for live area events: stop and ask a human — this ADR requires one shared status meaning.
-- **[ADR-007]** Before treating the area-flags snapshot as auto-detecting Night/Home role names, or hardcoding Part-Arm → HA mode mapping from snapshot bits alone: stop and ask a human — mapping remains install-time configuration (ADR-005).
-- **[ADR-007]** Before treating exit/entry (arming/pending) as fully covered by the area-flags snapshot alone: stop and ask a human — the spike only observed Disarmed; live pushes may still be required for those transients.
-- **[ADR-007]** Before treating optional arm-then-re-poll corroboration or wider dual-request area-bitmap layouts as already proven by this ADR: stop and ask a human — those paths were not exercised in the Validated run.
+- **[ADR-008]** Before hardcoding this household's Home/Night Part-Arm slot layout into the app: stop and ask a human — that would violate this decision; Home/Night→slot mapping must be install-time configuration.
+- **[ADR-008]** Before offering Away as a Part-Arm configuration option, or mapping Away to a Part-Arm slot number: stop and ask a human — Away must always be full arm.
+- **[ADR-008]** Before implementing auto-detection of Part-Arm slot roles via the area-details query already tested, or treating that query as a source of Night/Home names: stop and ask a human — that path was ruled out by this ADR.
+- **[ADR-008]** Before inventing a different per-mode arm command family, or shipping without Home arm because further capture work is pending: stop and ask a human — this ADR requires the confirmed shared command mechanism including Home.
+- **[ADR-008]** Before treating a specific add-on option shape for the Home/Night→slot mapping (e.g. three fields vs one ordered list) as already decided by this ADR: stop and ask a human — only configurability (with Away excluded) was decided; the concrete surface is still open.
+- **[ADR-009]** Before shipping alarm state on restart via push-only updates or MQTT retain alone, without a panel area/arm-state snapshot after login: stop and ask a human — that would violate this decision.
+- **[ADR-009]** Before inventing a different armed/disarmed/part-armed/in-alarm meaning for the startup snapshot than for live area events: stop and ask a human — this ADR requires one shared status meaning.
+- **[ADR-009]** Before treating the area-flags snapshot as auto-detecting Night/Home role names, or hardcoding Part-Arm → HA mode mapping from snapshot bits alone, or treating Away as a Part-Arm slot label: stop and ask a human — Home/Night mapping remains install-time configuration (ADR-008); Away is full arm.
+- **[ADR-009]** Before treating exit/entry (arming/pending) as fully covered by the area-flags snapshot alone: stop and ask a human — the spike only observed Disarmed; live pushes may still be required for those transients.
+- **[ADR-009]** Before treating optional arm-then-re-poll corroboration or wider dual-request area-bitmap layouts as already proven by this ADR: stop and ask a human — those paths were not exercised in the Validated run.
+
+## Testing stance
+
+- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping behaviour per ADR-006, ADR-008, ADR-009 and architecture).
+- **Live:** `/accept` owns product validation on the real setup (full Away / Night / Home arm sequences, trigger reconnect, real ComIP); `/ship` may smoke a real target. Green CI is not product accept.
