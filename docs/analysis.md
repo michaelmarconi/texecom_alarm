@@ -239,11 +239,27 @@ contention corroboration remains live-only / accept-walk.
 | Severity rationale | Diagnostics-logging ACs 1–6 name unit/integration + FakePanel; AC7 (correlate TRACE with a known live zone event) is honest live-only and does not block hermetic coverage of the logging contract. |
 | Spike required | No |
 
+### RISK-017: Repository contains live household security fingerprint
+
+| Field | Value |
+|---|---|
+| Category | Security surface |
+| Severity | High |
+| Severity rationale | Public Add-on intent plus in-repo zone map, LAN IPs/MACs in packet captures, personal names, and confirmed factory UDL on this panel is a real publish exposure — not theoretical. |
+| Spike required | No |
+
+Docs, spikes, captures, and some dev defaults encode this household's alarm layout and
+network path. Tracked by backlog draft DRAFT-2 ("Redact household security fingerprint
+before public release"). Clear Critical/High inventory items before public release;
+git history rewrite after a working-tree cleanse is a separate execute-time decision.
+No spike — inventory already done; ordinary redact/delete work.
+
 ### Categories scanned and clear of additional entries
 
-Team capability gaps beyond RISK-010: none new. Security surface beyond RISK-009:
-none new. Performance beyond RISK-004: none new. MQTT broker and HA Supervisor
-Add-on Store remain ordinary standing dependencies with known contracts.
+Team capability gaps beyond RISK-010: none new. Security surface: RISK-009 (panel
+factory-default UDL) and RISK-017 (repo publish fingerprint) are recorded; no further
+security-surface entries. Performance beyond RISK-004: none new. MQTT broker and HA
+Supervisor Add-on Store remain ordinary standing dependencies with known contracts.
 
 ## Section 2 — Dismissed candidates
 
@@ -347,3 +363,4 @@ No other spikes required. Historical spikes below remain for traceability.
 | 3 | 2026-08-08 | Issues found | 8 |
 | 4 | 2026-08-08 | Clear | — |
 | 5 | 2026-08-08 | Clear | — |
+| 6 | 2026-08-08 | Clear | — |
