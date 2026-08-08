@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -179,44 +180,81 @@ def test_part_arm_supervisor_display_labels_parse_to_canonical() -> None:
 
 
 def test_addon_config_schema_uses_display_part_arm_tokens() -> None:
-    """Supervisor list(...) tokens are the Configuration radio labels.
+    """Supervisor list(...) tokens are the Configuration radio labels (ADR-008).
 
-    Schema must use Title Case + emoji display tokens (not lowercase alone).
-    Settings still normalise both display and legacy lowercase forms to canonical.
+    Schema must use Title Case + emoji display tokens for Home / Night / Unused
+    only — Away is never a Part-Arm option. Settings still normalise both
+    display and legacy lowercase forms to canonical home|night|unused.
     """
     config_path = Path(__file__).resolve().parents[2] / "config.yaml"
     text = config_path.read_text(encoding="utf-8")
-    display_list = "list(Home 🏠|Night 🌙|Away 🔒|Unused)"
+    display_list = "list(Home 🏠|Night 🌙|Unused)"
     for slot in ("part_arm_1", "part_arm_2", "part_arm_3"):
         assert f"{slot}: {display_list}" in text
         assert f"{slot}: Unused" in text
+    assert "Away 🔒" not in text
     assert "list(home|night|away|unused)" not in text
+    assert "list(Home 🏠|Night 🌙|Away 🔒|Unused)" not in text
 
     display = load_settings(
         _valid_options(
             part_arm_1="Home 🏠",
             part_arm_2="Night 🌙",
-            part_arm_3="Away 🔒",
+            part_arm_3="Unused",
         )
     )
     assert display.part_arm_1 == "home"
     assert display.part_arm_2 == "night"
-    assert display.part_arm_3 == "away"
+    assert display.part_arm_3 == "unused"
 
-    legacy = load_settings(_valid_options(part_arm_1="home", part_arm_2="night", part_arm_3="away"))
-    assert legacy.part_arm_1 == "home"
-    assert legacy.part_arm_2 == "night"
-    assert legacy.part_arm_3 == "away"
+
+def test_legacy_away_slot_coerces_to_unused(caplog: pytest.LogCaptureFixture) -> None:
+    """Persisted Away on a Part-Arm slot migrates to Unused (ADR-008)."""
+    with caplog.at_level(logging.WARNING, logger="texecom_alarm.config"):
+        settings = load_settings(
+            _valid_options(part_arm_1="home", part_arm_2="night", part_arm_3="away")
+        )
+    assert settings.part_arm_1 == "home"
+    assert settings.part_arm_2 == "night"
+    assert settings.part_arm_3 == "unused"
+    assert settings.mode_byte_for_ha_mode("away") == FULL_ARM_AWAY_MODE_BYTE
+    assert settings.ha_mode_for_part_arm_slot(3) is None
+    assert any("Away" in r.message and "part_arm_3" in r.message for r in caplog.records)
+
+    with caplog.at_level(logging.WARNING, logger="texecom_alarm.config"):
+        display_away = load_settings(_valid_options(part_arm_1="Away 🔒"))
+    assert display_away.part_arm_1 == "unused"
+    assert display_away.mode_byte_for_ha_mode("away") == FULL_ARM_AWAY_MODE_BYTE
 
 
 def test_part_arm_remapping_changes_mode_bytes() -> None:
+    """Home/Night remap across slots; Away is always full-arm byte 0 (ADR-008)."""
     settings = load_settings(
-        _valid_options(part_arm_1="home", part_arm_2="away", part_arm_3="night")
+        _valid_options(part_arm_1="home", part_arm_2="unused", part_arm_3="night")
     )
     assert settings.mode_byte_for_ha_mode("home") == 1
-    assert settings.mode_byte_for_ha_mode("away") == 2
     assert settings.mode_byte_for_ha_mode("night") == 3
+    assert settings.mode_byte_for_ha_mode("away") == FULL_ARM_AWAY_MODE_BYTE
+    assert settings.ha_mode_for_part_arm_slot(1) == "home"
+    assert settings.ha_mode_for_part_arm_slot(2) is None
+    assert settings.ha_mode_for_part_arm_slot(3) == "night"
     assert settings.supported_arm_features() == ["arm_home", "arm_night", "arm_away"]
+    # Away must never be returned as a Part-Arm label, even if somehow stored.
+    leaked = Settings(
+        panel_host="10.0.0.2",
+        panel_port=DEFAULT_PANEL_PORT,
+        udl_password=DEFAULT_UDL_PASSWORD,
+        mqtt_host="mqtt.local",
+        mqtt_port=DEFAULT_MQTT_PORT,
+        mqtt_username="",
+        mqtt_password="",
+        mqtt_topic_prefix=DEFAULT_MQTT_TOPIC_PREFIX,
+        part_arm_1="home",  # type: ignore[arg-type]
+        part_arm_2="away",  # type: ignore[arg-type]
+        part_arm_3="night",  # type: ignore[arg-type]
+    )
+    assert leaked.mode_byte_for_ha_mode("away") == FULL_ARM_AWAY_MODE_BYTE
+    assert leaked.ha_mode_for_part_arm_slot(2) is None
 
 
 def test_unused_slot_not_offered_as_arm_target() -> None:
@@ -284,7 +322,7 @@ def test_load_settings_from_environ() -> None:
             "TEXECOM_PANEL_HOST": "panel.env",
             "TEXECOM_UDL_PASSWORD": "udl",
             "TEXECOM_MQTT_HOST": "broker.env",
-            "TEXECOM_PART_ARM_1": "away",
+            "TEXECOM_PART_ARM_1": "unused",
             "TEXECOM_PART_ARM_2": "night",
             "TEXECOM_PART_ARM_3": "home",
         },
@@ -292,10 +330,10 @@ def test_load_settings_from_environ() -> None:
     )
     assert settings.panel_host == "panel.env"
     assert settings.mqtt_host == "broker.env"
-    assert settings.part_arm_1 == "away"
+    assert settings.part_arm_1 == "unused"
     assert settings.part_arm_2 == "night"
     assert settings.part_arm_3 == "home"
-    assert settings.mode_byte_for_ha_mode("away") == 1
+    assert settings.mode_byte_for_ha_mode("away") == FULL_ARM_AWAY_MODE_BYTE
     assert settings.mode_byte_for_ha_mode("night") == 2
     assert settings.mode_byte_for_ha_mode("home") == 3
 
