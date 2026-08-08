@@ -1,9 +1,10 @@
 ---
 id: TASK-21
 title: Remove Away from Part-Arm options; keep Away as full arm
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-08 09:52'
+updated_date: '2026-08-08 09:58'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
