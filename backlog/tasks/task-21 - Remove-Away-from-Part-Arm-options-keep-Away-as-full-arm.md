@@ -4,7 +4,7 @@ title: Remove Away from Part-Arm options; keep Away as full arm
 status: awaiting-review
 assignee: []
 created_date: '2026-08-08 09:52'
-updated_date: '2026-08-08 10:01'
+updated_date: '2026-08-08 10:04'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -67,5 +67,5 @@ Verification: how we'll know = unit tests for schema/Settings parse + arm mode-b
 Notes/assumptions: none (live Configuration radio check remains accept/smoke after rebuild, not CI)
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
