@@ -1,6 +1,6 @@
 # ADR-007: Use Panel Area-Flags Snapshot for Alarm Startup Re-Sync
 
-**Status:** Accepted ✅  
+**Status:** ~~Accepted~~ Superseded by [ADR-009](adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md)  
 **Date:** 2026-08-04  
 **Spike:** [spike-007-area-arm-state-startup-read/SPIKE.md](../spikes/spike-007-area-arm-state-startup-read/SPIKE.md)
 

@@ -1,6 +1,6 @@
 # ADR-005: Use confirmed shared arm/disarm commands with configurable Part-Arm mapping for panel control
 
-**Status:** Accepted ✅
+**Status:** ~~Accepted~~ Superseded by [ADR-008](adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md)
 **Date:** 2026-08-04
 **Spike:** [spike-005-arm-disarm-command-framing/SPIKE.md](../spikes/spike-005-arm-disarm-command-framing/SPIKE.md)
 
