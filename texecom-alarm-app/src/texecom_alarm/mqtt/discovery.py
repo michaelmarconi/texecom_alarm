@@ -130,7 +130,7 @@ def alarm_discovery_payload(
 
 def connectivity_discovery_payload(*, topic_prefix: str) -> dict[str, object]:
     return {
-        "name": "Panel Link",
+        "name": "Alarm Panel Connected",
         "unique_id": CONNECTIVITY_OBJECT_ID,
         "object_id": CONNECTIVITY_OBJECT_ID,
         "default_entity_id": f"binary_sensor.{CONNECTIVITY_OBJECT_ID}",

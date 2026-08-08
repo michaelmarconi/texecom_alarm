@@ -257,6 +257,8 @@ async def _e2e_discovery_retained_and_lwt() -> None:
 
                 link = discovered[link_cfg]
                 assert link["availability_topic"] == "texecom/status"
+                assert link["name"] == "Alarm Panel Connected"
+                assert link["unique_id"] == "texecom_alarm_panel_link"
                 assert link["device_class"] == "connectivity"
                 assert link["state_topic"] == "texecom/panel_link/state"
                 assert link["device"]["identifiers"] == ["texecom_alarm"]
