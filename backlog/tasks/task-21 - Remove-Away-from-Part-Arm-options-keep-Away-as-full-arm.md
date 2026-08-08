@@ -1,10 +1,10 @@
 ---
 id: TASK-21
 title: Remove Away from Part-Arm options; keep Away as full arm
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-08 09:52'
-updated_date: '2026-08-08 09:58'
+updated_date: '2026-08-08 10:01'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -56,3 +56,16 @@ Files likely affected: config.yaml (modify), translations/en.yaml (modify), DOCS
 
 Test strategy: how we'll know = unit tests for schema/Settings parse + arm mode-byte selection (stand-in: FakePanel where arm tests already use it); command: cd texecom-alarm-app && python -m pytest tests/test_config.py tests/test_arm_commands.py -q. Live Configuration radios Home/Night/Unused only is accept/smoke after rebuild — not CI.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Part-Arm options are Home/Night/Unused only; Away always uses full-arm byte 0, with legacy Away→Unused coercion + warning.
+Changed files: config.yaml, translations/en.yaml, DOCS.md, docs/run.md, texecom-alarm-app/src/texecom_alarm/config.py, texecom-alarm-app/src/texecom_alarm/arm_commands.py, texecom-alarm-app/src/texecom_alarm/area_state.py, texecom-alarm-app/tests/test_config.py, texecom-alarm-app/tests/test_arm_commands.py, texecom-alarm-app/tests/test_mqtt_discovery.py, texecom-alarm-app/tests/test_e2e_fake_panel.py
+Verification: how we'll know = unit tests for schema/Settings parse + arm mode-byte selection; command `cd texecom-alarm-app && python -m pytest tests/test_config.py tests/test_arm_commands.py -q` → 39 passed; full suite `pytest tests -q --cov=texecom_alarm --cov-fail-under=90` → 196 passed, 94.78% coverage; ruff clean on changed Python files
+Notes/assumptions: none (live Configuration radio check remains accept/smoke after rebuild, not CI)
+
+## Build phase
+phase: awaiting-review
+<!-- SECTION:FINAL_SUMMARY:END -->
