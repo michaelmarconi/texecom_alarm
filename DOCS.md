@@ -9,8 +9,12 @@ zones are open or closed, and tell whether the link to the panel is healthy.
 
 - A Texecom Premier Elite panel with a network module (ComIP / Texecom Connect)
 - An MQTT broker Home Assistant can use (for example the Mosquitto add-on)
-- Only **one** app may talk to the panel at a time — stop anything else that is
-  already connected to the panel before you start this add-on
+- Stop anything else that already holds a **Connect/ComIP login** to the panel
+  before you **start** this add-on (the panel’s network module only accepts one
+  of those sessions at a time). Once this add-on is logged in, you can normally
+  use the official Texecom smartphone app at the same time — it does not
+  monopolise the link. Commands may occasionally be slower or rejected under
+  heavy concurrent use; that is not the same as the app “taking over” the channel.
 
 ## Installation
 
