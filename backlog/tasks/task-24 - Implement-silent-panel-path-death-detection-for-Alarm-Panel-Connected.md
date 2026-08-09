@@ -1,7 +1,7 @@
 ---
 id: TASK-24
 title: Implement silent panel-path death detection for Alarm Panel Connected
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-08 09:52'
 updated_date: '2026-08-09 13:01'
@@ -37,9 +37,9 @@ priority: medium
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Arm or disarm reject/timeout publishes Alarm Panel Connected OFF even while keepalive can still succeed; zone/alarm entities are not marked unavailable solely for that degrade; the log line includes reason and keepalive-still-ok context
-- [ ] #2 With no zone push traffic, connectivity stays ON; a failed trust poll publishes OFF and logs reason trust_poll_* with timing context
-- [ ] #3 After a single transient command reject, connectivity returns ON after a successful trust poll past the 30s recover window without restarting the process, and the recover path logs the transition to live
+- [x] #1 Arm or disarm reject/timeout publishes Alarm Panel Connected OFF even while keepalive can still succeed; zone/alarm entities are not marked unavailable solely for that degrade; the log line includes reason and keepalive-still-ok context
+- [x] #2 With no zone push traffic, connectivity stays ON; a failed trust poll publishes OFF and logs reason trust_poll_* with timing context
+- [x] #3 After a single transient command reject, connectivity returns ON after a successful trust poll past the 30s recover window without restarting the process, and the recover path logs the transition to live
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -67,5 +67,5 @@ Verification: how we'll know = FakePanel unit/integration for AC1–AC3 + struct
 Notes/assumptions: Poll/recover defaults are 30s (plan-time); run(..., trust_poll_interval=, trust_recover_window=) are test-only overrides. No auto re-LOGIN or command auto-retry. Zone/alarm availability unchanged (ADR-004). Pre-commit fixed isinstance UP038 in test_panel_trust.py before landing.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
