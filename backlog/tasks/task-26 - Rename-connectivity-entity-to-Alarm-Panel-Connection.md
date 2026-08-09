@@ -67,3 +67,10 @@ Note: Corrective for done TASK-22 (Connected → Connection).
 
 How we'll know = unit/discovery assertion that payload name is Alarm Panel Connection (and unique_id/object_id match the chosen scheme). Command: `cd texecom-alarm-app && python -m pytest tests/test_mqtt_discovery.py tests/test_e2e_fake_panel.py -q`. Live HA rename/rediscovery is accept/smoke — not CI.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
