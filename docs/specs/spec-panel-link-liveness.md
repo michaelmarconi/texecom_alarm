@@ -146,17 +146,20 @@ recovery (no regression vs the existing clean-disconnect behaviour).
 
 ## Open Questions
 
-- Exact numeric bound for “tens of seconds” (e.g. 30 vs 60) — settle at plan time
-  unless a spike finds a protocol-imposed minimum.
+- ~~Exact numeric bound for “tens of seconds” (e.g. 30 vs 60)~~ **Answered
+  2026-08-09:** Lock **30 seconds** as the order-of-tens bound (matches shipping
+  trust-poll / recover window). Friendly-name rename to **Alarm Panel Connection**
+  (and related id clean-up) is owned by Accepted `spec-panel-session-heal.md` —
+  run `/correction` so this spec’s **Alarm Panel Connected** wording aligns.
 
 ## Spike Candidates
 
-- How to detect silent panel-path death reliably (idle probe failure, absence of
-  expected panel traffic, periodic state corroboration, or a combination) without
-  false degraded flaps during quiet houses — feasibility and false-positive rate.
-- Whether renaming the friendly name alone is enough for HA, or whether the MQTT
-  `unique_id` / Entity ID must change to avoid a stuck “Panel Link” label on
-  existing installs.
+- ~~How to detect silent panel-path death reliably…~~ **Covered:** ADR-010
+  (command-reject + periodic house-state poll); SPIKE-008 Validated.
+- ~~Whether renaming the friendly name alone is enough… vs `unique_id` / Entity ID~~
+  **Answered 2026-08-09 (via `spec-panel-session-heal`):** Clean refactor — name
+  **Alarm Panel Connection** and change ids as needed; no backwards-compat soft
+  path. Align this spec via `/correction`.
 
 ## Review
 

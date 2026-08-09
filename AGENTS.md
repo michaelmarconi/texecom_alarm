@@ -1,6 +1,6 @@
 # Agent Instructions
 
-<!-- Synthesised by /constitute on 2026-08-08 from: ADR-001, ADR-002, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-010 -->
+<!-- Synthesised by /constitute on 2026-08-09 from: ADR-001, ADR-002, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-010, ADR-011 -->
 <!-- Re-run /constitute after any new ADR is accepted. -->
 
 ## Project
@@ -96,13 +96,25 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 **Decision:** Treat a rejected or timed-out arm/disarm as an immediate signal that the panel link may be untrustworthy, and separately poll the panel for current house/arm state on a bounded interval as a trust check — alongside the existing idle heartbeat, not instead of it. Do not judge freshness from “zones went quiet” alone.
 
 **Constraints:**
-- Alarm Panel Connected must go degraded on arm/disarm reject or timeout even when the idle heartbeat still succeeds.
+- The panel-connection freshness signal must go degraded on arm/disarm reject or timeout even when the idle heartbeat still succeeds.
 - The app must periodically ask the panel for current house/arm state as a corroboration poll; that poll must not replace the idle heartbeat.
 - Missing zone push traffic alone must not be the sole reason to mark the link degraded.
 - After a brief reject, the link may return to live automatically once corroboration succeeds and no recent command failure remains — without requiring a manual add-on restart.
 - Zone and alarm entities stay available with last-known state while the link is degraded (unchanged from ADR-004).
-- Exact poll interval, recover window, and “tens of seconds” bound are not fixed here — settle at plan time unless live walks force a change.
-- Automatic session tear-down/re-login on degrade, and in-tap auto-retry of the failed command, are not decided by this ADR.
+- Exact poll interval, recover window, and “tens of seconds” bound are not fixed here — settle at plan time unless live walks force a change (30s is the current shipping/plan lock from product docs).
+- Session tear-down/re-login on stuck degrade is settled by ADR-011; in-tap auto-retry of a failed arm/disarm remains out of scope for ADR-010.
+
+### ADR-011: Use automatic session recovery for mid-run panel path failures
+
+**Decision:** Use automatic session recovery after mid-run panel failure — reconnect when the health check dies, and open a fresh login only when trust stays broken after a short corroboration window.
+
+**Constraints:**
+- An unanswered mid-run health check must enter the same keep-trying recovery path as a clean panel drop — connection signal off while recovering; live again with state re-synced when the panel accepts — without a manual add-on restart.
+- Soft trust failures may try corroboration first; if still stuck after a bounded fail window, the app must tear down and log in again (still no manual restart).
+- Zone and alarm entities must not be blanked solely because recovery is running; freshness stays on the connection signal.
+- A failed arm/disarm tap must not be automatically re-fired as part of heal.
+- Exact fail-window length and how patient retry cadence lines up with existing mid-run reconnect budgets remain plan-time (and may need live tuning); do not treat reconnect budgets as newly finalised by this ADR alone.
+- Renaming the connection entity (e.g. Alarm Panel Connection) is a separate product rename — not decided by this ADR’s recovery mechanism.
 
 ## Stop conditions
 
@@ -128,12 +140,16 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - **[ADR-009]** Before treating the area-flags snapshot as auto-detecting Night/Home role names, or hardcoding Part-Arm → HA mode mapping from snapshot bits alone, or treating Away as a Part-Arm slot label: stop and ask a human — Home/Night mapping remains install-time configuration (ADR-008); Away is full arm.
 - **[ADR-009]** Before treating exit/entry (arming/pending) as fully covered by the area-flags snapshot alone: stop and ask a human — the spike only observed Disarmed; live pushes may still be required for those transients.
 - **[ADR-009]** Before treating optional arm-then-re-poll corroboration or wider dual-request area-bitmap layouts as already proven by this ADR: stop and ask a human — those paths were not exercised in the Validated run.
-- **[ADR-010]** Before using missing zone push traffic alone as the sole reason to mark Alarm Panel Connected degraded: stop and ask a human — that approach was rejected by this ADR.
+- **[ADR-010]** Before using missing zone push traffic alone as the sole reason to mark the panel-connection freshness signal degraded: stop and ask a human — that approach was rejected by this ADR.
 - **[ADR-010]** Before replacing the idle heartbeat with the house-state corroboration poll, or dropping either: stop and ask a human — this ADR requires both, with distinct roles.
-- **[ADR-010]** Before treating automatic session tear-down/re-login on degrade, or in-tap auto-retry of a failed arm/disarm, as already decided: stop and ask a human — those remain open follow-ons.
 - **[ADR-010]** Before treating live quiet-house false-positive rate or live zombie reproduction as already proven by CI/FakePanel alone: stop and ask a human — those remain live-only corroboration.
+- **[ADR-011]** Before treating the household connection-entity rename (e.g. Alarm Panel Connection) as already decided by this ADR: stop and ask a human — recovery mechanism only; naming is a separate product rename.
+- **[ADR-011]** Before treating in-tap auto-retry of a failed arm/disarm as already decided: stop and ask a human — ADR-011 explicitly leaves that out of scope.
+- **[ADR-011]** Before hardcoding the trust-degrade “still stuck” fail window or mid-run heal retry cadence as final, unchangeable values: stop and ask a human — ADR-011 left those for plan time / live tuning.
+- **[ADR-011]** Before aborting the mid-run listen loop on unanswered health-check without entering keep-trying recovery: stop and ask a human — that would violate this decision.
+- **[ADR-011]** Before treating live ComIP heal / zombie recovery as already proven by CI/FakePanel alone: stop and ask a human — those remain live-only corroboration.
 
 ## Testing stance
 
-- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping, silent-death / command-reject / quiet-house detector shapes per ADR-006, ADR-008, ADR-009, ADR-010 and architecture).
-- **Live:** `/accept` owns product validation on the real setup (full Away / Night / Home arm sequences, trigger reconnect, real ComIP, quiet-house and zombie corroboration for silent-death detection); `/ship` may smoke a real target. Green CI is not product accept.
+- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping, silent-death / command-reject / quiet-house detector shapes, mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login per ADR-006, ADR-008, ADR-009, ADR-010, ADR-011 and architecture).
+- **Live:** `/accept` owns product validation on the real setup (full Away / Night / Home arm sequences, trigger reconnect, real ComIP, quiet-house and zombie corroboration, mid-run heal under contention); `/ship` may smoke a real target. Green CI is not product accept.
