@@ -370,7 +370,7 @@ async def _listen_with_reconnect(
             # Non-recoverable listen failure: mark panel-link degraded, never
             # alarm/zone availability (ADR-004). Cancellation is BaseException.
             logger.exception(
-                "Panel listen loop failed unexpectedly — marking Alarm Panel Connected "
+                "Panel listen loop failed unexpectedly — marking Alarm Panel Connection "
                 "as disconnected and stopping this listen cycle."
             )
             await publish_panel_link_state(

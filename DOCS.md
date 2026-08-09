@@ -88,14 +88,14 @@ You can leave the defaults unless you have a reason to change them.
 
 - An **alarm control panel** (Away, Night, Home, and Disarm)
 - A **sensor for each zone** the panel reports as in use
-- **Alarm Panel Connected** — shows whether the link to the panel is healthy
+- **Alarm Panel Connection** — shows whether the link to the panel is healthy
 - A short **last-trigger** summary of what happened just before an alarm
 
 Zone names come from the panel when the add-on starts — you do not maintain a
 zone list by hand.
 
 If the panel link drops, alarm and zone entities stay available with their last
-known state. Use **Alarm Panel Connected** to tell live data from a stale link.
+known state. Use **Alarm Panel Connection** to tell live data from a stale link.
 
 ## Automations stay in Home Assistant
 

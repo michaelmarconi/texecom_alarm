@@ -99,29 +99,29 @@ def test_alarm_supported_features_order_home_night_away() -> None:
     assert remapped_payload["supported_features"] == ["arm_home", "arm_night", "arm_away"]
 
 
-def test_connectivity_object_id_is_panel_link() -> None:
-    assert CONNECTIVITY_OBJECT_ID == "texecom_alarm_panel_link"
+def test_connectivity_object_id_is_panel_connection() -> None:
+    assert CONNECTIVITY_OBJECT_ID == "texecom_alarm_panel_connection"
 
 
 def test_connectivity_discovery_topic() -> None:
     assert (
         connectivity_discovery_topic()
-        == "homeassistant/binary_sensor/texecom_alarm_panel_link/config"
+        == "homeassistant/binary_sensor/texecom_alarm_panel_connection/config"
     )
 
 
 def test_connectivity_state_topic() -> None:
-    assert connectivity_state_topic("texecom") == "texecom/panel_link/state"
+    assert connectivity_state_topic("texecom") == "texecom/panel_connection/state"
 
 
 def test_connectivity_discovery_payload_shape() -> None:
     payload = connectivity_discovery_payload(topic_prefix="texecom")
     assert payload["unique_id"] == CONNECTIVITY_OBJECT_ID
     assert payload["object_id"] == CONNECTIVITY_OBJECT_ID
-    assert payload["default_entity_id"] == "binary_sensor.texecom_alarm_panel_link"
-    assert payload["name"] == "Alarm Panel Connected"
+    assert payload["default_entity_id"] == "binary_sensor.texecom_alarm_panel_connection"
+    assert payload["name"] == "Alarm Panel Connection"
     assert payload["device"] == EXPECTED_DEVICE
-    assert payload["state_topic"] == "texecom/panel_link/state"
+    assert payload["state_topic"] == "texecom/panel_connection/state"
     assert payload["device_class"] == "connectivity"
     assert payload["payload_on"] == "ON"
     assert payload["payload_off"] == "OFF"
@@ -162,7 +162,7 @@ async def test_publish_connectivity_discovery_retained() -> None:
         will_retain=True,
     )
     await publish_connectivity_discovery(mqtt, topic_prefix="texecom")
-    topic = "homeassistant/binary_sensor/texecom_alarm_panel_link/config"
+    topic = "homeassistant/binary_sensor/texecom_alarm_panel_connection/config"
     msgs = [m for m in mqtt.messages if m.topic == topic]
     assert len(msgs) == 1
     assert msgs[0].retain is True
@@ -170,7 +170,7 @@ async def test_publish_connectivity_discovery_retained() -> None:
         msgs[0].payload if isinstance(msgs[0].payload, str) else msgs[0].payload.decode()
     )
     assert payload["unique_id"] == CONNECTIVITY_OBJECT_ID
-    assert payload["name"] == "Alarm Panel Connected"
+    assert payload["name"] == "Alarm Panel Connection"
     assert payload["device_class"] == "connectivity"
     assert payload["availability_topic"] == "texecom/status"
 
