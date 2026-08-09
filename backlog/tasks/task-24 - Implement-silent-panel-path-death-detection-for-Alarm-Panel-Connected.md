@@ -1,10 +1,10 @@
 ---
 id: TASK-24
 title: Implement silent panel-path death detection for Alarm Panel Connected
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-08 09:52'
-updated_date: '2026-08-09 12:35'
+updated_date: '2026-08-09 12:44'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -60,6 +60,12 @@ Test strategy: how we'll know = unit/integration against FakePanel stand-in (no 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Implemented ADR-010 silent panel-path death detection — command reject/timeout + 30s area-flags trust poll drive Alarm Panel Connected, with auto-recover and structured logs.
+Changed files: texecom-alarm-app/src/texecom_alarm/panel_trust.py, texecom-alarm-app/src/texecom_alarm/arm_commands.py, texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/tests/fake_panel.py, texecom-alarm-app/tests/test_panel_trust.py, texecom-alarm-app/tests/test_arm_commands.py, texecom-alarm-app/tests/test_e2e_fake_panel.py, texecom-alarm-app/src/texecom_alarm/protocol/client.py (ruff format only), texecom-alarm-app/tests/test_reconnect.py (ruff format only)
+Verification: how we'll know = FakePanel unit/integration for AC1–AC3 + structured log fields; python -m pytest tests/test_panel_trust.py tests/test_arm_commands.py tests/test_e2e_fake_panel.py -q → 35 passed; full suite pytest --cov=texecom_alarm --cov-fail-under=90 → 210 passed, ~93% coverage; ruff check/format clean
+Notes/assumptions: Poll/recover defaults are 30s (plan-time); run(..., trust_poll_interval=, trust_recover_window=) are test-only overrides. No auto re-LOGIN or command auto-retry. Zone/alarm availability unchanged (ADR-004). Pre-commit fixed isinstance UP038 in test_panel_trust.py before landing.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
