@@ -8,12 +8,14 @@
 
 | Component | Effort | Status | Notes |
 |---|---|---|---|
-| texecom-alarm-app | L | planned ✅ | TASK-1–24 done. Update 2026-08-09: TASK-25 progressive startup-login backoff (`spec-startup-login-backoff`). DRAFT-2 redact fingerprint remains skeleton. |
+| texecom-alarm-app | L | planned ✅ | TASK-1–25 done. Update 2026-08-10: TASK-26–29 session-heal wave (Connection rename + mid-run health-check reconnect + bounded stuck-trust re-login; ADR-011 / `spec-panel-session-heal`). DRAFT-2 redact fingerprint remains skeleton. |
 
 ---
 
 ## Review
 
+<!-- Populated by /review. Do not edit manually. -->
+
 | # | Date | Verdict | Issues |
 |---|------|---------|--------|
-| 1 | 2026-08-09 | Clear | — |
+| 1 | 2026-08-10 | Clear | — |
