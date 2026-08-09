@@ -1,6 +1,6 @@
 # Plan
 
-**State:** Approved ✅
+**State:** Draft 📝
 
 ---
 
@@ -8,12 +8,10 @@
 
 | Component | Effort | Status | Notes |
 |---|---|---|---|
-| texecom-alarm-app | L | planned ✅ | TASK-1–20 done. Update 2026-08-08: TASK-21 (Away off Part-Arm / full arm), TASK-22 (Alarm Panel Connected rename), TASK-23 checkpoint; DRAFT-1 silent-death after SPIKE-008. |
+| texecom-alarm-app | L | planned ✅ | TASK-1–24 done. Update 2026-08-09: TASK-25 progressive startup-login backoff (`spec-startup-login-backoff`). DRAFT-2 redact fingerprint remains skeleton. |
 
 ---
 
 ## Review
 
-| # | Date | Verdict | Issues |
-|---|------|---------|--------|
-| 1 | 2026-08-08 | Clear | — |
+<!-- Populated by /review. Do not edit manually. -->
