@@ -858,3 +858,152 @@ async def test_e2e_arm_nak_republishes_disarmed_state() -> None:
         await asyncio.wait_for(task, timeout=2.0)
     finally:
         await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_quiet_house_panel_link_stays_on() -> None:
+    """ADR-010 / AC2: no zone pushes alone must not degrade Alarm Panel Connected."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = Settings(
+            panel_host=panel.host,
+            panel_port=panel.port,
+            udl_password="1234",
+            mqtt_host="127.0.0.1",
+            mqtt_port=1883,
+            mqtt_username="",
+            mqtt_password="",
+            mqtt_topic_prefix="texecom",
+            part_arm_1="night",
+            part_arm_2="home",
+            part_arm_3="unused",
+        )
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(
+            run(
+                settings,
+                panel=client,
+                mqtt=mqtt,
+                idle=stop.wait,
+                trust_poll_interval=0.08,
+                trust_recover_window=0.05,
+            )
+        )
+        for _ in range(150):
+            if mqtt.payloads_for("texecom/panel_link/state"):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+
+        for _ in range(50):
+            if panel.area_flags_calls >= 2 and panel.keepalive_attempts >= 1:
+                break
+            await asyncio.sleep(0.02)
+
+        assert panel.area_flags_calls >= 2
+        assert panel.keepalive_attempts >= 1
+        assert "OFF" not in mqtt.payloads_for("texecom/panel_link/state")
+        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_arm_nak_degrades_panel_link_keepalive_still_ok() -> None:
+    """ADR-010 / AC1: FakePanel arm NAK → panel_link OFF; app availability stays online."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = Settings(
+            panel_host=panel.host,
+            panel_port=panel.port,
+            udl_password="1234",
+            mqtt_host="127.0.0.1",
+            mqtt_port=1883,
+            mqtt_username="",
+            mqtt_password="",
+            mqtt_topic_prefix="texecom",
+            part_arm_1="night",
+            part_arm_2="home",
+            part_arm_3="unused",
+        )
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(
+            run(
+                settings,
+                panel=client,
+                mqtt=mqtt,
+                idle=stop.wait,
+                trust_poll_interval=60.0,
+            )
+        )
+        for _ in range(150):
+            if (
+                mqtt.payloads_for("texecom/panel_link/state")
+                and "texecom/alarm/command" in mqtt.subscribed
+            ):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        before_status = list(mqtt.payloads_for("texecom/status"))
+        panel.nak_next_arm = True
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_HOME")
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF":
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+        assert mqtt.payloads_for("texecom/status") == before_status
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()

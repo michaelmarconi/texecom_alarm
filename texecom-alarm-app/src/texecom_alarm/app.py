@@ -20,6 +20,11 @@ from texecom_alarm.mqtt.discovery import (
     publish_zone_discovery,
 )
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
+from texecom_alarm.panel_trust import (
+    RECOVER_WINDOW_SECONDS,
+    TRUST_POLL_INTERVAL_SECONDS,
+    PanelTrust,
+)
 from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient, ProtocolError
 from texecom_alarm.protocol.frame import (
     MSG_AREA,
@@ -70,6 +75,8 @@ async def run(
     login_delay: float | None = None,
     startup_retry_interval: float | None = None,
     startup_sleep: Callable[[float], Awaitable[None]] | None = None,
+    trust_poll_interval: float | None = None,
+    trust_recover_window: float | None = None,
 ) -> None:
     """Connect, enumerate, discover, snapshot zone+alarm state, subscribe, listen."""
     cfg = settings if settings is not None else load_settings()
@@ -145,6 +152,22 @@ async def run(
         )
         logger.debug("app_event_messages_subscribed")
 
+        trust = PanelTrust(
+            mqtt_client,  # type: ignore[arg-type]
+            topic_prefix=cfg.mqtt_topic_prefix,
+            zone_count=zone_count,
+            poll_interval=(
+                trust_poll_interval
+                if trust_poll_interval is not None
+                else TRUST_POLL_INTERVAL_SECONDS
+            ),
+            recover_window=(
+                trust_recover_window if trust_recover_window is not None else RECOVER_WINDOW_SECONDS
+            ),
+        )
+        # Startup area-flags snapshot already corroborated house state.
+        trust.reset_after_reconnect()
+
         command_topic = alarm_command_topic(cfg.mqtt_topic_prefix)
         await mqtt_client.subscribe(command_topic)  # type: ignore[attr-defined]
         logger.debug("mqtt_alarm_command_subscribed", extra={"topic": command_topic})
@@ -161,6 +184,7 @@ async def run(
                 topic_prefix=cfg.mqtt_topic_prefix,
                 in_use_zones=in_use,
                 alarm_state=alarm_state,
+                trust=trust,
             ),
             name="panel-listen",
         )
@@ -171,6 +195,7 @@ async def run(
                 settings=cfg,
                 command_topic=command_topic,
                 alarm_state=alarm_state,
+                trust=trust,
             ),
             name="mqtt-alarm-commands",
         )
@@ -260,6 +285,7 @@ async def _listen_alarm_commands(
     settings: Settings,
     command_topic: str,
     alarm_state: _SharedAlarmState,
+    trust: PanelTrust | None = None,
 ) -> None:
     """Subscribe loop: MQTT ARM_*/DISARM → shared panel arm/disarm (ADR-005)."""
     inbound = mqtt.inbound_messages  # type: ignore[attr-defined]
@@ -277,6 +303,7 @@ async def _listen_alarm_commands(
                 mqtt=mqtt,  # type: ignore[arg-type]
                 topic_prefix=settings.mqtt_topic_prefix,
                 get_current_alarm_state=lambda: alarm_state.payload,
+                trust=trust,
             )
         except Exception:
             logger.exception(
@@ -296,6 +323,7 @@ async def _listen_with_reconnect(
     in_use_zones: set[int],
     alarm_state: _SharedAlarmState,
     idle_timeout: float = _KEEPALIVE_IDLE_TIMEOUT,
+    trust: PanelTrust | None = None,
 ) -> None:
     """Listen for panel pushes; on ForcedDisconnect, asymmetric reconnect then resume."""
     # Survive outages: one rolling buffer across reconnect cycles (ADR-004).
@@ -311,6 +339,7 @@ async def _listen_with_reconnect(
                 idle_timeout=idle_timeout,
                 alarm_state=alarm_state,
                 activity=activity,
+                trust=trust,
             )
         except Exception:
             # Non-recoverable listen failure: mark panel-link degraded, never
@@ -341,6 +370,8 @@ async def _listen_with_reconnect(
             last_alarm_payload=last_alarm_payload,
         )
         alarm_state.payload = last_alarm_payload
+        if trust is not None:
+            trust.reset_after_reconnect()
         # Snapshot may edge into triggered during the outage; use preserved buffer.
         await maybe_publish_trigger_snapshot(
             mqtt,  # type: ignore[arg-type]
@@ -361,21 +392,41 @@ async def _listen_panel_messages(
     alarm_state: _SharedAlarmState,
     idle_timeout: float = _KEEPALIVE_IDLE_TIMEOUT,
     activity: TriggerActivityBuffer | None = None,
+    trust: PanelTrust | None = None,
 ) -> None:
     """Steady-state loop until ForcedDisconnect.
 
-    Keepalive on idle timeout. Cancellation still propagates.
+    Keepalive on idle timeout; periodic house/arm trust poll alongside (ADR-010).
+    Cancellation still propagates.
     Updates ``alarm_state`` when HOUSE AREA pushes change the MQTT payload.
     """
     logger.debug("panel_listen_start")
     buffer = activity if activity is not None else TriggerActivityBuffer()
     try:
         while True:
+            wait = idle_timeout
+            if trust is not None and trust.poll_due():
+                wait = min(wait, 0.05)
+            elif trust is not None:
+                wait = min(wait, max(0.05, trust.seconds_until_poll()))
             try:
-                frame = await panel.recv_message(timeout=idle_timeout)
+                frame = await panel.recv_message(timeout=wait)
             except TimeoutError:
-                await panel.keepalive()
+                # Idle or trust-poll slice elapsed: keep session alive and
+                # corroborate house/arm state when due (ADR-010).
+                try:
+                    await panel.keepalive()
+                    if trust is not None:
+                        trust.note_keepalive_ok()
+                except Exception:
+                    if trust is not None:
+                        trust.note_keepalive_failed()
+                    raise
+                if trust is not None:
+                    await trust.maybe_poll(panel)
                 continue
+            if trust is not None:
+                await trust.maybe_poll(panel)
             body = frame.body
             if not body:
                 logger.debug("panel_message_empty")
@@ -428,7 +479,7 @@ async def _listen_panel_messages(
                 # OUTPUT / USER / DEBUG / unknown — not decoded for MQTT yet.
                 logger.log(
                     TRACE_LEVEL,
-                    "panel_event %s ignored for MQTT (not decoded as zone/area state) " "body=%s",
+                    "panel_event %s ignored for MQTT (not decoded as zone/area state) body=%s",
                     _msg_subtype_label(subtype),
                     body.hex(),
                 )
