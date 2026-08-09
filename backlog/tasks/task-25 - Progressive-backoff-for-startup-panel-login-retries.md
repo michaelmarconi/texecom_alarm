@@ -1,10 +1,10 @@
 ---
 id: TASK-25
 title: Progressive backoff for startup panel login retries
-status: in-progress
+status: attention
 assignee: []
 created_date: '2026-08-09 13:45'
-updated_date: '2026-08-09 16:29'
+updated_date: '2026-08-09 17:01'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -52,3 +52,27 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/app.py (modify), texe
 
 Test strategy: how we'll know = unit/integration against FakePanel stand-in (no live panel). Command: cd texecom-alarm-app && python -m pytest tests/test_startup_login_backoff.py tests/test_operator_errors.py -q
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Attention
+## Attention
+Category: 4 architecture-conflict
+Attempted: Required code review + Bugbot gate pair after TASK-25 commit beb424a. Bugbot: no bugs. Required review: clean on app/tests ACs; flagged docs/plan.md Approved→Draft in git diff main..task-25.
+Failed: Reviewer classified attention: do not merge that hunk. Diagnosis: feat commit does not touch docs/plan.md; task-25 branched before docs(plan) approve (4670b58). merge-tree of task-25→main keeps Approved ✅. Diff main..task-25 only looks like a regression because the task branch is behind main.
+Decision needed: (A) merge main into task-25, re-run required review only, then Merge Ask — or (B) proceed to Merge Ask as-is trusting merge-tree (plan.md stays Approved) — or (C) other.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Startup first-login retries now use progressive 5→10→20→30s backoff (capped), log each next wait, and recover into monitoring without exiting.
+Changed files: texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/tests/test_startup_login_backoff.py, texecom-alarm-app/tests/test_operator_errors.py
+Verification: ACs via FakePanel fail-N-then-succeed + recorded sleeps/logs; cd texecom-alarm-app && .venv/bin/python -m pytest tests/test_startup_login_backoff.py tests/test_operator_errors.py -q → 6 passed; full suite pytest --cov=texecom_alarm --cov-fail-under=90 -q → 214 passed, 92.96% coverage; ruff clean on changed files
+Notes/assumptions: Replaced test-only startup_retry_interval with startup_backoff_scale (sleep double unchanged); FakePanel drop_login_responses already covered fail-N-then-succeed — no FakePanel change; ADR-002 mid-run reconnect path untouched
+
+## Build phase
+phase: awaiting-review
+<!-- SECTION:FINAL_SUMMARY:END -->
