@@ -72,5 +72,5 @@ How we'll know = unit/discovery assertion that payload name is Alarm Panel Conne
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
