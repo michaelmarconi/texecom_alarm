@@ -1,18 +1,17 @@
 # Analysis
 
-<!-- Synthesised by /analyse on 2026-08-08 from: spec-alarm-control.md, spec-zone-monitoring.md, spec-panel-link-liveness.md, spec-continuous-operation.md, spec-diagnostics-logging.md, spec-startup-login-backoff.md -->
+<!-- Synthesised by /analyse on 2026-08-09 from: spec-alarm-control.md, spec-zone-monitoring.md, spec-panel-link-liveness.md, spec-continuous-operation.md, spec-diagnostics-logging.md, spec-startup-login-backoff.md, spec-panel-session-heal.md -->
 
-**Date:** 2026-08-08  
+**Date:** 2026-08-09  
 **State:** Accepted ✅
 
-**Update note (2026-08-08):** Re-run against all six Accepted specs (including
-panel-link-liveness, continuous-operation, diagnostics-logging, startup-login-backoff),
-Accepted ADRs 001–004, 006, 008, 009 (005/007 superseded), and current Spike Candidates.
-Scope calibration remains **Medium**: undocumented panel protocol and a live security
-system with a public Add-on surface; original High protocol unknowns are closed. New
-open research is silent panel-path death detection (panel-link-liveness). Away = full
-arm / Part-Arm Home·Night·Unused is now recorded in ADR-008; residual risk is
-implementation lag in the Part-Arm config surface.
+**Update note (2026-08-09):** Re-run against all seven Accepted specs (adds
+`spec-panel-session-heal`). Silent-death **detection** is closed by ADR-010 /
+SPIKE-008 Validated (RISK-012 downgraded). Session **heal** decisions closed in
+this session (RISK-019/020): health-check timeout joins reconnect heal;
+trust-degrade prefers corroboration then bounded tear-down/re-login; Connection
+rename is a clean id refactor. Record heal policy via `/adr` before architecture;
+align Connected→Connection wording via `/correction`. Scope remains **Medium**.
 
 ## Section 1 — Risk register
 
@@ -181,29 +180,25 @@ remains live-only; FakePanel/CI may stand in for reconnect-client behaviour only
 |---|---|
 | Source | spec-panel-link-liveness.md § Spike Candidates |
 | Category | Technology unknowns |
-| Severity | Medium |
-| Severity rationale | Accepted panel-link-liveness requires truthful degraded within tens of seconds on silent failure; wrong mechanism yields false flaps on quiet houses or zombie “live” that automations trust. Feasibility and false-positive rate are not settled by ADR-002/004 alone. |
-| Spike required | Yes |
+| Severity | Low |
+| Severity rationale | Downgraded 2026-08-09 — SPIKE-008 Validated; ADR-010 records command-reject + periodic house-state poll. Tens-of-seconds bound locked at **30s** (2026-08-09). Residual is live quiet-house / zombie corroboration and heal follow-ons (RISK-019), not an open detection fork. |
+| Spike required | No (resolved 2026-08-09; was Yes) |
 
-Clean disconnect recovery exists; silent death (session looks healthy, updates stop)
-does not. Candidates include idle probe failure, absence of expected panel traffic,
-periodic state corroboration, or a combination. FakePanel can exercise chosen
-behaviour in CI once designed; live quiet-house false-positive rate remains
-accept-walk / live-only corroboration.
+Detection is decided and largely built. Live corroboration remains accept-walk;
+session heal after degrade/dead-keepalive is RISK-019 / `spec-panel-session-heal`.
 
 ### RISK-013: Connectivity rename may need unique_id / Entity ID change
 
 | Field | Value |
 |---|---|
-| Source | spec-panel-link-liveness.md § Spike Candidates |
+| Source | spec-panel-link-liveness.md § Spike Candidates; also spec-panel-session-heal.md § Spike Candidates |
 | Category | Requirements clarity |
 | Severity | Low |
-| Severity rationale | Friendly name **Alarm Panel Connected** is required; whether MQTT `unique_id` / Entity ID must change to clear a stuck “Panel Link” label on existing installs is an HA discovery/install detail, not a panel-protocol unknown. |
+| Severity rationale | Settled 2026-08-09 — clean refactor: friendly name **Alarm Panel Connection** and change `unique_id` / Entity ID as needed; no backwards-compat soft path. Ordinary plan/build + `/correction` to align older Connected wording. |
 | Spike required | No |
 
-Settle during plan/build with discovery unit tests and one live install check.
-No dedicated research spike — first-party MQTT discovery behaviour plus FakePanel
-discovery assertions cover the CI path; live rename outcome is accept-walk.
+Discovery unit tests assert the new name/ids; live cutover may need entity reset /
+automation retarget. No research spike.
 
 ### RISK-014: Part-Arm config surface still allows Away (lags ADR-008)
 
@@ -269,7 +264,41 @@ family as disarm (`01` for area 1), issued when the area is in alarm, then disar
 Recorded as a provisional row in [protocol-reference.md](protocol-reference.md). Do **not**
 wire into production arm_commands until SPIKE-009 validates ACK/effect on this Elite 88.
 Distinct from implementing an HA “alarm reset” entity/signal (AGENTS.md ADR-002 stop —
-ask a human before that product path).
+ask a human before that product path). Validation remains **live-only** (SPIKE-009 /
+accept-walk on the Elite 88); once wire shapes are known, FakePanel should stand in for
+cmd-9 ACK/effect in CI.
+
+### RISK-019: Mid-run session heal / re-login policy not yet in an ADR
+
+| Field | Value |
+|---|---|
+| Source | spec-panel-session-heal.md § Spike Candidates |
+| Category | Scope and sequencing |
+| Severity | Medium |
+| Severity rationale | Accepted heal spec requires no manual restart after dead health-check or stuck trust-degrade; ADR-010 left tear-down/re-login open and live keepalive timeout aborted the listen loop. Without a recorded ADR, architecture cannot lock the mechanism. |
+| Spike required | No |
+
+**Session decisions (2026-08-09) — record via `/adr` before `/architecture` Update:**
+
+1. Unanswered mid-run health-check → same keep-trying reconnect heal as clean
+   disconnect (connection signal OFF while recovering; live + re-sync after).
+2. Trust-degrade heal → corroboration first; tear down and re-login only if still
+   stuck after a bounded fail window (bound at plan/ADR time; auto-retry of the
+   failed arm/disarm tap remains out of scope).
+
+FakePanel must cover fail-then-heal shapes in CI; live zombie/heal corroboration
+remains accept-walk. Exact patient retry cadence may align with ADR-002 budgets.
+
+### RISK-020: Panel-link-liveness naming still says Connected
+
+| Field | Value |
+|---|---|
+| Category | Requirements clarity |
+| Severity | Low |
+| Severity rationale | Two Accepted specs disagree on the household label until `/correction` propagates **Alarm Panel Connection** from `spec-panel-session-heal` into `spec-panel-link-liveness` and downstream docs. |
+| Spike required | No |
+
+Ordinary `/correction` (and constitute/architecture follow-through). No spike.
 
 ### Categories scanned and clear of additional entries
 
@@ -287,8 +316,11 @@ Supervisor Add-on Store remain ordinary standing dependencies with known contrac
 | Whether/how the Texecom Connect protocol supports enumerating the zone list programmatically | spec-zone-monitoring.md § Spike Candidates | Covered by ADR-001 — dynamic panel enumeration; SPIKE-001 Validated |
 | Whether `GETAREADETAILS` (`cmd=35`) exposes each Part-Arm slot's configured name/role | spec-alarm-control.md § Spike Candidates | Not a genuine open unknown — exercised live 2026-08-04; returns area identity only, not Part-Arm roles; Home/Night→slot remains manual install mapping (Away is full arm, not a Part-Arm option) |
 | Whether a stable numeric panel serial can be read for device/`unique_id` namespacing | spec-zone-monitoring.md § Spike Candidates | Not required by Accepted zone-monitoring — zone-stable `unique_id` without panel serial is the decided scheme; serial remains optional later, not a current unknown to spike |
-| How to detect silent panel-path death reliably… | spec-panel-link-liveness.md § Spike Candidates | Surfaced as RISK-012 (spike required) |
-| Whether renaming the friendly name alone is enough… vs `unique_id` / Entity ID | spec-panel-link-liveness.md § Spike Candidates | Surfaced as RISK-013 (no spike — plan/build + live check) |
+| How to detect silent panel-path death reliably… | spec-panel-link-liveness.md § Spike Candidates | Covered by ADR-010 — command-reject + house-state poll; SPIKE-008 Validated (was RISK-012) |
+| Whether renaming the friendly name alone is enough… vs `unique_id` / Entity ID | spec-panel-link-liveness.md § Spike Candidates | Settled 2026-08-09 with heal-spec rename — clean refactor to **Alarm Panel Connection** including id change; RISK-013 / RISK-020 |
+| How mid-run health-check timeout should join clean-disconnect recovery | spec-panel-session-heal.md § Spike Candidates | Settled 2026-08-09 — treat as dead session; same keep-trying reconnect heal; RISK-019 → `/adr` then build (no spike) |
+| Whether trust-degrade heal requires session tear-down / re-login | spec-panel-session-heal.md § Spike Candidates | Settled 2026-08-09 — corroboration first; tear-down/re-login if stuck after bounded window; RISK-019 → `/adr` (no spike) |
+| Whether Connection rename needs unique_id / Entity ID change | spec-panel-session-heal.md § Spike Candidates | Settled 2026-08-09 — yes, clean refactor; no backwards compat (RISK-013) |
 
 **Note:** Com Port isolation remains RISK-011 (not dismissed). Continuous-operation,
 diagnostics-logging, and startup-login-backoff have no Spike Candidates sections;
@@ -296,18 +328,8 @@ residuals are RISK-015 / RISK-016.
 
 ## Section 3 — Ordered spike list
 
-### SPIKE-008: Prove silent panel-path death detection without false degraded flaps
-
-| Field | Value |
-|---|---|
-| Resolves | RISK-012 |
-| Depends on | None |
-| Sequencing rationale | Independent of closed protocol spikes; blocks truthful Alarm Panel Connected for automations; can run once FakePanel can simulate silence after a healthy session. |
-
-Investigate idle probe / traffic absence / periodic corroboration (or combination),
-false-positive behaviour on quiet houses, and a CI FakePanel scenario that goes silent
-after healthy traffic. Output: recommended detection approach + what CI may claim vs
-live-only corroboration.
+No new research spikes for session heal (decisions recorded; `/adr` then architecture/build).
+Active research spike remains SPIKE-009 only. SPIKE-008 is complete (below).
 
 ### SPIKE-009: Validate ResetArea (cmd 9) before disarm when the panel is in alarm
 
@@ -323,9 +345,17 @@ AREA/LOG follow-on, and whether sirens/alarm clear. Output: whether production d
 when `triggered` must send cmd 9 first; update protocol-reference; leave product “reset
 signal” to a separate human/ADR decision per AGENTS.md.
 
-Active spikes: SPIKE-008, SPIKE-009. Historical spikes below remain for traceability.
+Active spikes: SPIKE-009. Historical spikes below remain for traceability.
 
 ### Historical spikes (complete or dismissed — retained for traceability)
+
+### SPIKE-008: Prove silent panel-path death detection without false degraded flaps — Validated ✅
+
+| Field | Value |
+|---|---|
+| Resolves | RISK-012 |
+| Depends on | None |
+| Outcome | ADR-010 |
 
 ### SPIKE-001: Determine whether zones can be enumerated programmatically — Validated ✅
 
@@ -395,3 +425,5 @@ Active spikes: SPIKE-008, SPIKE-009. Historical spikes below remain for traceabi
 | 4 | 2026-08-08 | Clear | — |
 | 5 | 2026-08-08 | Clear | — |
 | 6 | 2026-08-08 | Clear | — |
+| 7 | 2026-08-09 | Issues found | 1 |
+| 8 | 2026-08-09 | Clear | — |
