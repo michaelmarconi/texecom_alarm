@@ -86,12 +86,15 @@ class FakePanel:
         self.zone_detail_queries: list[int] = []
         self.zone_state_override: bytes | None = None
         self.area_flags_override: bytes | None = None
+        self.area_flags_calls = 0
+        self.nak_next_area_flags = 0
         self.last_seteventmessages_body: bytes | None = None
         self.seteventmessages_calls = 0
         self.last_arm_mode: int | None = None
         self.last_arm_body: bytes | None = None
         self.arm_calls: list[int] = []
         self.nak_next_arm = False
+        self.nak_next_disarm = False
         self.last_disarm_body: bytes | None = None
         self.disarm_calls = 0
         self._handlers: dict[int, Callable[[Frame], bytes]] = {
@@ -314,6 +317,10 @@ class FakePanel:
         return bytes([CMD_GET_ZONE_STATE]) + bytes(statuses)
 
     def _handle_get_area_flags(self, frame: Frame) -> bytes:
+        self.area_flags_calls += 1
+        if self.nak_next_area_flags > 0:
+            self.nak_next_area_flags -= 1
+            return bytes([CMD_GET_AREA_FLAGS, NAK])
         if self.area_flags_override is not None:
             override = self.area_flags_override
             self.area_flags_override = None
@@ -351,4 +358,7 @@ class FakePanel:
     def _handle_set_area_disarm(self, frame: Frame) -> bytes:
         self.last_disarm_body = frame.body[1:]
         self.disarm_calls += 1
+        if self.nak_next_disarm:
+            self.nak_next_disarm = False
+            return bytes([CMD_SET_AREA_DISARM, NAK])
         return bytes([CMD_SET_AREA_DISARM, ACK])

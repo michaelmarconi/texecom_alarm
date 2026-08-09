@@ -8,6 +8,13 @@ from typing import Protocol
 
 from texecom_alarm.area_state import publish_alarm_state
 from texecom_alarm.config import Settings
+from texecom_alarm.panel_trust import (
+    REASON_ARM_NAK,
+    REASON_ARM_TIMEOUT,
+    REASON_DISARM_NAK,
+    REASON_DISARM_TIMEOUT,
+    PanelTrust,
+)
 from texecom_alarm.protocol.client import PanelClient, ProtocolError
 
 logger = logging.getLogger(__name__)
@@ -43,6 +50,7 @@ async def handle_alarm_command(
     mqtt: MqttPublisher | None = None,
     topic_prefix: str | None = None,
     get_current_alarm_state: Callable[[], str | None] | None = None,
+    trust: PanelTrust | None = None,
 ) -> None:
     """Translate ARM_*/DISARM MQTT payloads into shared panel commands (ADR-008).
 
@@ -50,6 +58,7 @@ async def handle_alarm_command(
     AREA/snapshot updates. On panel NAK for arm, republishes the live last-known
     alarm state (via get_current_alarm_state at NAK time) so HA does not leave a
     stuck mode selection and mid-flight retained updates are not overwritten.
+    Arm/disarm reject or timeout also records a panel-link trust failure (ADR-010).
     Unknown payloads and HA modes not available from the Part-Arm mapping are
     ignored (logged, no panel send). Away always uses full-arm mode byte 0.
     """
@@ -58,7 +67,22 @@ async def handle_alarm_command(
 
     if text == PAYLOAD_DISARM:
         logger.debug("alarm_command_disarm")
-        await panel.set_area_disarm()
+        try:
+            await panel.set_area_disarm()
+        except ProtocolError as exc:
+            logger.warning(
+                "Panel rejected disarm request: %s",
+                exc,
+            )
+            if trust is not None:
+                await trust.record_command_failure(REASON_DISARM_NAK)
+        except TimeoutError as exc:
+            logger.warning(
+                "Panel disarm request timed out: %s",
+                exc,
+            )
+            if trust is not None:
+                await trust.record_command_failure(REASON_DISARM_TIMEOUT)
         return
 
     ha_mode = _PAYLOAD_TO_HA_MODE.get(text)
@@ -84,6 +108,24 @@ async def handle_alarm_command(
             ha_mode,
             exc,
         )
+        if trust is not None:
+            await trust.record_command_failure(REASON_ARM_NAK, ha_mode=ha_mode)
+        live_state = get_current_alarm_state() if get_current_alarm_state is not None else None
+        if mqtt is not None and topic_prefix is not None and live_state is not None:
+            await publish_alarm_state(
+                mqtt,
+                payload=live_state,
+                topic_prefix=topic_prefix,
+            )
+        return
+    except TimeoutError as exc:
+        logger.warning(
+            "Panel arm request for mode %s timed out: %s",
+            ha_mode,
+            exc,
+        )
+        if trust is not None:
+            await trust.record_command_failure(REASON_ARM_TIMEOUT, ha_mode=ha_mode)
         live_state = get_current_alarm_state() if get_current_alarm_state is not None else None
         if mqtt is not None and topic_prefix is not None and live_state is not None:
             await publish_alarm_state(
