@@ -56,3 +56,10 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/panel_trust.py (creat
 
 Test strategy: how we'll know = unit/integration against FakePanel stand-in (no live panel). Command: cd texecom-alarm-app && python -m pytest tests/test_panel_trust.py tests/test_arm_commands.py tests/test_e2e_fake_panel.py -q
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
