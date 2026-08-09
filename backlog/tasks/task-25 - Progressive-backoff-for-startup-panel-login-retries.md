@@ -1,9 +1,10 @@
 ---
 id: TASK-25
 title: Progressive backoff for startup panel login retries
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-09 13:45'
+updated_date: '2026-08-09 16:29'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
