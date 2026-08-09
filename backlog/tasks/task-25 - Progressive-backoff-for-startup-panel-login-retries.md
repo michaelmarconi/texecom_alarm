@@ -1,10 +1,10 @@
 ---
 id: TASK-25
 title: Progressive backoff for startup panel login retries
-status: awaiting-review
+status: attention
 assignee: []
 created_date: '2026-08-09 13:45'
-updated_date: '2026-08-09 16:39'
+updated_date: '2026-08-09 17:01'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -52,6 +52,17 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/app.py (modify), texe
 
 Test strategy: how we'll know = unit/integration against FakePanel stand-in (no live panel). Command: cd texecom-alarm-app && python -m pytest tests/test_startup_login_backoff.py tests/test_operator_errors.py -q
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Attention
+## Attention
+Category: 4 architecture-conflict
+Attempted: Required code review + Bugbot gate pair after TASK-25 commit beb424a. Bugbot: no bugs. Required review: clean on app/tests ACs; flagged docs/plan.md Approved→Draft in git diff main..task-25.
+Failed: Reviewer classified attention: do not merge that hunk. Diagnosis: feat commit does not touch docs/plan.md; task-25 branched before docs(plan) approve (4670b58). merge-tree of task-25→main keeps Approved ✅. Diff main..task-25 only looks like a regression because the task branch is behind main.
+Decision needed: (A) merge main into task-25, re-run required review only, then Merge Ask — or (B) proceed to Merge Ask as-is trusting merge-tree (plan.md stays Approved) — or (C) other.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
