@@ -57,6 +57,31 @@ async def _wait_until_online(mqtt: RecordingMqttPublisher, task: asyncio.Task[No
     raise AssertionError("timed out waiting for MQTT online after startup retries")
 
 
+async def _wait_until_monitoring(mqtt: RecordingMqttPublisher, task: asyncio.Task[None]) -> None:
+    """Wait until post-login monitoring has published alarm + panel-link state.
+
+    MQTT availability goes online during discovery, before zone/area snapshots and
+    panel_link — so online alone is not enough for AC3 monitoring evidence.
+    """
+    for _ in range(400):
+        has_online = mqtt.connected and any(str(m.payload) == "online" for m in mqtt.messages)
+        has_alarm = any(m.topic.endswith("/alarm/state") for m in mqtt.messages)
+        has_panel_link = any(
+            m.topic.endswith("/panel_link/state") and str(m.payload) == "ON" for m in mqtt.messages
+        )
+        if has_online and has_alarm and has_panel_link:
+            return
+        if task.done():
+            exc = task.exception()
+            if exc is not None:
+                raise exc
+            raise AssertionError("run() finished before monitoring state published")
+        await asyncio.sleep(0.02)
+    raise AssertionError(
+        "timed out waiting for alarm/state and panel_link/state after startup recovery"
+    )
+
+
 @pytest.mark.asyncio
 async def test_startup_backoff_waits_grow_then_cap(
     caplog: pytest.LogCaptureFixture,
@@ -161,7 +186,7 @@ async def test_startup_backoff_recovers_into_monitoring(
                 startup_sleep=_sleep,
             )
         )
-        await _wait_until_online(mqtt, task)
+        await _wait_until_monitoring(mqtt, task)
 
         # Monitoring path: discovery + zone/alarm state + panel-link live published.
         assert any("binary_sensor" in m.topic and "config" in m.topic for m in mqtt.messages)
