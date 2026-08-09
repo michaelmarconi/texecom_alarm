@@ -404,7 +404,7 @@ class PanelClient:
                         self.timeout_message(pending, host=self.host, port=self.port)
                     )
                 raise TimeoutError(
-                    f"Timed out waiting for data from the panel at " f"{self.host}:{self.port}."
+                    f"Timed out waiting for data from the panel at {self.host}:{self.port}."
                 )
 
             frame, consumed = try_decode_frame(self._buf)
@@ -458,7 +458,7 @@ class PanelClient:
                         self.timeout_message(pending, host=self.host, port=self.port)
                     ) from None
                 raise TimeoutError(
-                    f"Timed out waiting for data from the panel at " f"{self.host}:{self.port}."
+                    f"Timed out waiting for data from the panel at {self.host}:{self.port}."
                 ) from None
             if not chunk:
                 raise ForcedDisconnect(
