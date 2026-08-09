@@ -4,7 +4,7 @@ title: Progressive backoff for startup panel login retries
 status: awaiting-review
 assignee: []
 created_date: '2026-08-09 13:45'
-updated_date: '2026-08-09 17:02'
+updated_date: '2026-08-09 17:03'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -74,5 +74,5 @@ Verification: ACs via FakePanel fail-N-then-succeed + recorded sleeps/logs; targ
 Notes/assumptions: Practitioner chose A — merged main into task-25 (af8c10b) so docs/plan.md stays Approved; required re-review only (no Bugbot). Prior attention was branch lag, not an app regression.
 
 ## Build phase
-phase: awaiting-review
+phase: awaiting-merge-signoff
 <!-- SECTION:FINAL_SUMMARY:END -->
