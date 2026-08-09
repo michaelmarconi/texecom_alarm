@@ -45,6 +45,30 @@ logger = logging.getLogger(__name__)
 # (docs/protocol-reference.md). Used as recv_message idle timeout → keepalive.
 _KEEPALIVE_IDLE_TIMEOUT = 15.0
 
+# First-login progressive backoff (spec-startup-login-backoff). Distinct from ADR-002
+# mid-run reconnect budgets.
+_STARTUP_LOGIN_BACKOFF_BASE_SECONDS = 5.0
+_STARTUP_LOGIN_BACKOFF_CAP_SECONDS = 30.0
+
+
+def startup_login_wait_seconds(failure_number: int, *, scale: float = 1.0) -> float:
+    """Seconds to wait after the *k*-th failed startup connect/login (`k = 1, 2, …`).
+
+    Production schedule: ``min(5 × 2^(k-1), 30)`` — 5→10→20→30 then 30 forever.
+    ``scale`` is a test-only multiplier so CI can shrink waits without changing
+    the schedule shape (non-decreasing, increases, capped at 30×scale).
+    """
+    if failure_number < 1:
+        raise ValueError(f"failure_number must be >= 1, got {failure_number}")
+    if scale <= 0:
+        raise ValueError(f"scale must be > 0, got {scale}")
+    wait = min(
+        _STARTUP_LOGIN_BACKOFF_BASE_SECONDS * (2 ** (failure_number - 1)),
+        _STARTUP_LOGIN_BACKOFF_CAP_SECONDS,
+    )
+    return wait * scale
+
+
 _MSG_SUBTYPE_LABELS: dict[int, str] = {
     MSG_DEBUG: "DEBUG",
     MSG_ZONE: "ZONE",
@@ -73,7 +97,7 @@ async def run(
     mqtt: object | None = None,
     idle: Callable[[], Awaitable[None]] | None = None,
     login_delay: float | None = None,
-    startup_retry_interval: float | None = None,
+    startup_backoff_scale: float = 1.0,
     startup_sleep: Callable[[float], Awaitable[None]] | None = None,
     trust_poll_interval: float | None = None,
     trust_recover_window: float | None = None,
@@ -108,11 +132,7 @@ async def run(
                 panel_client,
                 host=cfg.panel_host,
                 port=cfg.panel_port,
-                interval=(
-                    startup_retry_interval
-                    if startup_retry_interval is not None
-                    else cfg.reconnect_normal_interval_seconds
-                ),
+                backoff_scale=startup_backoff_scale,
                 sleep=startup_sleep,
             )
 
@@ -240,10 +260,14 @@ async def _connect_and_login_with_retry(
     *,
     host: str,
     port: int,
-    interval: float,
+    backoff_scale: float = 1.0,
     sleep: Callable[[float], Awaitable[None]] | None = None,
 ) -> None:
-    """Keep retrying first connect/login until the panel accepts (continuous-operation)."""
+    """Keep retrying first connect/login until the panel accepts (continuous-operation).
+
+    Waits follow the progressive startup schedule (spec-startup-login-backoff), not
+    ADR-002 mid-run reconnect intervals.
+    """
     sleeper = sleep if sleep is not None else asyncio.sleep
     attempt = 0
     while True:
@@ -260,6 +284,7 @@ async def _connect_and_login_with_retry(
                 )
             return
         except (TimeoutError, OSError, ProtocolError, ForcedDisconnect) as exc:
+            wait = startup_login_wait_seconds(attempt, scale=backoff_scale)
             logger.error(
                 "Could not log in to the panel at %s:%s (attempt %s): %s "
                 "Keeping the add-on running and retrying in %g seconds. "
@@ -269,13 +294,13 @@ async def _connect_and_login_with_retry(
                 port,
                 attempt,
                 exc,
-                interval,
+                wait,
             )
             try:
                 await panel.close()
             except Exception:
                 logger.exception("Could not close the failed panel connection before retrying.")
-            await sleeper(interval)
+            await sleeper(wait)
 
 
 async def _listen_alarm_commands(
