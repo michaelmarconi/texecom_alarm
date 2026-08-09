@@ -1,9 +1,10 @@
 ---
 id: TASK-26
 title: Rename connectivity entity to Alarm Panel Connection
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-09 23:50'
+updated_date: '2026-08-09 23:56'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
