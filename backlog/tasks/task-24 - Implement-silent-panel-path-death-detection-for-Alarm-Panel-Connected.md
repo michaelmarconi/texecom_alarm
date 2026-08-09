@@ -4,7 +4,7 @@ title: Implement silent panel-path death detection for Alarm Panel Connected
 status: awaiting-review
 assignee: []
 created_date: '2026-08-08 09:52'
-updated_date: '2026-08-09 12:49'
+updated_date: '2026-08-09 13:01'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -67,5 +67,5 @@ Verification: how we'll know = FakePanel unit/integration for AC1–AC3 + struct
 Notes/assumptions: Poll/recover defaults are 30s (plan-time); run(..., trust_poll_interval=, trust_recover_window=) are test-only overrides. No auto re-LOGIN or command auto-retry. Zone/alarm availability unchanged (ADR-004). Pre-commit fixed isinstance UP038 in test_panel_trust.py before landing.
 
 ## Build phase
-phase: awaiting-merge-signoff
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
