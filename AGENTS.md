@@ -1,6 +1,6 @@
 # Agent Instructions
 
-<!-- Synthesised by /constitute on 2026-08-09 from: ADR-001, ADR-002, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-010, ADR-011 -->
+<!-- Synthesised by /constitute on 2026-08-10 from: ADR-001, ADR-002, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-010, ADR-011, ADR-012 -->
 <!-- Re-run /constitute after any new ADR is accepted. -->
 
 ## Project
@@ -116,6 +116,15 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - Exact fail-window length and how patient retry cadence lines up with existing mid-run reconnect budgets remain plan-time (and may need live tuning); do not treat reconnect budgets as newly finalised by this ADR alone.
 - Renaming the connection entity (e.g. Alarm Panel Connection) is a separate product rename — not decided by this ADR’s recovery mechanism.
 
+### ADR-012: Use Python 3 for the Texecom Alarm App
+
+**Decision:** Use Python 3 for the Texecom Alarm App.
+
+**Constraints:**
+- New app code for this peer stays in Python 3 — do not reimplement the add-on in another language without a superseding ADR.
+- Packaging and runtime stay compatible with a Python 3 process inside the Home Assistant App image (not a second language runtime as the primary app).
+- Docker base image and s6 process supervision remain platform packaging, not a separate language decision.
+
 ## Stop conditions
 
 - **[ADR-001]** Before implementing a hybrid or cached last-known-good zone list for when the panel can't be reached at startup: stop and ask a human — that path was left open and not validated by this ADR.
@@ -148,6 +157,7 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - **[ADR-011]** Before hardcoding the trust-degrade “still stuck” fail window or mid-run heal retry cadence as final, unchangeable values: stop and ask a human — ADR-011 left those for plan time / live tuning.
 - **[ADR-011]** Before aborting the mid-run listen loop on unanswered health-check without entering keep-trying recovery: stop and ask a human — that would violate this decision.
 - **[ADR-011]** Before treating live ComIP heal / zombie recovery as already proven by CI/FakePanel alone: stop and ask a human — those remain live-only corroboration.
+- **[ADR-012]** Before rewriting the Texecom Alarm App peer in a language other than Python 3: stop and ask a human — that requires a superseding ADR.
 
 ## Testing stance
 
