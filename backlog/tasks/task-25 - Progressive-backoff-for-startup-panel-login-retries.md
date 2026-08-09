@@ -1,10 +1,10 @@
 ---
 id: TASK-25
 title: Progressive backoff for startup panel login retries
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-09 13:45'
-updated_date: '2026-08-09 17:03'
+updated_date: '2026-08-09 17:06'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -35,9 +35,9 @@ ordinal: 19000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 After repeated startup connect/login failures, recorded waits are strictly non-decreasing, increase at least once, never exceed 30 seconds, and remain at 30 once the cap is reached
-- [ ] #2 Each failed startup login attempt logs the wait duration that will be used before the next try
-- [ ] #3 After several failed startup logins under backoff, when the panel accepts login the app proceeds into normal monitoring without exiting the process
+- [x] #1 After repeated startup connect/login failures, recorded waits are strictly non-decreasing, increase at least once, never exceed 30 seconds, and remain at 30 once the cap is reached
+- [x] #2 Each failed startup login attempt logs the wait duration that will be used before the next try
+- [x] #3 After several failed startup logins under backoff, when the panel accepts login the app proceeds into normal monitoring without exiting the process
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -74,5 +74,5 @@ Verification: ACs via FakePanel fail-N-then-succeed + recorded sleeps/logs; targ
 Notes/assumptions: Practitioner chose A — merged main into task-25 (af8c10b) so docs/plan.md stays Approved; required re-review only (no Bugbot). Prior attention was branch lag, not an app regression.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
