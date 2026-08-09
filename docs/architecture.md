@@ -1,8 +1,8 @@
 # Architecture
 
-<!-- Synthesised by /architecture on 2026-08-08 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-002-use-frame-resync-and-asymmetric-reconnect-for-panel-protocol-collisions.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md -->
+<!-- Synthesised by /architecture on 2026-08-09 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-002-use-frame-resync-and-asymmetric-reconnect-for-panel-protocol-collisions.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md, adr-010-use-command-reject-events-and-periodic-house-state-polling-for-silent-panel-path-death-detection.md -->
 
-**Date:** 2026-08-08
+**Date:** 2026-08-09
 **State:** Accepted ✅
 
 ## Overview
@@ -54,6 +54,10 @@ Building this commits the project to:
   Away always uses the panel's full-arm mode; Home and Night map to Part-Arm slots
   from per-installation configuration (Home / Night / Unused only — Away is never a
   Part-Arm option), rather than hardcoding this household's engineer layout.
+- Keeping Alarm Panel Connected truthful when the session still looks alive but is
+  not trustworthy: a rejected or timed-out arm/disarm is an immediate degrade signal,
+  and a separate periodic house/arm-state poll corroborates trust alongside the idle
+  heartbeat — not zone-silence alone, and not heartbeat failure alone (ADR-010).
 
 **Diagram colours:** blue = this system (authored components and local storage); grey =
 external people and systems.
@@ -101,6 +105,12 @@ broker) and its internal shape are detailed under `## Components` below.
   `alarm_control_panel` and zone entities themselves keep reporting their last known
   state throughout — they are never marked unavailable because of this; only the app
   process itself being down does that (ADR-004).
+- **Session looks live but is untrustworthy** — arm/disarm reject or timeout, or a
+  failed house/arm-state corroboration poll, flips Alarm Panel Connected to degraded
+  even while the idle heartbeat still succeeds; the link may return to live after
+  successful corroboration with no recent command failure, without a manual add-on
+  restart (ADR-010). Zone/alarm entities keep last-known state (ADR-004). Automatic
+  tear-down/re-login and in-tap command auto-retry are not decided here.
 - **MQTT broker unreachable** — out of scope to solve beyond standard client
   reconnect behaviour; this app has the same standing dependency on the broker that
   `the prior MQTT bridge` does today.
@@ -154,7 +164,7 @@ alarm entity (ADR-004). No HTTP API, no HA config-flow, no entity-registry prese
 beyond what HA's own MQTT integration creates from these discovery payloads (ADR-003).
 **Consumes:**
 - Texecom Connect protocol over TCP to the panel's ComIP module (ADR-001, ADR-002,
-  ADR-006, ADR-008, ADR-009).
+  ADR-006, ADR-008, ADR-009, ADR-010).
 - The household's MQTT broker, as a standing runtime dependency (ADR-003) — the same
   broker `the prior MQTT bridge` already uses today.
 - App configuration (panel host/port, UDL password, MQTT broker settings, and the
@@ -195,12 +205,24 @@ Key behaviours:
 - **Event subscription and steady-state decode**: sends `SETEVENTMESSAGES` to
   subscribe to `ZONE`/`AREA`/`OUTPUT`/`USER`/`LOG` push messages, then decodes each
   unsolicited message into the corresponding zone/alarm state and publishes it as an
-  MQTT state update — no steady-state polling (the ADR-006 and ADR-009 snapshots are
-  startup / reconnect only).
+  MQTT state update. Zone/arm *entity* currency in steady state is still push-driven
+  (ADR-006 / ADR-009 snapshots remain startup / reconnect only). Separately, ADR-010
+  adds a bounded periodic house/arm-state *trust* poll — not a replacement for push
+  updates and not “degrade when zones go quiet.”
 - **Idle keepalive and ordinary collision recovery**: sends a safe read-only command
   (e.g. `GETDATETIME`) periodically; on a 2–3s timeout, resends with the same sequence
   number, matching the panel's own documented and empirically-confirmed recovery
-  behaviour (ADR-002).
+  behaviour (ADR-002). This keepalive is session keep-alive only — not proof the path
+  is trustworthy for commands (ADR-010).
+- **Silent panel-path death / command-path zombie detection** (ADR-010): arm/disarm
+  NAK or command timeout immediately marks Alarm Panel Connected degraded even when
+  keepalive still succeeds. A periodic house/arm-state corroboration poll (same family
+  as the ADR-009 area-flags read, on a plan-time interval) also marks degraded on
+  poll failure. Missing zone push traffic alone must not be the sole degrade criterion.
+  Return to live after successful corroboration once the recent-command-failure recover
+  window has cleared, without requiring a manual add-on restart. Session tear-down /
+  re-login on degrade and in-tap auto-retry of the failed command remain open
+  follow-ons. FakePanel must exercise the SPIKE-008 scenario shapes for CI.
 - **Frame resync** (ADR-002): treats a byte that doesn't match the expected frame
   header as recoverable — scans forward for the next valid header instead of raising —
   because the panel's own SmartCom/ComIP hardware is confirmed to multiplex unrelated
@@ -288,11 +310,44 @@ flowchart LR
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
 ```
 
-There is no client-tunable steady-state poll cadence here — after the ADR-006 zone
-and ADR-009 area-flags startup / reconnect snapshots, ongoing state changes arrive as
-unsolicited pushes only once `SETEVENTMESSAGES` has been sent, and the panel's own
-reporting latency was observed to fall within the same wall-clock second as the
-physical action in SPIKE-002.
+Entity state updates in this flow stay push-driven: after the ADR-006 zone and
+ADR-009 area-flags startup / reconnect snapshots, ongoing zone/alarm *entity*
+changes arrive as unsolicited pushes once `SETEVENTMESSAGES` has been sent
+(panel reporting latency observed within the same wall-clock second in
+SPIKE-002). That is separate from ADR-010’s bounded periodic house/arm-state
+*trust* poll, which runs alongside the idle keepalive to corroborate that the
+session remains trustworthy — it is not a substitute for push updates, not a
+client-tunable entity-state poll cadence, and must not degrade solely because
+zones go quiet.
+
+### Panel-link trust (silent death / command reject)
+
+How Alarm Panel Connected stays honest when the TCP session still looks alive
+(ADR-010), without blanking zone/alarm entities (ADR-004).
+
+```mermaid
+flowchart LR
+    Reject["Arm/disarm NAK<br/>or command timeout"]:::owned
+    PollFail["House/arm trust<br/>poll fails"]:::owned
+    Degrade["Alarm Panel Connected<br/>→ degraded"]:::owned
+    Keep["Zone/alarm keep<br/>last-known state"]:::owned
+    PollOk["Trust poll OK +<br/>no recent cmd fail"]:::owned
+    Live["Alarm Panel Connected<br/>→ live"]:::owned
+
+    Reject --> Degrade
+    PollFail --> Degrade
+    Degrade --> Keep
+    Degrade --> PollOk --> Live
+
+    classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
+```
+
+A rejected or timed-out arm/disarm is an immediate degrade *event* even when the
+idle heartbeat still succeeds. The periodic house/arm-state poll is a separate
+trust check (alongside keepalive). Return to live after successful corroboration
+once the recent-command-failure window has cleared, without a manual add-on
+restart. Automatic session tear-down/re-login and in-tap command auto-retry are
+not decided here.
 
 ### Protocol collision recovery
 
@@ -363,7 +418,7 @@ appear on that Part-Arm option surface.
 
 | Outside system | In CI | What CI may claim | Live-only |
 |---|---|---|---|
-| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), frame resync, reconnect paths; silent-session scenarios once SPIKE-008 lands | Real Away/Night/Home arm sequences, trigger-time forced disconnect recovery, quiet-house false-positive rate for silent-death detection |
+| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), frame resync, reconnect paths; silent-death / command-reject / quiet-house detector shapes (ADR-010 / SPIKE-008) | Real Away/Night/Home arm sequences, trigger-time forced disconnect recovery, live quiet-house false-positive rate and live zombie corroboration for silent-death detection |
 | MQTT broker | Hermetic / test broker (or FakePanel + recording MQTT client) | Discovery payloads, state/command publish/subscribe, connectivity sensor and last-trigger snapshot attributes | Household HA entity behaviour, wrapper/HomeKit/automations |
 
 CI never targets the live household panel or a production broker account. Product
@@ -379,8 +434,9 @@ no new external network exposure is introduced.
 
 **Logging and monitoring:** Standard `bashio::log` output via the s6-supervised
 process, plus a dedicated connectivity/freshness `binary_sensor` published over MQTT
-that reflects degraded panel-link health during recovery windows (ADR-002, ADR-004) —
-the `alarm_control_panel`/zone entities themselves are not used for this signal, since
+that reflects degraded panel-link health during recovery windows (ADR-002, ADR-004)
+and during silent-death / command-reject detection (ADR-010) — the
+`alarm_control_panel`/zone entities themselves are not used for this signal, since
 their own last-known state must stay visible throughout (ADR-004).
 
 **Deployment:** Ships as a Home Assistant App (add-on) using the existing
@@ -445,11 +501,13 @@ module accepts only one TCP client at a time (ADR-001).
   Home/Night→slot must be configurable and Away must be excluded from Part-Arm options
   is fixed. → design during `/plan` / build of the app's config surface; do not treat
   any one shape as already mandated.
-- **Silent panel-path death detection** (RISK-012 / SPIKE-008; `spec-panel-link-liveness`)
-  — how to detect a previously healthy session that has stopped delivering trustworthy
-  updates (idle probe, traffic absence, periodic corroboration, or a combination)
-  without false degraded flaps on quiet houses is not yet investigated. → run `/spike`
-  (SPIKE-008) before treating a specific detection design as architecture-settled.
+- ~~**Silent panel-path death detection** (RISK-012 / SPIKE-008)~~ **Answered 2026-08-08
+  / ADR-010:** Combination — command-reject/timeout as degrade event plus periodic
+  house/arm-state corroboration poll alongside idle keepalive; not traffic-absence
+  alone; not keepalive-alone. Exact poll/recover intervals settle at `/plan` /
+  build. Automatic session tear-down/re-login on degrade and in-tap command
+  auto-retry remain open follow-ons (ADR-010). Live quiet-house / zombie walks remain
+  `/accept` corroboration.
 - **Com Port / reporting isolation** (RISK-011 / ADR-002 secondary mitigation) remains
   an optional installer-level probe: it has not been checked on this panel, and must
   not be assumed to shorten or eliminate the trigger-time forced disconnect
@@ -467,3 +525,6 @@ module accepts only one TCP client at a time (ADR-001).
 | 5 | 2026-08-04 | Clear | — |
 | 6 | 2026-08-04 | Clear | — |
 | 7 | 2026-08-08 | Clear | — |
+| 8 | 2026-08-09 | Issues found | 1 |
+| 9 | 2026-08-09 | Clear | — (review-8 Key flows ADR-010 contradiction fixed) |
+| 10 | 2026-08-09 | Clear | — |
