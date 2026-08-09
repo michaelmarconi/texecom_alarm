@@ -84,7 +84,7 @@ async def test_startup_retries_silent_login_then_succeeds(
                     mqtt=mqtt,
                     idle=stop.wait,
                     login_delay=0.0,
-                    startup_retry_interval=0.01,
+                    startup_backoff_scale=0.002,
                     startup_sleep=_sleep,
                 )
             )
