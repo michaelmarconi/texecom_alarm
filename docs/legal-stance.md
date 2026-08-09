@@ -1,7 +1,7 @@
 # Legal stance — protocol interoperability
 
 **Status:** Project position statement (not legal advice)  
-**Related:** [Protocol reference](protocol-reference.md) · RISK-008 in [analysis](analysis.md)
+**Related:** [Protocol overview](protocol-overview.md) · [Protocol reference](protocol-reference.md) · RISK-008 in [analysis](analysis.md)
 
 This document states how this project treats Texecom Connect / ComIP protocol knowledge and why the public materials look the way they do.
 
@@ -19,14 +19,14 @@ This project is **not** affiliated with, endorsed by, or approved by Texecom. Te
 |-----------|--------|
 | Add-on code (MIT) | A bridge from panel TCP session → MQTT discovery for Home Assistant |
 | Consumer docs (`README.md`, `DOCS.md`) | How to install and configure the add-on |
-| [Protocol reference](protocol-reference.md) and spike reports | Living **observational** notes of what this panel did on the wire |
+| [Protocol overview](protocol-overview.md) + [protocol reference](protocol-reference.md) and spike reports | Living **observational** notes of what this panel did on the wire (explanation + lookup) |
 | Architecture / ADRs / specs | Product and engineering decisions for *this* add-on |
 
 We do **not** publish Texecom’s internal protocol manuals, NDA packs, SDK dumps, or verbatim extracts from materials Texecom distributes only under confidentiality.
 
 ## How protocol knowledge was obtained
 
-1. **Live capture and probe** against a household Premier Elite panel (model/firmware recorded in the protocol reference), using the network path the panel already offers for Connect/ComIP-style clients.
+1. **Live capture and probe** against a household Premier Elite panel (model/firmware recorded in the protocol overview/reference), using the network path the panel already offers for Connect/ComIP-style clients.
 2. **Independent implementation** of a client and tests from those observations (and from this project’s own spikes), rather than importing proprietary Texecom documentation into the tree.
 3. **Public prior art** (open-source clients, forum reports) may be **cited for corroboration or contrast**, and is labelled when a fact is not yet independently confirmed on this panel. Citation ≠ copying confidential Texecom documents.
 
@@ -34,7 +34,7 @@ Where a finding has not been confirmed live here, the protocol reference says so
 
 ## What we ask of readers
 
-- Treat the protocol reference as **incomplete, panel-specific, and empirical** — not as an official Texecom specification.
+- Treat the protocol overview and reference as **incomplete, panel-specific, and empirical** — not as an official Texecom specification.
 - Do not assume behaviour on other models, firmware, or installations without your own verification.
 - If you hold Texecom materials under NDA, **do not** contribute those materials (or close paraphrases of them) into this repository. Contribute only what you can defend as independent observation or your own clean-room work.
 

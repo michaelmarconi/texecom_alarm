@@ -258,7 +258,7 @@ No spike — inventory already done; ordinary redact/delete work.
 
 | Field | Value |
 |---|---|
-| Source | Hermetic public Connect-client inspection 2026-08-08 (`research/hermetic-the prior MQTT bridge-v1.3.1/`); related open product question in ADR-002 / SPIKE-002 (“alarm reset” as a signal) |
+| Source | Protocol research candidate (cmd 9); related open product question in ADR-002 / SPIKE-002 (“alarm reset” as a signal) |
 | Category | Technology unknowns |
 | Severity | Medium |
 | Severity rationale | Disarm (cmd 8) is confirmed for ordinary armed/exit-cancel paths (SPIKE-005), but behaviour immediately after a real in-alarm / triggered state is not proven. If this panel expects a separate ResetArea (cmd 9) before disarm, HA Disarm after a trigger could NAK or leave the panel uncleared — a household-facing control gap. Wire shape is a small, testable unknown; product meaning of “alarm reset” as an MQTT/automation signal remains a separate ADR-002 stop condition. |
