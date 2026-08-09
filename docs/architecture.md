@@ -1,10 +1,10 @@
 # Architecture
 
-<!-- Synthesised by /architecture on 2026-08-10 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-002-use-frame-resync-and-asymmetric-reconnect-for-panel-protocol-collisions.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md, adr-010-use-command-reject-events-and-periodic-house-state-polling-for-silent-panel-path-death-detection.md, adr-011-use-automatic-session-recovery-for-mid-run-panel-path-failures.md -->
+<!-- Synthesised by /architecture on 2026-08-10 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-002-use-frame-resync-and-asymmetric-reconnect-for-panel-protocol-collisions.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md, adr-010-use-command-reject-events-and-periodic-house-state-polling-for-silent-panel-path-death-detection.md, adr-011-use-automatic-session-recovery-for-mid-run-panel-path-failures.md, adr-012-use-python-3-for-the-texecom-alarm-app.md -->
 
 **Date:** 2026-08-10
-**State:** Draft 📝
-<!-- Update 2026-08-10: folded ADR-011 + Accepted spec-panel-session-heal (mid-run session recovery; Alarm Panel Connection naming). -->
+**State:** Accepted ✅
+<!-- Update 2026-08-10: cited ADR-012 for Python 3 (clears review-12 technology gap); prior same-day fold of ADR-011 + session-heal. -->
 <!-- Prior: 2026-08-09 folded Accepted spec-startup-login-backoff (progressive first-login waits). -->
 
 ## Overview
@@ -164,12 +164,12 @@ flowchart LR
 
 **Role:** Bridges the Texecom Premier Elite panel's ComIP/Connect-protocol session to
 Home Assistant, taking over the role `the prior MQTT bridge` plays today.
-**Technology:** Python 3, packaged as a Home Assistant App (Docker image on
+**Technology:** Python 3 (ADR-012), packaged as a Home Assistant App (Docker image on
 `ghcr.io/home-assistant/base`, s6-overlay-supervised process) — the App-not-integration
-shape is ADR-003; language and packaging are the shipping stack (Python itself has no
-dedicated ADR). Framing/CRC/resync/decode and arm/disarm command work were validated
+shape is ADR-003. Framing/CRC/resync/decode and arm/disarm command work were validated
 live against the panel in SPIKE-001, SPIKE-002, and SPIKE-005 (production command
-mapping is ADR-008).
+mapping is ADR-008). Docker base and s6 supervision are platform packaging, not a
+separate language decision (ADR-012).
 **Exposes:** Home Assistant MQTT discovery topics and their paired state/command
 topics for: one `alarm_control_panel` entity; one `binary_sensor` entity per in-use
 zone; one dedicated connectivity/freshness `binary_sensor` — friendly name
@@ -190,6 +190,8 @@ discovery payloads (ADR-003). Clean rename of that connectivity entity’s
   repo (ADR-008 requires Home/Night→slot to be install-time configuration with Away
   excluded from Part-Arm options; the exact option shape is still open — see Open
   questions).
+**Delivery:** Home Assistant App image with s6-supervised Python 3 process (ADR-012
+language; ADR-003 App shape).
 
 Key behaviours:
 
@@ -564,6 +566,4 @@ module accepts only one TCP client at a time (ADR-001).
 | 10 | 2026-08-09 | Clear | — |
 | 11 | 2026-08-09 | Clear | — |
 | 12 | 2026-08-10 | Issues found | 1 |
-
-**Open issues (from review 12):**
-- Technology choice without ADR or open question: peer Technology names **Python 3**, which is not decided by any accepted ADR (ADR-003 covers MQTT discovery / App-not-integration only) and is not named in Open questions — the Technology field itself notes Python has no dedicated ADR.
+| 13 | 2026-08-10 | Clear | — (review-12 Python technology gap cleared via ADR-012) |
