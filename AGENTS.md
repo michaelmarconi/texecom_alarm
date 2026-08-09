@@ -1,6 +1,6 @@
 # Agent Instructions
 
-<!-- Synthesised by /constitute on 2026-08-08 from: ADR-001, ADR-002, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009 -->
+<!-- Synthesised by /constitute on 2026-08-08 from: ADR-001, ADR-002, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-010 -->
 <!-- Re-run /constitute after any new ADR is accepted. -->
 
 ## Project
@@ -91,6 +91,19 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - Client, FakePanel, and tests must implement this snapshot command family and flag decode (extra round-trip at startup is required).
 - Exit/entry transient states may still depend on live area pushes — the Disarmed-only spike run did not prove those appear in the flag block.
 
+### ADR-010: Use command-reject events and periodic house-state polling for silent panel-path death detection
+
+**Decision:** Treat a rejected or timed-out arm/disarm as an immediate signal that the panel link may be untrustworthy, and separately poll the panel for current house/arm state on a bounded interval as a trust check — alongside the existing idle heartbeat, not instead of it. Do not judge freshness from “zones went quiet” alone.
+
+**Constraints:**
+- Alarm Panel Connected must go degraded on arm/disarm reject or timeout even when the idle heartbeat still succeeds.
+- The app must periodically ask the panel for current house/arm state as a corroboration poll; that poll must not replace the idle heartbeat.
+- Missing zone push traffic alone must not be the sole reason to mark the link degraded.
+- After a brief reject, the link may return to live automatically once corroboration succeeds and no recent command failure remains — without requiring a manual add-on restart.
+- Zone and alarm entities stay available with last-known state while the link is degraded (unchanged from ADR-004).
+- Exact poll interval, recover window, and “tens of seconds” bound are not fixed here — settle at plan time unless live walks force a change.
+- Automatic session tear-down/re-login on degrade, and in-tap auto-retry of the failed command, are not decided by this ADR.
+
 ## Stop conditions
 
 - **[ADR-001]** Before implementing a hybrid or cached last-known-good zone list for when the panel can't be reached at startup: stop and ask a human — that path was left open and not validated by this ADR.
@@ -115,8 +128,12 @@ Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assis
 - **[ADR-009]** Before treating the area-flags snapshot as auto-detecting Night/Home role names, or hardcoding Part-Arm → HA mode mapping from snapshot bits alone, or treating Away as a Part-Arm slot label: stop and ask a human — Home/Night mapping remains install-time configuration (ADR-008); Away is full arm.
 - **[ADR-009]** Before treating exit/entry (arming/pending) as fully covered by the area-flags snapshot alone: stop and ask a human — the spike only observed Disarmed; live pushes may still be required for those transients.
 - **[ADR-009]** Before treating optional arm-then-re-poll corroboration or wider dual-request area-bitmap layouts as already proven by this ADR: stop and ask a human — those paths were not exercised in the Validated run.
+- **[ADR-010]** Before using missing zone push traffic alone as the sole reason to mark Alarm Panel Connected degraded: stop and ask a human — that approach was rejected by this ADR.
+- **[ADR-010]** Before replacing the idle heartbeat with the house-state corroboration poll, or dropping either: stop and ask a human — this ADR requires both, with distinct roles.
+- **[ADR-010]** Before treating automatic session tear-down/re-login on degrade, or in-tap auto-retry of a failed arm/disarm, as already decided: stop and ask a human — those remain open follow-ons.
+- **[ADR-010]** Before treating live quiet-house false-positive rate or live zombie reproduction as already proven by CI/FakePanel alone: stop and ask a human — those remain live-only corroboration.
 
 ## Testing stance
 
-- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping behaviour per ADR-006, ADR-008, ADR-009 and architecture).
-- **Live:** `/accept` owns product validation on the real setup (full Away / Night / Home arm sequences, trigger reconnect, real ComIP); `/ship` may smoke a real target. Green CI is not product accept.
+- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping, silent-death / command-reject / quiet-house detector shapes per ADR-006, ADR-008, ADR-009, ADR-010 and architecture).
+- **Live:** `/accept` owns product validation on the real setup (full Away / Night / Home arm sequences, trigger reconnect, real ComIP, quiet-house and zombie corroboration for silent-death detection); `/ship` may smoke a real target. Green CI is not product accept.
