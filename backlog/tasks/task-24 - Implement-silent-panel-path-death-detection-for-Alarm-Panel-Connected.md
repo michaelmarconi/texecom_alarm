@@ -1,10 +1,10 @@
 ---
 id: TASK-24
 title: Implement silent panel-path death detection for Alarm Panel Connected
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-08 09:52'
-updated_date: '2026-08-09 12:31'
+updated_date: '2026-08-09 12:35'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
