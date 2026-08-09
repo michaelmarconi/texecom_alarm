@@ -74,5 +74,5 @@ Verification: ACs via FakePanel fail-N-then-succeed + recorded sleeps/logs; targ
 Notes/assumptions: Practitioner chose A — merged main into task-25 (af8c10b) so docs/plan.md stays Approved; required re-review only (no Bugbot). Prior attention was branch lag, not an app regression.
 
 ## Build phase
-phase: awaiting-merge-signoff
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
