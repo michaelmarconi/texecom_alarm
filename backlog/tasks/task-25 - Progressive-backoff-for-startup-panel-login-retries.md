@@ -1,10 +1,10 @@
 ---
 id: TASK-25
 title: Progressive backoff for startup panel login retries
-status: attention
+status: awaiting-review
 assignee: []
 created_date: '2026-08-09 13:45'
-updated_date: '2026-08-09 17:01'
+updated_date: '2026-08-09 17:02'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -70,8 +70,8 @@ Decision needed: (A) merge main into task-25, re-run required review only, then 
 ## Build result
 Summary: Startup first-login retries now use progressive 5→10→20→30s backoff (capped), log each next wait, and recover into monitoring without exiting.
 Changed files: texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/tests/test_startup_login_backoff.py, texecom-alarm-app/tests/test_operator_errors.py
-Verification: ACs via FakePanel fail-N-then-succeed + recorded sleeps/logs; cd texecom-alarm-app && .venv/bin/python -m pytest tests/test_startup_login_backoff.py tests/test_operator_errors.py -q → 6 passed; full suite pytest --cov=texecom_alarm --cov-fail-under=90 -q → 214 passed, 92.96% coverage; ruff clean on changed files
-Notes/assumptions: Replaced test-only startup_retry_interval with startup_backoff_scale (sleep double unchanged); FakePanel drop_login_responses already covered fail-N-then-succeed — no FakePanel change; ADR-002 mid-run reconnect path untouched
+Verification: ACs via FakePanel fail-N-then-succeed + recorded sleeps/logs; targeted + full suite green per executor (214 passed, ~93% cov)
+Notes/assumptions: Practitioner chose A — merged main into task-25 (af8c10b) so docs/plan.md stays Approved; required re-review only (no Bugbot). Prior attention was branch lag, not an app regression.
 
 ## Build phase
 phase: awaiting-review
