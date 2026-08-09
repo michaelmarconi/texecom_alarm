@@ -79,7 +79,7 @@ async def handle_alarm_command(
         await panel.set_area_arm(mode_byte)
     except ProtocolError as exc:
         logger.warning(
-            "Panel rejected arm request for mode %s: %s. "
+            "Panel rejected arm request for mode %s: %s "
             "Home Assistant will be refreshed with the current alarm state.",
             ha_mode,
             exc,
