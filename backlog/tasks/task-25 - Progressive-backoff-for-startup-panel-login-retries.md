@@ -52,3 +52,10 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/app.py (modify), texe
 
 Test strategy: how we'll know = unit/integration against FakePanel stand-in (no live panel). Command: cd texecom-alarm-app && python -m pytest tests/test_startup_login_backoff.py tests/test_operator_errors.py -q
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
