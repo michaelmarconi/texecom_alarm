@@ -186,14 +186,14 @@ async def test_successful_arm_does_not_publish_optimistic_state() -> None:
 
 @pytest.mark.asyncio
 async def test_arm_nak_records_trust_failure_and_publishes_panel_link_off() -> None:
-    """ADR-010: arm NAK flips Alarm Panel Connected OFF via PanelTrust."""
+    """ADR-010: arm NAK flips Alarm Panel Connection OFF via PanelTrust."""
     from texecom_alarm.panel_trust import PanelTrust
 
     panel = MagicMock()
     panel.set_area_arm = AsyncMock(side_effect=ProtocolError("SETAREAARM NAK"))
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
-    await mqtt.publish("texecom/panel_link/state", "ON", retain=True)
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
     trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
     trust.note_keepalive_ok()
 
@@ -207,21 +207,21 @@ async def test_arm_nak_records_trust_failure_and_publishes_panel_link_off() -> N
         trust=trust,
     )
 
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
     assert mqtt.payloads_for("texecom/alarm/state") == ["disarmed"]
     assert trust.live is False
 
 
 @pytest.mark.asyncio
 async def test_disarm_nak_records_trust_failure() -> None:
-    """ADR-010: disarm NAK flips Alarm Panel Connected OFF."""
+    """ADR-010: disarm NAK flips Alarm Panel Connection OFF."""
     from texecom_alarm.panel_trust import PanelTrust
 
     panel = MagicMock()
     panel.set_area_disarm = AsyncMock(side_effect=ProtocolError("SETAREADISARM NAK"))
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
-    await mqtt.publish("texecom/panel_link/state", "ON", retain=True)
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
     trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
 
     await handle_alarm_command(
@@ -233,5 +233,5 @@ async def test_disarm_nak_records_trust_failure() -> None:
         trust=trust,
     )
 
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
     assert trust.live is False

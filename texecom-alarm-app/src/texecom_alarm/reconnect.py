@@ -67,7 +67,7 @@ async def publish_panel_link_state(
     topic_prefix: str,
     live: bool,
 ) -> None:
-    """Publish retained panel-link connectivity state (ON=live, OFF=degraded)."""
+    """Publish retained panel-connection connectivity state (ON=live, OFF=degraded)."""
     topic = connectivity_state_topic(topic_prefix)
     payload = PANEL_LINK_ON if live else PANEL_LINK_OFF
     await mqtt.publish(topic, payload, retain=True)
