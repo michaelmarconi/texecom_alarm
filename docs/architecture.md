@@ -4,6 +4,7 @@
 
 **Date:** 2026-08-09
 **State:** Accepted ✅
+<!-- Update 2026-08-09: folded Accepted spec-startup-login-backoff (progressive first-login waits). -->
 
 ## Overview
 
@@ -96,7 +97,11 @@ broker) and its internal shape are detailed under `## Components` below.
 
 - **Panel unreachable at startup** — the app cannot build any zone/alarm entities
   until panel login succeeds; there is no offline or cached fallback in this
-  architecture.
+  architecture. While waiting, the process stays up and retries first
+  connect/login with progressive waits (5 s → 10 s → 20 s → 30 s, then 30 s
+  until success), logging each next wait so operators can tell patience from a
+  hang (`spec-startup-login-backoff`). This schedule does not redefine mid-run
+  reconnect patience after a session was already healthy (ADR-002).
 - **Unexpected byte on the wire** — the app scans forward for the next valid frame
   header instead of tearing down the connection (ADR-002).
 - **Connection dropped** — the app reconnects with a budget sized to what dropped it
@@ -176,11 +181,22 @@ beyond what HA's own MQTT integration creates from these discovery payloads (ADR
 
 Key behaviours:
 
-- **Startup / zone discovery** (ADR-001): opens the TCP connection, waits ≥500ms, logs
-  in with the UDL password (factory default `1234`, confirmed in SPIKE-001 — not
-  blank), sends `GETPANELIDENTIFICATION` for the zone count, then loops
-  `GETZONEDETAILS` across every zone number and discards any slot the panel reports as
-  `zoneType=0` (unused) rather than creating an entity for it.
+- **Startup / first-login progressive backoff** (`spec-startup-login-backoff`, on
+  `spec-continuous-operation`): until the first successful panel connect/login
+  (including after an add-on restart), failed attempts do not exit the process.
+  After the *k*-th failure (`k = 1, 2, 3, …`), wait
+  `min(5 × 2^(k-1), 30)` seconds before the next try — **5 s → 10 s → 20 s →
+  30 s**, then **30 s** forever until success. Cap is **30 seconds**; never wait
+  longer; never give up. Recovery logs must name the wait that will be used
+  before the next try. Distinct from ADR-002 asymmetric reconnect after a
+  previously healthy session drops. FakePanel must exercise fail-then-succeed and
+  capped-wait shapes for CI.
+- **Startup / zone discovery** (ADR-001): after the first successful connect/login
+  (including the ≥500ms post-connect wait and UDL password login — factory default
+  `1234`, confirmed in SPIKE-001 — not blank), sends `GETPANELIDENTIFICATION` for
+  the zone count, then loops `GETZONEDETAILS` across every zone number and discards
+  any slot the panel reports as `zoneType=0` (unused) rather than creating an entity
+  for it.
 - **Startup / reconnect zone-state snapshot** (ADR-006): after LOGIN (and again after
   a reconnect re-LOGIN), sends `GetZoneState` (cmd `2`) with body
   `[startZone][zoneCount]` (1-byte `startZone` when panel zone count ≤ 256; batches of
@@ -267,6 +283,8 @@ still holds the session).
 flowchart LR
     Stop["the prior MQTT bridge<br/>stopped"]:::external
     Open["App opens TCP,<br/>LOGIN"]:::owned
+    Backoff{"First login<br/>OK?"}:::owned
+    Wait["Progressive wait<br/>log next delay"]:::owned
     Ident["GETPANELIDENTIFICATION<br/>zone count"]:::owned
     Loop["GETZONEDETAILS x N<br/>type + name"]:::owned
     ZoneSnap["GetZoneState<br/>zone snapshot"]:::owned
@@ -275,15 +293,18 @@ flowchart LR
     Sub["SETEVENTMESSAGES<br/>subscribe"]:::owned
     HAEnt["HA creates<br/>entities"]:::external
 
-    Stop --> Open --> Ident --> Loop --> ZoneSnap --> AreaSnap --> Pub --> Sub --> HAEnt
+    Stop --> Open --> Backoff
+    Backoff -->|no| Wait --> Open
+    Backoff -->|yes| Ident --> Loop --> ZoneSnap --> AreaSnap --> Pub --> Sub --> HAEnt
 
     classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
 ```
 
-Zone slots the panel reports as unused are dropped during the `GETZONEDETAILS` loop
-and never reach the discovery-publish step, so Home Assistant never sees a dead entity
-for them. The `GetZoneState` snapshot (ADR-006) supplies correct initial open/closed
+Until first login succeeds, the app stays running and retries with the progressive
+startup backoff above (not the mid-run reconnect budget). Zone slots the panel
+reports as unused are dropped during the `GETZONEDETAILS` loop and never reach the
+discovery-publish step, so Home Assistant never sees a dead entity for them. The `GetZoneState` snapshot (ADR-006) supplies correct initial open/closed
 values for in-use zones on every start (and after reconnect), so zone entities do not
 wait for the next physical change or rely on retained MQTT alone. The `GetAreaFlags`
 snapshot (ADR-009) supplies correct initial armed/disarmed/part-armed/in-alarm state
@@ -418,7 +439,7 @@ appear on that Part-Arm option surface.
 
 | Outside system | In CI | What CI may claim | Live-only |
 |---|---|---|---|
-| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), frame resync, reconnect paths; silent-death / command-reject / quiet-house detector shapes (ADR-010 / SPIKE-008) | Real Away/Night/Home arm sequences, trigger-time forced disconnect recovery, live quiet-house false-positive rate and live zombie corroboration for silent-death detection |
+| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), frame resync, reconnect paths; silent-death / command-reject / quiet-house detector shapes (ADR-010 / SPIKE-008); progressive startup-login backoff (fail-N-then-succeed waits strictly increasing then capped at 30 s; recovery without process exit) | Real Away/Night/Home arm sequences, trigger-time forced disconnect recovery, live quiet-house false-positive rate and live zombie corroboration for silent-death detection; live ComIP contention timing under real Supervisor (RISK-015) |
 | MQTT broker | Hermetic / test broker (or FakePanel + recording MQTT client) | Discovery payloads, state/command publish/subscribe, connectivity sensor and last-trigger snapshot attributes | Household HA entity behaviour, wrapper/HomeKit/automations |
 
 CI never targets the live household panel or a production broker account. Product
@@ -437,7 +458,9 @@ process, plus a dedicated connectivity/freshness `binary_sensor` published over 
 that reflects degraded panel-link health during recovery windows (ADR-002, ADR-004)
 and during silent-death / command-reject detection (ADR-010) — the
 `alarm_control_panel`/zone entities themselves are not used for this signal, since
-their own last-known state must stay visible throughout (ADR-004).
+their own last-known state must stay visible throughout (ADR-004). Startup
+first-login failures must log the wait duration before the next try
+(`spec-startup-login-backoff`) so operators can distinguish backoff from a hang.
 
 **Deployment:** Ships as a Home Assistant App (add-on) using the existing
 `config.yaml`/`Dockerfile`/`rootfs` scaffold (arch: `aarch64`, `amd64`), run as a
@@ -528,3 +551,4 @@ module accepts only one TCP client at a time (ADR-001).
 | 8 | 2026-08-09 | Issues found | 1 |
 | 9 | 2026-08-09 | Clear | — (review-8 Key flows ADR-010 contradiction fixed) |
 | 10 | 2026-08-09 | Clear | — |
+| 11 | 2026-08-09 | Clear | — |
