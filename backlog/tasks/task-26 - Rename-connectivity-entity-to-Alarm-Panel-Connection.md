@@ -1,10 +1,10 @@
 ---
 id: TASK-26
 title: Rename connectivity entity to Alarm Panel Connection
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-09 23:50'
-updated_date: '2026-08-09 23:56'
+updated_date: '2026-08-09 23:59'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -71,6 +71,12 @@ How we'll know = unit/discovery assertion that payload name is Alarm Panel Conne
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Renamed connectivity MQTT entity to Alarm Panel Connection with clean unique_id/object_id/state-topic identity (no panel_link/Connected leftovers in discovery).
+Changed files: DOCS.md, texecom-alarm-app/src/texecom_alarm/mqtt/discovery.py, texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/src/texecom_alarm/panel_trust.py, texecom-alarm-app/src/texecom_alarm/reconnect.py, texecom-alarm-app/tests/test_mqtt_discovery.py, texecom-alarm-app/tests/test_e2e_fake_panel.py, texecom-alarm-app/tests/test_reconnect.py, texecom-alarm-app/tests/test_panel_trust.py, texecom-alarm-app/tests/test_arm_commands.py, texecom-alarm-app/tests/test_app_mqtt.py, texecom-alarm-app/tests/test_startup_login_backoff.py
+Verification: how we'll know — `cd texecom-alarm-app && python -m pytest tests/test_mqtt_discovery.py tests/test_e2e_fake_panel.py -q` → 30 passed; full suite regression → 214 passed; ruff check/format clean
+Notes/assumptions: Chosen HA identity scheme is `unique_id`/`object_id`=`texecom_alarm_panel_connection`, state topic=`{prefix}/panel_connection/state` (replaces `panel_link`). Internal Python helpers (`publish_panel_link_state`, `panel_link_payload` log extras) left unchanged — not HA entity identity. ADR-004 separation of connectivity vs alarm/zone availability unchanged.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
