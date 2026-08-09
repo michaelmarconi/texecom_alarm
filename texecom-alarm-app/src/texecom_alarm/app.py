@@ -166,7 +166,7 @@ async def run(
             ),
         )
         # Startup area-flags snapshot already corroborated house state.
-        trust.reset_after_reconnect()
+        await trust.reset_after_reconnect()
 
         command_topic = alarm_command_topic(cfg.mqtt_topic_prefix)
         await mqtt_client.subscribe(command_topic)  # type: ignore[attr-defined]
@@ -371,7 +371,7 @@ async def _listen_with_reconnect(
         )
         alarm_state.payload = last_alarm_payload
         if trust is not None:
-            trust.reset_after_reconnect()
+            await trust.reset_after_reconnect()
         # Snapshot may edge into triggered during the outage; use preserved buffer.
         await maybe_publish_trigger_snapshot(
             mqtt,  # type: ignore[arg-type]

@@ -309,6 +309,41 @@ async def test_transient_command_reject_recovers_after_window() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reset_after_reconnect_republishes_panel_link_on() -> None:
+    """Command OFF after reconnect ON must not stick: reset republishes ON.
+
+    Race: reconnect publishes panel-link ON, then a command failure publishes OFF,
+    then reset_after_reconnect sets _live True. Without republishing ON, MQTT stays
+    OFF and _maybe_recover early-returns because _live is already True.
+    """
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_link/state", "ON", retain=True)
+
+    clock = {"t": 0.0}
+    trust = _trust(mqtt, poll_interval=1.0, recover_window=1.0, clock=lambda: clock["t"])
+    trust.note_keepalive_ok()
+
+    # Simulates MQTT command handler publishing OFF after reconnect already ON.
+    await trust.record_command_failure(REASON_ARM_NAK, ha_mode="away")
+    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+    assert trust.live is False
+
+    await trust.reset_after_reconnect()
+    assert trust.live is True
+    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+
+    # Successful trust poll must remain ON (would stay OFF if reset skipped publish
+    # and left _live True so _maybe_recover never republished).
+    clock["t"] = 2.0
+    panel = MagicMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    await trust.maybe_poll(panel)
+    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+    assert trust.live is True
+
+
+@pytest.mark.asyncio
 async def test_listen_loop_runs_trust_poll_alongside_keepalive() -> None:
     """Trust poll rides the listen loop; quiet (no ZONE) stays ON when poll OK."""
     panel = FakePanel(

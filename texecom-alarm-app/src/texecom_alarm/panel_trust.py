@@ -79,8 +79,14 @@ class PanelTrust:
     def note_keepalive_failed(self) -> None:
         self._last_keepalive_ok = False
 
-    def reset_after_reconnect(self) -> None:
-        """Clear degrade memory after a clean ForcedDisconnect recovery."""
+    async def reset_after_reconnect(self) -> None:
+        """Clear degrade memory and republish panel-link ON after recovery.
+
+        Must publish ON even when ``_live`` is already True: a command failure can
+        publish OFF after reconnect's ON and before this reset runs; setting
+        ``_live`` alone would leave MQTT OFF while ``_maybe_recover`` skips
+        republish because it thinks the link is already live.
+        """
         now = self._clock()
         self._live = True
         self._last_command_fail_at = None
@@ -88,6 +94,11 @@ class PanelTrust:
         self._last_poll_attempt_at = now
         self._last_failure_reason = None
         self._last_failure_ha_mode = None
+        await publish_panel_link_state(
+            self._mqtt,
+            topic_prefix=self._topic_prefix,
+            live=True,
+        )
 
     def _seconds_since(self, when: float | None) -> float | None:
         if when is None:
