@@ -254,6 +254,23 @@ before public release"). Clear Critical/High inventory items before public relea
 git history rewrite after a working-tree cleanse is a separate execute-time decision.
 No spike — inventory already done; ordinary redact/delete work.
 
+### RISK-018: Post-alarm disarm may require a dedicated ResetArea command (cmd 9)
+
+| Field | Value |
+|---|---|
+| Source | Hermetic public Connect-client inspection 2026-08-08 (`research/hermetic-the prior MQTT bridge-v1.3.1/`); related open product question in ADR-002 / SPIKE-002 (“alarm reset” as a signal) |
+| Category | Technology unknowns |
+| Severity | Medium |
+| Severity rationale | Disarm (cmd 8) is confirmed for ordinary armed/exit-cancel paths (SPIKE-005), but behaviour immediately after a real in-alarm / triggered state is not proven. If this panel expects a separate ResetArea (cmd 9) before disarm, HA Disarm after a trigger could NAK or leave the panel uncleared — a household-facing control gap. Wire shape is a small, testable unknown; product meaning of “alarm reset” as an MQTT/automation signal remains a separate ADR-002 stop condition. |
+| Spike required | Yes |
+
+Candidate (not live-confirmed): Connect command byte `9` with the same area-select body
+family as disarm (`01` for area 1), issued when the area is in alarm, then disarm (cmd 8).
+Recorded as a provisional row in [protocol-reference.md](protocol-reference.md). Do **not**
+wire into production arm_commands until SPIKE-009 validates ACK/effect on this Elite 88.
+Distinct from implementing an HA “alarm reset” entity/signal (AGENTS.md ADR-002 stop —
+ask a human before that product path).
+
 ### Categories scanned and clear of additional entries
 
 Team capability gaps beyond RISK-010: none new. Security surface: RISK-009 (panel
@@ -292,7 +309,21 @@ false-positive behaviour on quiet houses, and a CI FakePanel scenario that goes 
 after healthy traffic. Output: recommended detection approach + what CI may claim vs
 live-only corroboration.
 
-No other spikes required. Historical spikes below remain for traceability.
+### SPIKE-009: Validate ResetArea (cmd 9) before disarm when the panel is in alarm
+
+| Field | Value |
+|---|---|
+| Resolves | RISK-018 |
+| Depends on | SPIKE-005 (disarm framing known); preferably after a controlled trigger or known in-alarm state (SPIKE-002 trigger path) |
+| Sequencing rationale | Small wire unknown with direct disarm-after-trigger product impact; can run independently of SPIKE-008. Does **not** by itself decide ADR-002’s open “alarm reset” *signal* question — only whether cmd 9 is real and useful on this panel. |
+
+Against the live Elite 88: after the panel is in alarm (or an equivalent safe test state),
+compare disarm-only (cmd 8) vs ResetArea (cmd 9) then disarm (cmd 8). Record ACK/NAK,
+AREA/LOG follow-on, and whether sirens/alarm clear. Output: whether production disarm
+when `triggered` must send cmd 9 first; update protocol-reference; leave product “reset
+signal” to a separate human/ADR decision per AGENTS.md.
+
+Active spikes: SPIKE-008, SPIKE-009. Historical spikes below remain for traceability.
 
 ### Historical spikes (complete or dismissed — retained for traceability)
 

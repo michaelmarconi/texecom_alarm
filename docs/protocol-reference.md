@@ -25,6 +25,7 @@ Behaviour may differ on other panel models/firmware.
 - Live panel observations 2026-08-07–08 — Part-Arm Night vs Home disarm follow-up (AREA delivery, mid-command frame resync, OUTPUT/LOG accompaniment) against the production Connect client
 - `davidMbrooke/texecom-connect` (`texecomConnect.py`, MIT/Apache-2.0) — public prior-art source inspection, cited where it informed a finding (not Texecom confidential docs)
 - Community report: HA forum thread on panel/MQTT bridging, user Ben.S, 2020 — cited where it corroborates a finding
+- Hermetic public Connect-client image inspection 2026-08-08 (`research/hermetic-the prior MQTT bridge-v1.3.1/`) — cited only for **unconfirmed candidates** pending live confirmation (e.g. cmd 9 / SPIKE-009; serial probe `03 5A A2`; `GETSYSTEMPOWER` field decode)
 
 ## Framing
 
@@ -53,6 +54,21 @@ The panel can also send a literal `+++` over the socket as a forced-disconnect s
 a plain TCP close. Never independently observed to date (SPIKE-002 only ever saw an outright
 `socket closed by peer`, not `+++`) — treat both as "the panel has ended this session" until an actual
 `+++` capture confirms whether it behaves differently.
+
+### Non-Connect serial-number probe (unconfirmed on this panel)
+
+Some public Connect clients, on the **same TCP socket** before or beside normal Connect framing,
+send a short **non-`t`/`C` probe** and parse a digit string as a panel serial:
+
+| Direction | Bytes / parse |
+|---|---|
+| Client → panel | `03 5A A2` (three raw bytes — not a Connect frame) |
+| Panel → client (claimed) | Payload digits taken from the reply (inspection: bytes after a short header, excluding a trailing byte), joined as a decimal string |
+| Timeout used by that client | ~2 s |
+
+**Status:** Candidate from public Connect-client inspection (2026-08-08) only — **not exercised live** on this Elite 88 in-repo. Keep clearly separate from Connect `LOGIN` / `GETPANELIDENTIFICATION`.
+
+**Product note:** Accepted zone-monitoring does **not** require a numeric panel serial for MQTT `unique_id` (zone-stable ids without serial). This probe is map/completeness only unless a later product decision wants serial for device identifiers — then live-confirm first. Analysis already dismissed “must spike serial for unique_id” as not required.
 
 ## Protocol-format collisions (read this before writing any client) — the real crash mechanism
 
@@ -89,11 +105,13 @@ confirmed (SPIKE-005)** — see the notes below the table.
 | 3 | `GETZONEDETAILS` | zone number (1 byte) | Returns zone type + area bitmap + name/text. 34/35/41-byte response depending on firmware. |
 | 6 | `SETAREAARM` *(provisional name)* | `[mode] 01` — mode byte `00`=Away (×2), `01`=Night (×3), `02`=Home (×1) | **Confirmed shared "set arm mode" command, all three modes (SPIKE-005).** Same command byte for all three, differing only in the body's first byte. Home's mode byte (`02`) was determined by testing the natural next value in the sequence directly against the live panel — not blind guesswork: the command structure itself was already proven safe (used identically for Away/Night), only the untested mode-byte value was in question, and the result was independently corroborated three ways before being treated as confirmed: a clean ACK, an event sequence (`in exit` → `part armed` → settled at AREA state `7`) matching SPIKE-002's own independent prior observation of a keypad-driven Home arm, and direct visual confirmation via the household's Texecom Connect app ("part-armed to Home"). Disarmed immediately after with the same `cmd=8, body=01` used for the other modes. |
 | 8 | `SETAREADISARM` *(provisional name)* | `01` — identical across all observations (Away, Night, and Home) | **Confirmed live (SPIKE-005), reproduced multiple times, mode-independent.** Same command disarms a fully-armed panel, cancels in-progress exit, and disarms Part-Arm Night or Home. ACK'd (`0x06`) every time. **AREA `disarmed` after ACK is not uniform by prior mode** — see AREA section (Night/Away observed; Home unsettled on the event path as of 2026-08-07–08). |
+| 9 | `SETAREARESET` *(provisional name)* | Same area-select body shape as disarm (`01` for area 1 on this panel) | **Not yet exercised on this panel.** Candidate from public Connect-client inspection (2026-08-08): opcode `9` with the same area bitmap/body family as cmd `8`, used immediately **before** disarm when the area is in alarm. Open unknown — does this Elite 88 require/accept that sequence after a real trigger? Tracked as [RISK-018](analysis.md) / **SPIKE-009**. Related to, but not the same as, ADR-002’s still-open product question of what “alarm reset” means as an integration signal. **Do not implement in production until SPIKE-009 validates.** |
+| 11 | `GETAREAFLAGS` | `[start, count]` two bytes | **Confirmed live (SPIKE-007 / ADR-009).** Elite 88 production path: `start=0`, `count=72`, one byte per flag index (`area_size=1`). Returns a flag block used for alarm startup re-sync. Decode indices: see **GetAreaFlags flag indices** below. **Alternate layout (other panels — not used on this Elite 88):** when a client’s derived `area_size === 8`, some public Connect clients instead read `start=0, count=30` then a **second** `GetAreaFlags(start=50, count=3)` for Part-Arm slot bits; on the Elite 88 single-read path those slots are indices 50–52 inside the main `count=72` block. |
 | 13 | `GETLCDDISPLAY` | — | Not yet exercised against this panel. |
 | 15 | `GETLOGPOINTER` | — | Not yet exercised against this panel. |
 | 22 | `GETPANELIDENTIFICATION` | — | Returns a 32-byte string: panel type, zone count, unknown field, firmware version. This panel: `'Elite 88     ENG->SW V6.02.02LS1'` → 88 zones. |
 | 23 | `GETDATETIME` | — | Used as a safe idle/keepalive probe in SPIKE-002 and again 2026-08-04; read-only. A ~15s cadence kept a subscribed session alive for minutes; without it the panel closed the socket after ~1 minute of passive listen-only. |
-| 25 | `GETSYSTEMPOWER` | — | Confirmed live (SPIKE-005 dry run) — `the prior MQTT bridge` uses this as its own idle/keepalive probe (this project's own client instead uses `GETDATETIME` for the same purpose, per SPIKE-002). Response body not yet decoded field-by-field (raw example: `b0b0ad5300`). |
+| 25 | `GETSYSTEMPOWER` | — | Confirmed live (SPIKE-005 dry run) as a read-only probe (this project’s keepalive uses `GETDATETIME` instead). **Response body decode — hypothesis, not live-calibrated here:** five bytes `[refV, sysV, batV, sysI, batI]`; raw example from SPIKE-005: `b0b0ad5300`. Public Connect-client inspection (2026-08-08) applies `panelVoltage ≈ round(13.7 + (sysV − refV) × 0.07)`, same form for battery from `batV`, and `panelCurrent ≈ round(sysI × 9)` / `batteryCharge ≈ round(batI × 9)` when the current bytes are &gt; 0. Treat as a map note only until checked against a known meter/panel reading on this Elite 88 — do not ship power MQTT entities from this formula alone. |
 | 27 | `GETUSER` | — | Not yet exercised against this panel. |
 | 35 | `GETAREADETAILS` | area number (1 byte; `0` NAK'd) | **Exercised live 2026-08-04.** Area `1` returns name `HOUSE` plus trailing timer-ish bytes; areas `2`–`4` return `Not used B`/`C`/`D`. This is **area** identity, not Part-Arm slot role/name — it does **not** expose which engineer-configured Part-Arm slot is Night vs Home. Empty body and area `0` both NAK (`0x15`). |
 | 37 | `SETEVENTMESSAGES` | 2-byte bitmask: `DEBUG \| ZONE_EVENT \| AREA_EVENT \| OUTPUT_EVENT \| USER_EVENT \| LOG_FLAG` | Subscribes the session to unsolicited `'M'`-type push messages. Confirmed safe and working. |
@@ -207,6 +225,32 @@ a Home-only defect.
 **OUTPUT events** (`0x03`) accompany both arm-settle and disarm for Night and Home alike
 (output/relay bookkeeping). They are not a substitute for AREA arm-state.
 
+### GetAreaFlags flag indices
+
+Startup / reconnect alarm re-sync uses `GETAREAFLAGS` (cmd `11`) — see [SPIKE-007](spikes/spike-007-area-arm-state-startup-read/SPIKE.md) / ADR-009. For each area, each **flag index** is one bit in that area’s column of the returned block (Elite 88: one byte per index, area 1 = bit 0).
+
+Only the indices this project’s decode uses (and that public Connect clients name the same way) are listed. Index names below match production constants in `area_state.py`; live meaning on this panel was validated via SPIKE-007’s Disarmed decode and ongoing snapshot use — not by re-deriving every bit from scratch in this edit.
+
+| Flag index | Name | Role in decode (priority order) |
+|---:|---|---|
+| 0 | Alarm | If set → HA `triggered` / in-alarm |
+| 21 | Armed | Armed-family (with 22 / 23 / 26) |
+| 22 | FullArmed | Armed-family → full Away when no Part-Arm slot bit |
+| 23 | PartArmed | Armed-family; Part-Arm when a slot bit is also set |
+| 26 | ForceArmed | Armed-family |
+| 50 | PartArm1 | Active Part-Arm **slot 1** (HA Home/Night via install mapping, not from the name alone) |
+| 51 | PartArm2 | Slot 2 |
+| 52 | PartArm3 | Slot 3 |
+
+**Decode reminder (ADR-009):** Alarm (0) wins; else any of Armed/FullArmed/PartArmed/ForceArmed → armed or part-armed; Part-Arm slot from 50–52 (first set wins 1→2→3); else disarmed. Exit/entry are **not** taken from this snapshot — live AREA pushes still cover those. Away is full arm, never a Part-Arm slot label.
+
+**Read shapes (layout completeness):**
+
+| Layout | First read | Part-Arm slot bits | Used on this Elite 88? |
+|---|---|---|---|
+| Single block (`area_size ≠ 8` in that client’s map — Elite 88 here uses `area_size=1`) | `start=0`, `count=72` | Indices 50–52 in the same block | **Yes — production / SPIKE-007** |
+| Split block (public-client path when their `area_size === 8`) | `start=0`, `count=30` | Second call `start=50`, `count=3` (three flag rows) | **No** — do not switch the Elite 88 client to this without a live need |
+
 ### LOG event types
 
 Confirmed against this panel (via live capture) unless marked "prior art only":
@@ -219,17 +263,21 @@ Confirmed against this panel (via live capture) unless marked "prior art only":
 | 33 | Exit Error (Arming Failed) | Prior art only — not yet observed live |
 | 34 | Entry Started | Confirmed live (SPIKE-002) |
 | 45 | Reset After Alarm | Prior art only — **not observed live even in a dedicated follow-up test** clearing the alarm-memory indicator after a real trigger (SPIKE-002). Open question: does this panel/firmware ever emit it for this action, or only for a full engineer-level reset? |
-| 78 | Part Arm 1 | Prior art only — not yet observed live |
-| 79 | Part Arm 2 (`arm_home`) | Confirmed live, reproduced twice (SPIKE-002) |
-| 80 | Part Arm 3 | Prior art only — not yet observed live |
+| 78 | Part Arm 1 | Prior art name; not yet observed live on this panel. Sibling remote/quick labels: 204 / 207 (below). |
+| 79 | Part Arm 2 (`arm_home` on this install’s slot mapping) | Confirmed live, reproduced twice (SPIKE-002). Sibling remote/quick labels: 205 / 208. |
+| 80 | Part Arm 3 | Prior art name; not yet observed live. Sibling remote/quick labels: 206 / 209. |
+| 204 | Quick Part Arm 1 | Label from public Connect-client inspection (2026-08-08) — **not observed live** here. Same Part-Arm **slot 1** family as 78 / 207. |
+| 205 | Quick Part Arm 2 | Same source — **not observed live**. Slot 2 family with 79 / 208. |
+| 206 | Quick Part Arm 3 | Same source — **not observed live**. Slot 3 family with 80 / 209. |
 | 1 | unknown | Observed live, group values 3/4 seen around alarm-trigger onset — meaning not yet decoded |
 | 3 | unknown | Observed live, paired 1:1 with each zone-secure event during arm/disarm bookkeeping bursts — likely "zone secured/omitted" logging, not confirmed |
 | 31 | unknown | Observed live on **every** keypad code entry (arm, disarm, alarm-memory clear) — likely a generic "user code entered" event, not confirmed |
 | 41 | unknown | Observed live, not yet correlated with a specific action |
 | 53 | "Download Start" / remote-session marker (inferred) | Observed live during a Texecom Connect app-originated remote arm (SPIKE-002) **and** repeatedly during an idle subscribed session with no arm/disarm activity (2026-08-04, ~every 2–10s while logged in and event-subscribed). Name inferred from context; behaviour looks more like a periodic "remote/UDL session active" log entry than an action-specific event. |
 | 113 | "Remote Command" (inferred) | Inferred, not documented. Originally seen only with the phone app (SPIKE-002); SPIKE-005 has now also observed it (group=`9`) immediately after both a `the prior MQTT bridge`-issued Arm Night and a directly-tested Arm Home — so it is not app-specific after all. See the arm-mode signature note below. |
-| 207 | unknown | Observed live (SPIKE-005): group=`6`, immediately after type `113`/group `9` and before the `part armed` AREA event, on every `the prior MQTT bridge`-issued Arm Night. Not seen for Arm Away or Arm Home. Meaning not decoded. |
-| 208 | unknown | Observed live (SPIKE-005): group=`6`, in the same position as `207` but following the directly-tested Arm Home instead of Arm Night. Sequential with `207` — see the arm-mode signature note below. |
+| 207 | Remote Part Arm 1 | **Observed live** (SPIKE-005): group=`6`, after type `113`/group `9` and before `part armed` AREA, on every Night arm via `the prior MQTT bridge`. Name: public Connect-client inspection (2026-08-08) — fits slot **1** with 78 / 204. On this household’s mapping Night is the mode that produced 207 (not a claim that slot 1 is always Night elsewhere). |
+| 208 | Remote Part Arm 2 | **Observed live** (SPIKE-005): group=`6`, same position as 207 but after Arm Home. Name from same inspection — slot **2** with 79 / 205. Matches this install’s Home ↔ Part-Arm 2 pairing in the SPIKE-002 row above. |
+| 209 | Remote Part Arm 3 | Label from public Connect-client inspection — **not observed live** here. Slot 3 family with 80 / 206. |
 | 42 | unknown, likely a mode/action-specific marker rather than a client-specific one | Observed live (SPIKE-005): group=`5` immediately after **every** `the prior MQTT bridge`-issued Disarm (Away or Night alike — mode-independent), group=`6` immediately after a `the prior MQTT bridge`-issued Arm **Away** specifically (not seen for Arm Night/Home, which produce 113/207/208 instead — see below). Reproduced 2026-08-08 on Night→disarm via the production client (group=`5`). **Not** observed in the Home→disarm cycles of 2026-08-07–08 where AREA `disarmed` was also absent. Not seen in SPIKE-002. |
 
 **Arm-mode LOG signatures (provisional):** the LOG type/group pair immediately following an
@@ -240,11 +288,13 @@ only *which client* issued it — revising an earlier client-specific hypothesis
 - Disarm after Home: type `42` group `5` **not** observed in 2026-08-07–08 cycles; LOG type=`3`
   group=`8` bookkeeping still appears after the ACK.
 - Arm Away: type `42` group `6`.
-- Arm Night: type `113` group `9`, then type `207` group `6`.
-- Arm Home: type `113` group `9`, then type `208` group `6` — one sequential step up from Night's
-  `207`, matching the mode byte sequence (`01`=Night, `02`=Home).
+- Arm Night: type `113` group `9`, then type `207` (Remote Part Arm 1) group `6`.
+- Arm Home: type `113` group `9`, then type `208` (Remote Part Arm 2) group `6` — one sequential
+  step up from Night’s `207`, matching the mode byte sequence (`01`=Night, `02`=Home) **and**
+  the Part-Arm slot index in the remote-part-arm labels.
 
 Treat as a working hypothesis pending wider reproduction (including Away on the production client).
+Quick Part Arm types 204–206 are named for map completeness only until seen on this panel.
 
 Each LOG event also carries a **group** byte whose meaning is not yet decoded (values 0, 3, 4, 5, 6, 7,
 8, 9, 16, 17, 18 observed so far) — open question.
@@ -289,6 +339,10 @@ Each LOG event also carries a **group** byte whose meaning is not yet decoded (v
 - LOG event types 1, 3, 31, 41, and the "group" byte on every LOG event are unmapped.
 - Whether `Reset After Alarm` (type 45) is ever emitted by this panel/firmware for a plain
   disarm-after-alarm or alarm-memory clear, versus only a full engineer-level reset, is unresolved.
+- Whether Connect cmd `9` (`SETAREARESET`) is accepted and useful before disarm when in alarm —
+  see [RISK-018](analysis.md) / **SPIKE-009** (candidate only until validated).
+- `GETSYSTEMPOWER` five-byte → voltage/current formula is an uncalibrated hypothesis (cmd 25 notes).
+- Non-Connect serial probe `03 5A A2` is unconfirmed on this panel (Framing subsection).
 - The exact byte format of the non-Connect-protocol traffic beyond the identified AT commands (e.g.
   the 83-byte unidentified burst in SPIKE-002) is not decoded.
 - Whether the post-trigger disruption window has a bounded maximum duration is not established — only
@@ -300,6 +354,27 @@ Each LOG event also carries a **group** byte whose meaning is not yet decoded (v
   is the frame destroyed by ComIP/multiplex collision (nine-byte LOG-shaped discard)? Raw
   whole-stream capture during Home→disarm (before application resync) would distinguish panel
   omission from client-side loss. Away→disarm on the production client is not yet re-verified.
+
+## Prior Connect-client behaviour notes (non-normative)
+
+These are **other clients’ product policies**, recorded 2026-08-08 from public image inspection
+(`research/hermetic-the prior MQTT bridge-v1.3.1/`). They are **not** panel wire requirements and **not**
+ADRs for this project. Kept so contrasts (e.g. zombie survival) stay searchable.
+
+| Behaviour | What that client did | This project’s stance (today) |
+|---|---|---|
+| Idle probe | `GETSYSTEMPOWER` ~30 s after last command | `GETDATETIME` ~15 s idle (equivalent keepalive class) |
+| Bad frame / CRC | Tear down TCP and reconnect (~10 s) | **Resync/skip** and stay on session (ADR-002) |
+| Reconnect budget | Fixed ~10 s then retry | Asymmetric normal vs post-trigger budgets (ADR-002) |
+| Arm while already armed/part-armed | **Disarm first**, then arm | Direct `SETAREAARM` (no auto-disarm-before-arm) |
+| Disarm while in alarm | **Cmd 9 then cmd 8** | Cmd 8 only until **SPIKE-009** |
+| Arm/disarm NAK | Log warning only | Republish last-known HA state; SPIKE-008 path may treat NAK as degrade |
+| Clean shutdown | `SETEVENTMESSAGES(0)` then close | No equivalent “clear subscribe” policy documented as required |
+| MQTT broker drop | Process **exits** (`reconnectPeriod: 0`) | App LWT / availability; panel-link separate (ADR-004) |
+
+Do **not** copy these into production merely because another client does them. Any adoption needs its
+own spike/ADR (and AGENTS.md stop conditions where applicable — e.g. “alarm reset” as a product
+signal).
 
 ## How to add to this document
 
