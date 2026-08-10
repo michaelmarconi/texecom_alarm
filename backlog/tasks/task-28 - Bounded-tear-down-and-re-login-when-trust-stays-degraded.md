@@ -4,7 +4,7 @@ title: Bounded tear-down and re-login when trust stays degraded
 status: awaiting-review
 assignee: []
 created_date: '2026-08-09 23:50'
-updated_date: '2026-08-10 08:50'
+updated_date: '2026-08-10 08:54'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -86,5 +86,5 @@ Verification: python -m pytest tests/test_panel_trust.py tests/test_session_heal
 Notes/assumptions: Stuck soft-trust uses ForcedDisconnect into existing reconnect_after_disconnect; trust_fail_window_seconds defaults to 90 (tunable). No panel_link tombstones.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
