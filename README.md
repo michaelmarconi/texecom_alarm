@@ -18,6 +18,18 @@ open/closed status, and tell whether the panel link is healthy.
 Zones and names come from the panel when the add-on starts — you do not maintain
 a zone list by hand.
 
+## Reliability
+
+Built to keep working when the panel link gets messy — for example during an
+alarm, when other apps share the network path, or when the connection drops.
+
+- Ignores unexpected panel chatter instead of crashing
+- Reconnects on its own (and waits longer after a real alarm, when the panel
+  often blocks the network briefly)
+- Keeps your last known alarm and zone states in Home Assistant; a separate
+  **panel connection** sensor shows whether the link is live or catching up
+- Recovers stuck sessions without a manual add-on restart
+
 ## Before you start
 
 - A Texecom Premier Elite panel with a network module (ComIP / Texecom Connect)
@@ -33,6 +45,22 @@ a zone list by hand.
 3. Start the add-on and check the log for a successful panel login.
 
 Full option descriptions: [Documentation](DOCS.md).
+
+## Optional: nicer names and icons in Home Assistant
+
+Zone entities use the panel’s labels and ship without a device class (the panel
+does not say “door” vs “PIR” vs “shock”). That is enough for automations; tidy
+presentation is optional.
+
+In Home Assistant, open an entity → **Settings** (gear):
+
+- **Name** — short display name (for example `Front door`). A custom name also
+  avoids the long `Texecom Alarm …` prefix on entity cards.
+- **Show as** — device class (`door`, `window`, `motion`, `vibration`, …) for
+  icons and open/closed vs detected/clear wording.
+
+Other options: set a **name** on individual Lovelace cards only, or leave the
+defaults and use entity IDs in automations.
 
 ## Credits
 
