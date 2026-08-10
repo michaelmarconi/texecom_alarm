@@ -4,7 +4,7 @@ title: Heal mid-run health-check death via keep-trying reconnect
 status: awaiting-review
 assignee: []
 created_date: '2026-08-09 23:50'
-updated_date: '2026-08-10 00:36'
+updated_date: '2026-08-10 08:43'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -86,5 +86,5 @@ Verification: `cd texecom-alarm-app && python -m pytest tests/test_session_heal.
 Notes/assumptions: Soft trust-degrade heal (session-heal AC2 / corroboration-then-bounded re-login) left for its own task; FakePanel clears `silence_keepalive` on successful LOGIN so post-heal sessions accept keepalive again; `run(..., idle_timeout=)` added as a test seam only. No legacy panel_link MQTT tombstones.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
