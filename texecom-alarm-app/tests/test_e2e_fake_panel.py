@@ -233,6 +233,9 @@ async def _e2e_discovery_retained_and_lwt() -> None:
                     topic = str(message.topic)
                     payload = message.payload.decode("utf-8")
                     if topic.startswith("homeassistant/"):
+                        # Empty retained payload = HA discovery tombstone (legacy retire).
+                        if not payload:
+                            continue
                         discovered[topic] = json.loads(payload)
                     elif topic == "texecom/status":
                         status_payloads.append(payload)
