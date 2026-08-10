@@ -75,3 +75,10 @@ ordinal: 21000
 
 How we'll know = end-to-end against FakePanel stand-in + recording MQTT (session-heal AC1/AC3/AC4). Command: `cd texecom-alarm-app && python -m pytest tests/test_session_heal.py tests/test_reconnect.py tests/test_e2e_fake_panel.py -q`. Live ComIP contention remains `/accept`.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
