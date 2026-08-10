@@ -8,7 +8,7 @@
 
 | Component | Effort | Status | Notes |
 |---|---|---|---|
-| texecom-alarm-app | L | planned ✅ | TASK-1–25 done. Update 2026-08-10: TASK-26–29 session-heal wave (Connection rename + mid-run health-check reconnect + bounded stuck-trust re-login; ADR-011 / `spec-panel-session-heal`). DRAFT-2 redact fingerprint remains skeleton. |
+| texecom-alarm-app | L | planned ✅ | TASK-1–29 done (incl. session-heal wave). Redact-fingerprint publish gate parked in `TODO.md` (was DRAFT-2) — not a product-accept blocker. |
 
 ---
 
