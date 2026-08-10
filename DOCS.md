@@ -75,6 +75,22 @@ You can leave the defaults unless you have a reason to change them.
 | Reconnect attempts (after trigger) | `18` | Longer retry budget after an alarm |
 | Reconnect interval (after trigger) | `5` seconds | Wait between those retries |
 
+### Soft trust recovery
+
+If the panel path looks connected but is untrustworthy (for example an arm
+command is rejected, or a periodic house-state check fails), **Alarm Panel
+Connection** goes off while zone and alarm entities keep their last-known state.
+A successful house-state check can restore the link. If it stays off longer than
+the trust fail window, the add-on tears down the session and logs in again
+(without restarting the add-on, and without silently re-trying the failed
+arm/disarm).
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| Trust fail window | `90` seconds | How long Connection may stay off before tear-down / re-login |
+
+You can leave the default unless live walks suggest a different window.
+
 ### Logging
 
 | Level | When to use it |
