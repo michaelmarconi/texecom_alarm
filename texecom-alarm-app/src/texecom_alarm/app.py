@@ -101,6 +101,7 @@ async def run(
     startup_sleep: Callable[[float], Awaitable[None]] | None = None,
     trust_poll_interval: float | None = None,
     trust_recover_window: float | None = None,
+    trust_fail_window: float | None = None,
     idle_timeout: float | None = None,
 ) -> None:
     """Connect, enumerate, discover, snapshot zone+alarm state, subscribe, listen."""
@@ -185,6 +186,11 @@ async def run(
             ),
             recover_window=(
                 trust_recover_window if trust_recover_window is not None else RECOVER_WINDOW_SECONDS
+            ),
+            fail_window=(
+                trust_fail_window
+                if trust_fail_window is not None
+                else cfg.trust_fail_window_seconds
             ),
         )
         # Startup area-flags snapshot already corroborated house state.
@@ -465,9 +471,11 @@ async def _listen_panel_messages(
                     raise
                 if trust is not None:
                     await trust.maybe_poll(panel)
+                    _raise_if_stuck_trust_relogin(trust)
                 continue
             if trust is not None:
                 await trust.maybe_poll(panel)
+                _raise_if_stuck_trust_relogin(trust)
             body = frame.body
             if not body:
                 logger.debug("panel_message_empty")
@@ -530,6 +538,17 @@ async def _listen_panel_messages(
 
 # Backward-compatible alias for tests that still import the old name.
 _listen_zone_messages = _listen_panel_messages
+
+
+def _raise_if_stuck_trust_relogin(trust: PanelTrust) -> None:
+    """If soft trust stayed OFF past the fail window, tear down via ForcedDisconnect."""
+    if not trust.needs_session_relogin():
+        return
+    trust.log_stuck_fail_window_expiry()
+    raise ForcedDisconnect(
+        f"Alarm Panel Connection stayed untrustworthy for {trust.fail_window:g}s "
+        f"(stuck-trust fail window) — tearing down and logging in again."
+    )
 
 
 async def _idle_forever() -> None:
