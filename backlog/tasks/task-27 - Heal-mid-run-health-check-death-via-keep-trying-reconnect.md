@@ -1,7 +1,7 @@
 ---
 id: TASK-27
 title: Heal mid-run health-check death via keep-trying reconnect
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-09 23:50'
 updated_date: '2026-08-10 08:43'
@@ -42,9 +42,9 @@ ordinal: 21000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 FakePanel unanswered mid-run health check keeps the process running, Connection OFF while recovering, then ON with zone/alarm re-synced without add-on restart
-- [ ] #2 Zone and alarm entities stay available with last-known state during recovery (not unavailable solely for panel recovery)
-- [ ] #3 While recovery is still failing, Connection stays OFF and recovery attempts/failures appear at normal log levels (not TRACE-only)
+- [x] #1 FakePanel unanswered mid-run health check keeps the process running, Connection OFF while recovering, then ON with zone/alarm re-synced without add-on restart
+- [x] #2 Zone and alarm entities stay available with last-known state during recovery (not unavailable solely for panel recovery)
+- [x] #3 While recovery is still failing, Connection stays OFF and recovery attempts/failures appear at normal log levels (not TRACE-only)
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -86,5 +86,5 @@ Verification: `cd texecom-alarm-app && python -m pytest tests/test_session_heal.
 Notes/assumptions: Soft trust-degrade heal (session-heal AC2 / corroboration-then-bounded re-login) left for its own task; FakePanel clears `silence_keepalive` on successful LOGIN so post-heal sessions accept keepalive again; `run(..., idle_timeout=)` added as a test seam only. No legacy panel_link MQTT tombstones.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
