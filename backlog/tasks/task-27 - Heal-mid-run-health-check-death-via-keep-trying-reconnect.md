@@ -1,10 +1,10 @@
 ---
 id: TASK-27
 title: Heal mid-run health-check death via keep-trying reconnect
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-09 23:50'
-updated_date: '2026-08-10 00:32'
+updated_date: '2026-08-10 00:36'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -79,6 +79,12 @@ How we'll know = end-to-end against FakePanel stand-in + recording MQTT (session
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Mid-run keepalive timeout now maps to ForcedDisconnect and reuses keep-trying reconnect (OFF → re-LOGIN + snapshots → ON) without aborting the listen cycle.
+Changed files: texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/tests/fake_panel.py, texecom-alarm-app/tests/test_session_heal.py, texecom-alarm-app/tests/test_reconnect.py, texecom-alarm-app/tests/test_e2e_fake_panel.py
+Verification: `cd texecom-alarm-app && python -m pytest tests/test_session_heal.py tests/test_reconnect.py tests/test_e2e_fake_panel.py -q` → 25 passed; full suite 218 passed; coverage 92.54% (≥90%); ruff clean on touched files
+Notes/assumptions: Soft trust-degrade heal (session-heal AC2 / corroboration-then-bounded re-login) left for its own task; FakePanel clears `silence_keepalive` on successful LOGIN so post-heal sessions accept keepalive again; `run(..., idle_timeout=)` added as a test seam only. No legacy panel_link MQTT tombstones.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
