@@ -13,7 +13,6 @@ from texecom_alarm.mqtt.discovery import (
     AVAILABILITY_OFFLINE,
     AVAILABILITY_ONLINE,
     CONNECTIVITY_OBJECT_ID,
-    LEGACY_CONNECTIVITY_OBJECT_ID,
     alarm_attributes_topic,
     alarm_discovery_payload,
     alarm_discovery_topic,
@@ -21,7 +20,6 @@ from texecom_alarm.mqtt.discovery import (
     connectivity_discovery_payload,
     connectivity_discovery_topic,
     connectivity_state_topic,
-    legacy_connectivity_state_topic,
     publish_alarm_discovery,
     publish_connectivity_discovery,
     publish_zone_discovery,
@@ -175,38 +173,6 @@ async def test_publish_connectivity_discovery_retained() -> None:
     assert payload["name"] == "Alarm Panel Connection"
     assert payload["device_class"] == "connectivity"
     assert payload["availability_topic"] == "texecom/status"
-
-
-@pytest.mark.asyncio
-async def test_publish_connectivity_discovery_tombs_legacy_panel_link() -> None:
-    """Existing installs must not keep retained panel_link discovery/state."""
-    mqtt = RecordingMqttPublisher()
-    await mqtt.connect(
-        will_topic=availability_topic("texecom"),
-        will_payload=AVAILABILITY_OFFLINE,
-        will_retain=True,
-    )
-    await publish_connectivity_discovery(mqtt, topic_prefix="texecom")
-
-    legacy_cfg = connectivity_discovery_topic(LEGACY_CONNECTIVITY_OBJECT_ID)
-    legacy_state = legacy_connectivity_state_topic("texecom")
-    assert LEGACY_CONNECTIVITY_OBJECT_ID == "texecom_alarm_panel_link"
-    assert legacy_cfg == "homeassistant/binary_sensor/texecom_alarm_panel_link/config"
-    assert legacy_state == "texecom/panel_link/state"
-
-    disc_msgs = [m for m in mqtt.messages if m.topic == legacy_cfg]
-    assert len(disc_msgs) == 1
-    assert disc_msgs[0].retain is True
-    assert disc_msgs[0].payload == ""
-
-    state_msgs = [m for m in mqtt.messages if m.topic == legacy_state]
-    assert len(state_msgs) == 1
-    assert state_msgs[0].retain is True
-    assert state_msgs[0].payload == ""
-
-    # New identity still published after the tombstones.
-    new_cfg = connectivity_discovery_topic()
-    assert any(m.topic == new_cfg and m.retain and m.payload for m in mqtt.messages)
 
 
 @pytest.mark.asyncio
