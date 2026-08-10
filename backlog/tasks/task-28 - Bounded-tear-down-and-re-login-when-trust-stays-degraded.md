@@ -1,7 +1,7 @@
 ---
 id: TASK-28
 title: Bounded tear-down and re-login when trust stays degraded
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-09 23:50'
 updated_date: '2026-08-10 08:54'
@@ -40,9 +40,9 @@ ordinal: 22000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 After FakePanel trust-fail that later clears on corroboration within the fail window, Connection returns ON with re-synced state and no session tear-down required
-- [ ] #2 After FakePanel trust stays OFF past the fail window (default 90s, shortened in tests), the app tears down, re-logins, re-syncs, and Connection returns ON without add-on restart
-- [ ] #3 Heal never auto-retries the failed arm/disarm command; zone/alarm stay available with last-known state during recovery
+- [x] #1 After FakePanel trust-fail that later clears on corroboration within the fail window, Connection returns ON with re-synced state and no session tear-down required
+- [x] #2 After FakePanel trust stays OFF past the fail window (default 90s, shortened in tests), the app tears down, re-logins, re-syncs, and Connection returns ON without add-on restart
+- [x] #3 Heal never auto-retries the failed arm/disarm command; zone/alarm stay available with last-known state during recovery
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -86,5 +86,5 @@ Verification: python -m pytest tests/test_panel_trust.py tests/test_session_heal
 Notes/assumptions: Stuck soft-trust uses ForcedDisconnect into existing reconnect_after_disconnect; trust_fail_window_seconds defaults to 90 (tunable). No panel_link tombstones.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
