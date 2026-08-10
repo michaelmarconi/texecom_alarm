@@ -84,6 +84,7 @@ def _trust(
     zone_count: int = 12,
     poll_interval: float = 30.0,
     recover_window: float = 30.0,
+    fail_window: float = 90.0,
     clock: Callable[[], float] | None = None,
 ) -> PanelTrust:
     return PanelTrust(
@@ -92,6 +93,7 @@ def _trust(
         zone_count=zone_count,
         poll_interval=poll_interval,
         recover_window=recover_window,
+        fail_window=fail_window,
         clock=clock,
     )
 
@@ -306,6 +308,69 @@ async def test_transient_command_reject_recovers_after_window() -> None:
     assert recover[-1].reason == REASON_TRUST_POLL_OK
     msg = recover[-1].getMessage().lower()
     assert "live" in msg or "recover" in msg
+
+
+@pytest.mark.asyncio
+async def test_corroboration_within_fail_window_does_not_request_relogin() -> None:
+    """AC1: successful trust poll inside fail window recovers without tear-down."""
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+
+    clock = {"t": 0.0}
+    trust = _trust(
+        mqtt,
+        poll_interval=1.0,
+        recover_window=1.0,
+        fail_window=90.0,
+        clock=lambda: clock["t"],
+    )
+    trust.note_keepalive_ok()
+    await trust.record_command_failure(REASON_ARM_NAK, ha_mode="away")
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    assert trust.needs_session_relogin() is False
+
+    clock["t"] = 2.0
+    panel = MagicMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    await trust.maybe_poll(panel)
+
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    assert trust.live is True
+    assert trust.needs_session_relogin() is False
+    clock["t"] = 200.0
+    assert trust.needs_session_relogin() is False
+
+
+@pytest.mark.asyncio
+async def test_stuck_past_fail_window_requests_session_relogin() -> None:
+    """AC2: Connection continuously OFF past fail window → session relogin needed."""
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+
+    clock = {"t": 10.0}
+    trust = _trust(mqtt, poll_interval=1.0, fail_window=90.0, clock=lambda: clock["t"])
+    trust.note_keepalive_ok()
+    capture = _attach_capture()
+
+    panel_fail = MagicMock()
+    panel_fail.get_area_flags = AsyncMock(side_effect=ProtocolError("GetAreaFlags NAK"))
+    await trust.maybe_poll(panel_fail)
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    assert trust.needs_session_relogin() is False
+
+    clock["t"] = 99.0
+    assert trust.needs_session_relogin() is False
+
+    clock["t"] = 100.0
+    assert trust.needs_session_relogin() is True
+    trust.log_stuck_fail_window_expiry()
+    infos = [r for r in capture.records if r.levelno >= logging.INFO]
+    assert infos
+    assert any(
+        "fail window" in r.getMessage().lower() or "stuck" in r.getMessage().lower() for r in infos
+    )
 
 
 @pytest.mark.asyncio

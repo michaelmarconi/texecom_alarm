@@ -26,6 +26,8 @@ DEFAULT_RECONNECT_NORMAL_ATTEMPTS = 4
 DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS = 2.5
 DEFAULT_RECONNECT_TRIGGER_ATTEMPTS = 18
 DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS = 5.0
+# Stuck-trust fail window before tear-down / re-login (ADR-011) — tunable, not final.
+DEFAULT_TRUST_FAIL_WINDOW_SECONDS = 90.0
 DEFAULT_LOG_LEVEL = "INFO"
 
 PartArmLabel = Literal["home", "night", "unused"]
@@ -51,6 +53,7 @@ _ENV_KEYS = {
     "reconnect_normal_interval_seconds": "TEXECOM_RECONNECT_NORMAL_INTERVAL_SECONDS",
     "reconnect_trigger_attempts": "TEXECOM_RECONNECT_TRIGGER_ATTEMPTS",
     "reconnect_trigger_interval_seconds": "TEXECOM_RECONNECT_TRIGGER_INTERVAL_SECONDS",
+    "trust_fail_window_seconds": "TEXECOM_TRUST_FAIL_WINDOW_SECONDS",
     "log_level": "TEXECOM_LOG_LEVEL",
 }
 
@@ -78,6 +81,7 @@ class Settings:
     reconnect_normal_interval_seconds: float = DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS
     reconnect_trigger_attempts: int = DEFAULT_RECONNECT_TRIGGER_ATTEMPTS
     reconnect_trigger_interval_seconds: float = DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS
+    trust_fail_window_seconds: float = DEFAULT_TRUST_FAIL_WINDOW_SECONDS
     log_level: LogLevel = DEFAULT_LOG_LEVEL
 
     def part_arm_labels(self) -> tuple[PartArmLabel, PartArmLabel, PartArmLabel]:
@@ -221,6 +225,12 @@ def _parse(raw: Mapping[str, Any]) -> Settings:
             raw,
             "reconnect_trigger_interval_seconds",
             DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
+            minimum=0.0,
+        ),
+        trust_fail_window_seconds=_optional_float(
+            raw,
+            "trust_fail_window_seconds",
+            DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
             minimum=0.0,
         ),
         log_level=_parse_log_level(raw),

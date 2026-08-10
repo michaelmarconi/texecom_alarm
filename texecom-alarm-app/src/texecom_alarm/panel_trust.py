@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 TRUST_POLL_INTERVAL_SECONDS = 30.0
 RECOVER_WINDOW_SECONDS = 30.0
+# Plan default: 3× shipping trust-poll interval (ADR-011 — tunable, not final).
+STUCK_TRUST_FAIL_WINDOW_SECONDS = 90.0
 
 REASON_ARM_NAK = "arm_nak"
 REASON_DISARM_NAK = "disarm_nak"
@@ -25,6 +27,7 @@ REASON_DISARM_TIMEOUT = "disarm_timeout"
 REASON_TRUST_POLL_NAK = "trust_poll_nak"
 REASON_TRUST_POLL_TIMEOUT = "trust_poll_timeout"
 REASON_TRUST_POLL_OK = "trust_poll_ok"
+REASON_STUCK_FAIL_WINDOW = "stuck_trust_fail_window"
 
 
 class MqttPublisher(Protocol):
@@ -42,7 +45,9 @@ class PanelTrust:
     """Tracks command-path + trust-poll health for Alarm Panel Connection.
 
     Never marks zone/alarm entities unavailable (ADR-004). Never degrades solely
-    because zones are quiet. Does not tear down the session or auto-retry commands.
+    because zones are quiet. Prefers corroboration first; if Connection stays OFF
+    past the stuck-trust fail window, signals session tear-down / re-login
+    (ADR-011). Does not auto-retry arm/disarm commands.
     """
 
     def __init__(
@@ -53,6 +58,7 @@ class PanelTrust:
         zone_count: int,
         poll_interval: float = TRUST_POLL_INTERVAL_SECONDS,
         recover_window: float = RECOVER_WINDOW_SECONDS,
+        fail_window: float = STUCK_TRUST_FAIL_WINDOW_SECONDS,
         clock: Callable[[], float] | None = None,
     ) -> None:
         self._mqtt = mqtt
@@ -60,18 +66,24 @@ class PanelTrust:
         self._zone_count = zone_count
         self._poll_interval = poll_interval
         self._recover_window = recover_window
+        self._fail_window = fail_window
         self._clock = clock if clock is not None else time.monotonic
         self._live = True
         self._last_keepalive_ok: bool | None = None
         self._last_command_fail_at: float | None = None
         self._last_successful_trust_poll_at: float | None = None
         self._last_poll_attempt_at: float | None = None
+        self._degraded_since: float | None = None
         self._last_failure_reason: str | None = None
         self._last_failure_ha_mode: str | None = None
 
     @property
     def live(self) -> bool:
         return self._live
+
+    @property
+    def fail_window(self) -> float:
+        return self._fail_window
 
     def note_keepalive_ok(self) -> None:
         self._last_keepalive_ok = True
@@ -92,6 +104,7 @@ class PanelTrust:
         self._last_command_fail_at = None
         self._last_successful_trust_poll_at = now
         self._last_poll_attempt_at = now
+        self._degraded_since = None
         self._last_failure_reason = None
         self._last_failure_ha_mode = None
         await publish_panel_link_state(
@@ -104,6 +117,11 @@ class PanelTrust:
         if when is None:
             return None
         return max(0.0, self._clock() - when)
+
+    def _mark_degraded(self) -> None:
+        self._live = False
+        if self._degraded_since is None:
+            self._degraded_since = self._clock()
 
     def _log_extra(
         self,
@@ -120,6 +138,7 @@ class PanelTrust:
                 self._last_successful_trust_poll_at
             ),
             "seconds_since_last_command_failure": self._seconds_since(self._last_command_fail_at),
+            "seconds_since_degraded": self._seconds_since(self._degraded_since),
             "panel_link_payload": panel_link_payload,
         }
 
@@ -134,7 +153,7 @@ class PanelTrust:
         self._last_command_fail_at = now
         self._last_failure_reason = reason
         self._last_failure_ha_mode = ha_mode
-        self._live = False
+        self._mark_degraded()
         await publish_panel_link_state(
             self._mqtt,
             topic_prefix=self._topic_prefix,
@@ -163,6 +182,26 @@ class PanelTrust:
         remaining = self._poll_interval - (self._clock() - self._last_poll_attempt_at)
         return max(0.0, remaining)
 
+    def needs_session_relogin(self) -> bool:
+        """True when Connection has stayed OFF continuously past the fail window."""
+        if self._live or self._degraded_since is None:
+            return False
+        return (self._clock() - self._degraded_since) >= self._fail_window
+
+    def log_stuck_fail_window_expiry(self) -> None:
+        """Everyday log when the stuck-trust fail window expires (before tear-down)."""
+        logger.warning(
+            "Alarm Panel Connection stayed off for %g seconds (stuck-trust fail window); "
+            "tearing down the panel session and logging in again. "
+            "Zone/alarm entities keep last-known state.",
+            self._fail_window,
+            extra=self._log_extra(
+                reason=REASON_STUCK_FAIL_WINDOW,
+                ha_mode=self._last_failure_ha_mode,
+                panel_link_payload=PANEL_LINK_OFF,
+            ),
+        )
+
     async def maybe_poll(self, panel: PanelClient) -> None:
         """Run a get_area_flags trust poll when the interval has elapsed."""
         if not self.poll_due():
@@ -187,7 +226,7 @@ class PanelTrust:
         await self._maybe_recover()
 
     async def _on_poll_failure(self, reason: str) -> None:
-        self._live = False
+        self._mark_degraded()
         self._last_failure_reason = reason
         await publish_panel_link_state(
             self._mqtt,
@@ -217,6 +256,7 @@ class PanelTrust:
         if self._live:
             return
         self._live = True
+        self._degraded_since = None
         await publish_panel_link_state(
             self._mqtt,
             topic_prefix=self._topic_prefix,

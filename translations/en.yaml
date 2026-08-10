@@ -57,6 +57,13 @@ configuration:
   reconnect_trigger_interval_seconds:
     name: Reconnect interval seconds (after trigger)
     description: Seconds to wait between those longer retries (default 5).
+  trust_fail_window_seconds:
+    name: Trust fail window seconds
+    description: >-
+      How long Alarm Panel Connection may stay off from a soft trust failure
+      before the add-on tears down and logs in again (default 90). Brief
+      glitches can clear earlier via a successful house-state check. Tunable
+      for live adjustment — not a fixed forever value.
   log_level:
     name: Log level
     description: >-

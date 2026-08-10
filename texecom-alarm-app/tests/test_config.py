@@ -19,6 +19,7 @@ from texecom_alarm.config import (
     DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
     DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
     DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
+    DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
     DEFAULT_UDL_PASSWORD,
     FULL_ARM_AWAY_MODE_BYTE,
     ConfigError,
@@ -44,6 +45,7 @@ def _valid_options(**overrides: object) -> dict[str, object]:
         "reconnect_normal_interval_seconds": DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
         "reconnect_trigger_attempts": DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
         "reconnect_trigger_interval_seconds": DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
+        "trust_fail_window_seconds": DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
     }
     data.update(overrides)
     return data
@@ -72,6 +74,7 @@ def test_load_settings_applies_schema_defaults() -> None:
         reconnect_normal_interval_seconds=DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
         reconnect_trigger_attempts=DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
         reconnect_trigger_interval_seconds=DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
+        trust_fail_window_seconds=DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
     )
 
 
@@ -99,6 +102,7 @@ def test_reconnect_settings_defaults_and_overrides() -> None:
     assert defaults.reconnect_normal_interval_seconds == 2.5
     assert defaults.reconnect_trigger_attempts == 18
     assert defaults.reconnect_trigger_interval_seconds == 5.0
+    assert defaults.trust_fail_window_seconds == 90.0
 
     tuned = load_settings(
         _valid_options(
@@ -106,12 +110,19 @@ def test_reconnect_settings_defaults_and_overrides() -> None:
             reconnect_normal_interval_seconds=0.5,
             reconnect_trigger_attempts=6,
             reconnect_trigger_interval_seconds=1.25,
+            trust_fail_window_seconds=45.0,
         )
     )
     assert tuned.reconnect_normal_attempts == 2
     assert tuned.reconnect_normal_interval_seconds == 0.5
     assert tuned.reconnect_trigger_attempts == 6
     assert tuned.reconnect_trigger_interval_seconds == 1.25
+    assert tuned.trust_fail_window_seconds == 45.0
+
+
+def test_invalid_trust_fail_window_raises_clear_error() -> None:
+    with pytest.raises(ConfigError, match="trust_fail_window_seconds"):
+        load_settings(_valid_options(trust_fail_window_seconds=-1))
 
 
 def test_invalid_reconnect_interval_raises_clear_error() -> None:
@@ -134,6 +145,7 @@ def test_reconnect_settings_from_environ() -> None:
             "TEXECOM_RECONNECT_NORMAL_INTERVAL_SECONDS": "1.5",
             "TEXECOM_RECONNECT_TRIGGER_ATTEMPTS": "9",
             "TEXECOM_RECONNECT_TRIGGER_INTERVAL_SECONDS": "3.0",
+            "TEXECOM_TRUST_FAIL_WINDOW_SECONDS": "120",
         },
         options_path="/nonexistent/options.json",
     )
@@ -141,6 +153,7 @@ def test_reconnect_settings_from_environ() -> None:
     assert settings.reconnect_normal_interval_seconds == 1.5
     assert settings.reconnect_trigger_attempts == 9
     assert settings.reconnect_trigger_interval_seconds == 3.0
+    assert settings.trust_fail_window_seconds == 120.0
 
 
 def test_part_arm_slot_defaults_and_mode_bytes() -> None:
