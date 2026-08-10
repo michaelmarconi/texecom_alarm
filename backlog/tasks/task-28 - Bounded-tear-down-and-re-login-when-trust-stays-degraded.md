@@ -80,5 +80,5 @@ How we'll know = FakePanel unit/integration for corroboration recover vs bounded
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
