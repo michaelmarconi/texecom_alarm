@@ -39,7 +39,7 @@ class MqttPublisher(Protocol):
 
 
 class PanelTrust:
-    """Tracks command-path + trust-poll health for Alarm Panel Connected.
+    """Tracks command-path + trust-poll health for Alarm Panel Connection.
 
     Never marks zone/alarm entities unavailable (ADR-004). Never degrades solely
     because zones are quiet. Does not tear down the session or auto-retry commands.
@@ -141,8 +141,8 @@ class PanelTrust:
             live=False,
         )
         logger.warning(
-            "Alarm Panel Connected degraded (%s); keepalive_still_ok=%s; "
-            "publishing panel-link OFF. Zone/alarm entities keep last-known state.",
+            "Alarm Panel Connection degraded (%s); keepalive_still_ok=%s; "
+            "publishing Connection OFF. Zone/alarm entities keep last-known state.",
             reason,
             self._last_keepalive_ok,
             extra=self._log_extra(
@@ -195,8 +195,8 @@ class PanelTrust:
             live=False,
         )
         logger.warning(
-            "Alarm Panel Connected degraded (%s); keepalive_still_ok=%s; "
-            "publishing panel-link OFF. Zone/alarm entities keep last-known state.",
+            "Alarm Panel Connection degraded (%s); keepalive_still_ok=%s; "
+            "publishing Connection OFF. Zone/alarm entities keep last-known state.",
             reason,
             self._last_keepalive_ok,
             extra=self._log_extra(
@@ -223,8 +223,8 @@ class PanelTrust:
             live=True,
         )
         logger.info(
-            "Alarm Panel Connected recovered to live after successful trust poll; "
-            "publishing panel-link ON.",
+            "Alarm Panel Connection recovered to live after successful trust poll; "
+            "publishing Connection ON.",
             extra=self._log_extra(
                 reason=REASON_TRUST_POLL_OK,
                 ha_mode=self._last_failure_ha_mode,

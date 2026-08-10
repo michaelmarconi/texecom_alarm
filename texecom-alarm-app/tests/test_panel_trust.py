@@ -98,11 +98,11 @@ def _trust(
 
 @pytest.mark.asyncio
 async def test_arm_nak_publishes_panel_link_off_while_keepalive_ok() -> None:
-    """AC1: arm NAK → Alarm Panel Connected OFF; zones/alarm stay available."""
+    """AC1: arm NAK → Alarm Panel Connection OFF; zones/alarm stay available."""
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
     await mqtt.publish(availability_topic("texecom"), AVAILABILITY_ONLINE, retain=True)
-    await mqtt.publish("texecom/panel_link/state", "ON", retain=True)
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
     await mqtt.publish("texecom/alarm/state", "disarmed", retain=True)
     await mqtt.publish("texecom/zone/1/state", "OFF", retain=True)
 
@@ -125,7 +125,7 @@ async def test_arm_nak_publishes_panel_link_off_while_keepalive_ok() -> None:
         trust=trust,
     )
 
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
     assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
     assert mqtt.payloads_for("texecom/zone/1/state")[-1] == "OFF"
     assert mqtt.payloads_for(availability_topic("texecom"))[-1] == AVAILABILITY_ONLINE
@@ -145,7 +145,7 @@ async def test_disarm_timeout_publishes_panel_link_off() -> None:
     """AC1: disarm timeout → OFF with disarm_timeout reason."""
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
-    await mqtt.publish("texecom/panel_link/state", "ON", retain=True)
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
     trust = _trust(mqtt)
     trust.note_keepalive_ok()
     capture = _attach_capture()
@@ -163,7 +163,7 @@ async def test_disarm_timeout_publishes_panel_link_off() -> None:
         trust=trust,
     )
 
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
     warnings = [r for r in capture.records if r.levelno == logging.WARNING]
     assert warnings
     extra = _extra(warnings[-1])
@@ -207,7 +207,7 @@ async def test_quiet_house_stays_live_without_zone_pushes() -> None:
     """AC2: no zone push traffic alone must not degrade connectivity."""
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
-    await mqtt.publish("texecom/panel_link/state", "ON", retain=True)
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
 
     clock = {"t": 0.0}
     trust = _trust(mqtt, poll_interval=1.0, recover_window=1.0, clock=lambda: clock["t"])
@@ -219,7 +219,7 @@ async def test_quiet_house_stays_live_without_zone_pushes() -> None:
         clock["t"] = float(step) * 1.0
         trust.note_keepalive_ok()
         await trust.maybe_poll(panel)
-        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
 
     assert panel.get_area_flags.await_count >= 1
 
@@ -229,7 +229,7 @@ async def test_trust_poll_nak_publishes_off_with_timing_context() -> None:
     """AC2: failed trust poll → OFF with trust_poll_nak + timing fields."""
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
-    await mqtt.publish("texecom/panel_link/state", "ON", retain=True)
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
 
     clock = {"t": 10.0}
     trust = _trust(mqtt, poll_interval=1.0, clock=lambda: clock["t"])
@@ -245,7 +245,7 @@ async def test_trust_poll_nak_publishes_off_with_timing_context() -> None:
     panel_fail.get_area_flags = AsyncMock(side_effect=ProtocolError("GetAreaFlags NAK"))
     await trust.maybe_poll(panel_fail)
 
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
     warnings = [r for r in capture.records if r.levelno == logging.WARNING]
     assert warnings
     extra = _extra(warnings[-1])
@@ -268,7 +268,7 @@ async def test_trust_poll_timeout_reason() -> None:
     warnings = [r for r in capture.records if r.levelno == logging.WARNING]
     assert warnings
     assert _extra(warnings[-1])["reason"] == REASON_TRUST_POLL_TIMEOUT
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
 
 
 @pytest.mark.asyncio
@@ -276,7 +276,7 @@ async def test_transient_command_reject_recovers_after_window() -> None:
     """AC3: single NAK → OFF; after recover window + successful poll → ON without restart."""
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
-    await mqtt.publish("texecom/panel_link/state", "ON", retain=True)
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
 
     clock = {"t": 0.0}
     trust = _trust(mqtt, poll_interval=1.0, recover_window=30.0, clock=lambda: clock["t"])
@@ -284,7 +284,7 @@ async def test_transient_command_reject_recovers_after_window() -> None:
     capture = _attach_capture()
 
     await trust.record_command_failure(REASON_ARM_NAK, ha_mode="away")
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
 
     panel = MagicMock()
     panel.get_area_flags = AsyncMock(return_value=bytes(72))
@@ -292,12 +292,12 @@ async def test_transient_command_reject_recovers_after_window() -> None:
     # Successful poll inside recover window must stay OFF.
     clock["t"] = 10.0
     await trust.maybe_poll(panel)
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
 
     # Past recover window: successful poll returns to live.
     clock["t"] = 31.0
     await trust.maybe_poll(panel)
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
 
     infos = [r for r in capture.records if r.levelno == logging.INFO]
     assert infos
@@ -318,7 +318,7 @@ async def test_reset_after_reconnect_republishes_panel_link_on() -> None:
     """
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
-    await mqtt.publish("texecom/panel_link/state", "ON", retain=True)
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
 
     clock = {"t": 0.0}
     trust = _trust(mqtt, poll_interval=1.0, recover_window=1.0, clock=lambda: clock["t"])
@@ -326,12 +326,12 @@ async def test_reset_after_reconnect_republishes_panel_link_on() -> None:
 
     # Simulates MQTT command handler publishing OFF after reconnect already ON.
     await trust.record_command_failure(REASON_ARM_NAK, ha_mode="away")
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
     assert trust.live is False
 
     await trust.reset_after_reconnect()
     assert trust.live is True
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
 
     # Successful trust poll must remain ON (would stay OFF if reset skipped publish
     # and left _live True so _maybe_recover never republished).
@@ -339,7 +339,7 @@ async def test_reset_after_reconnect_republishes_panel_link_on() -> None:
     panel = MagicMock()
     panel.get_area_flags = AsyncMock(return_value=bytes(72))
     await trust.maybe_poll(panel)
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
     assert trust.live is True
 
 
@@ -364,7 +364,7 @@ async def test_listen_loop_runs_trust_poll_alongside_keepalive() -> None:
         await client.login()
         mqtt = RecordingMqttPublisher()
         await mqtt.connect()
-        await mqtt.publish("texecom/panel_link/state", "ON", retain=True)
+        await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
 
         trust = PanelTrust(
             mqtt,
@@ -394,7 +394,7 @@ async def test_listen_loop_runs_trust_poll_alongside_keepalive() -> None:
 
         assert panel.keepalive_attempts >= 1
         assert panel.area_flags_calls >= 1
-        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
         await client.close()
     finally:
         await panel.stop()
@@ -402,7 +402,7 @@ async def test_listen_loop_runs_trust_poll_alongside_keepalive() -> None:
 
 @pytest.mark.asyncio
 async def test_e2e_arm_nak_while_keepalive_ok_marks_degraded() -> None:
-    """FakePanel: keepalive OK + arm NAK → panel_link OFF; availability unchanged."""
+    """FakePanel: keepalive OK + arm NAK → panel_connection OFF; availability unchanged."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
@@ -434,7 +434,7 @@ async def test_e2e_arm_nak_while_keepalive_ok_marks_degraded() -> None:
         )
         for _ in range(150):
             if (
-                mqtt.payloads_for("texecom/panel_link/state")
+                mqtt.payloads_for("texecom/panel_connection/state")
                 and "texecom/alarm/command" in mqtt.subscribed
             ):
                 break
@@ -444,14 +444,14 @@ async def test_e2e_arm_nak_while_keepalive_ok_marks_degraded() -> None:
                     raise exc
             await asyncio.sleep(0.02)
 
-        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
         assert mqtt.payloads_for(availability_topic("texecom"))[-1] == AVAILABILITY_ONLINE
         before_avail = list(mqtt.payloads_for(availability_topic("texecom")))
 
         panel.nak_next_arm = True
         await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
         for _ in range(100):
-            if mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF":
+            if mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF":
                 break
             if task.done():
                 exc = task.exception()
@@ -459,7 +459,7 @@ async def test_e2e_arm_nak_while_keepalive_ok_marks_degraded() -> None:
                     raise exc
             await asyncio.sleep(0.02)
 
-        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
         assert mqtt.payloads_for(availability_topic("texecom")) == before_avail
         assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
 
@@ -502,9 +502,9 @@ async def test_e2e_trust_poll_fail_then_recover() -> None:
             )
         )
         for _ in range(150):
-            if mqtt.payloads_for("texecom/panel_link/state") == ["ON"] or (
-                mqtt.payloads_for("texecom/panel_link/state")
-                and mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+            if mqtt.payloads_for("texecom/panel_connection/state") == ["ON"] or (
+                mqtt.payloads_for("texecom/panel_connection/state")
+                and mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
             ):
                 if "texecom/alarm/command" in mqtt.subscribed:
                     break
@@ -513,22 +513,22 @@ async def test_e2e_trust_poll_fail_then_recover() -> None:
                 if exc is not None:
                     raise exc
             await asyncio.sleep(0.02)
-        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
 
         # Fail the next trust poll only (startup snapshot already completed).
         panel.nak_next_area_flags = 1
         for _ in range(200):
-            if "OFF" in mqtt.payloads_for("texecom/panel_link/state"):
+            if "OFF" in mqtt.payloads_for("texecom/panel_connection/state"):
                 break
             if task.done():
                 exc = task.exception()
                 if exc is not None:
                     raise exc
             await asyncio.sleep(0.02)
-        assert "OFF" in mqtt.payloads_for("texecom/panel_link/state")
+        assert "OFF" in mqtt.payloads_for("texecom/panel_connection/state")
 
         for _ in range(200):
-            payloads = mqtt.payloads_for("texecom/panel_link/state")
+            payloads = mqtt.payloads_for("texecom/panel_connection/state")
             if "OFF" in payloads and payloads[-1] == "ON":
                 break
             if task.done():
@@ -537,7 +537,7 @@ async def test_e2e_trust_poll_fail_then_recover() -> None:
                     raise exc
             await asyncio.sleep(0.02)
 
-        payloads = mqtt.payloads_for("texecom/panel_link/state")
+        payloads = mqtt.payloads_for("texecom/panel_connection/state")
         assert "OFF" in payloads
         assert payloads[-1] == "ON"
 
