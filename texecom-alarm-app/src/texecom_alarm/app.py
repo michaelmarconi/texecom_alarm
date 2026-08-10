@@ -101,10 +101,12 @@ async def run(
     startup_sleep: Callable[[float], Awaitable[None]] | None = None,
     trust_poll_interval: float | None = None,
     trust_recover_window: float | None = None,
+    idle_timeout: float | None = None,
 ) -> None:
     """Connect, enumerate, discover, snapshot zone+alarm state, subscribe, listen."""
     cfg = settings if settings is not None else load_settings()
     owns_panel = panel is None
+    listen_idle_timeout = idle_timeout if idle_timeout is not None else _KEEPALIVE_IDLE_TIMEOUT
 
     panel_kwargs: dict = {}
     if login_delay is not None:
@@ -204,6 +206,7 @@ async def run(
                 topic_prefix=cfg.mqtt_topic_prefix,
                 in_use_zones=in_use,
                 alarm_state=alarm_state,
+                idle_timeout=listen_idle_timeout,
                 trust=trust,
             ),
             name="panel-listen",
@@ -381,7 +384,7 @@ async def _listen_with_reconnect(
             raise
         last_alarm_payload = alarm_state.payload
         logger.info(
-            "Panel ended the monitoring session (forced disconnect); "
+            "Panel monitoring session ended (forced disconnect or unanswered health check); "
             "last alarm state was %s. Reconnecting…",
             last_alarm_payload,
         )
@@ -443,6 +446,19 @@ async def _listen_panel_messages(
                     await panel.keepalive()
                     if trust is not None:
                         trust.note_keepalive_ok()
+                except ForcedDisconnect:
+                    if trust is not None:
+                        trust.note_keepalive_failed()
+                    raise
+                except TimeoutError as exc:
+                    # Unanswered mid-run health check = dead session (ADR-011):
+                    # same keep-trying reconnect path as a clean panel drop.
+                    if trust is not None:
+                        trust.note_keepalive_failed()
+                    raise ForcedDisconnect(
+                        f"Panel health check went unanswered — treating the session as dead "
+                        f"and reconnecting. {exc}"
+                    ) from exc
                 except Exception:
                     if trust is not None:
                         trust.note_keepalive_failed()
