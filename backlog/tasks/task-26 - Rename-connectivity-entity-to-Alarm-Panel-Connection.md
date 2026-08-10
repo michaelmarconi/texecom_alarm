@@ -4,7 +4,7 @@ title: Rename connectivity entity to Alarm Panel Connection
 status: awaiting-review
 assignee: []
 created_date: '2026-08-09 23:50'
-updated_date: '2026-08-09 23:59'
+updated_date: '2026-08-10 00:31'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -78,5 +78,5 @@ Verification: how we'll know — `cd texecom-alarm-app && python -m pytest tests
 Notes/assumptions: Chosen HA identity scheme is `unique_id`/`object_id`=`texecom_alarm_panel_connection`, state topic=`{prefix}/panel_connection/state` (replaces `panel_link`). Internal Python helpers (`publish_panel_link_state`, `panel_link_payload` log extras) left unchanged — not HA entity identity. ADR-004 separation of connectivity vs alarm/zone availability unchanged.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
