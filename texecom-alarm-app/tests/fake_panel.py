@@ -69,6 +69,9 @@ class FakePanel:
         self.commands_seen: list[int] = []
         self.keepalive_attempts = 0
         self.keepalive_sequences: list[int] = []
+        # When True, accept GETDATETIME (count it) but never reply — mid-run
+        # health-check death for session-heal tests (ADR-011). Clear to accept again.
+        self.silence_keepalive = False
         self.resync_survivals = 0
         self.interleave_message_before_response: bytes | None = None
         self.stale_sequence_before_response = False
@@ -234,6 +237,10 @@ class FakePanel:
             logger.debug("fake_panel_dropped_response", extra={"cmd": cmd})
             return
 
+        if cmd == CMD_GETDATETIME and self.silence_keepalive:
+            logger.debug("fake_panel_silenced_keepalive")
+            return
+
         if self.inject_bytes:
             junk = self.inject_bytes
             self.inject_bytes = b""
@@ -275,6 +282,8 @@ class FakePanel:
         password = frame.body[1:].decode("ascii", errors="replace")
         if password == self.udl_password:
             self.authenticated = True
+            # New session after mid-run health-check death: answer keepalive again.
+            self.silence_keepalive = False
             return bytes([CMD_LOGIN, ACK])
         return bytes([CMD_LOGIN, 0x15])
 

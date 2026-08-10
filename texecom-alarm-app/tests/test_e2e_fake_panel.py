@@ -1009,3 +1009,113 @@ async def test_e2e_arm_nak_degrades_panel_link_keepalive_still_ok() -> None:
         await asyncio.wait_for(task, timeout=2.0)
     finally:
         await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_health_check_death_heals_without_restart() -> None:
+    """ADR-011 / session-heal AC1: unanswered keepalive → reconnect heal + re-sync."""
+    from texecom_alarm.protocol.frame import (
+        CMD_GET_AREA_FLAGS,
+        CMD_GET_ZONE_STATE,
+        CMD_LOGIN,
+        CMD_SETEVENTMESSAGES,
+    )
+
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = Settings(
+            panel_host=panel.host,
+            panel_port=panel.port,
+            udl_password="1234",
+            mqtt_host="127.0.0.1",
+            mqtt_port=1883,
+            mqtt_username="",
+            mqtt_password="",
+            mqtt_topic_prefix="texecom",
+            part_arm_1="night",
+            part_arm_2="home",
+            part_arm_3="unused",
+            reconnect_normal_attempts=2,
+            reconnect_normal_interval_seconds=0.01,
+            reconnect_trigger_attempts=3,
+            reconnect_trigger_interval_seconds=0.02,
+        )
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.2,
+            keepalive_retries=0,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(
+            run(
+                settings,
+                panel=client,
+                mqtt=mqtt,
+                idle=stop.wait,
+                idle_timeout=0.05,
+                trust_poll_interval=60.0,
+            )
+        )
+        for _ in range(150):
+            if mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["ON"]:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+        before_status = list(mqtt.payloads_for("texecom/status"))
+        zone_before = mqtt.payloads_for("texecom/zone/1/state")[-1]
+        alarm_before = mqtt.payloads_for("texecom/alarm/state")[-1]
+        cmds_before = list(panel.commands_seen)
+        setevent_before = panel.seteventmessages_calls
+
+        panel.silence_keepalive = True
+
+        for _ in range(300):
+            link = mqtt.payloads_for("texecom/panel_connection/state")
+            resumed = (
+                link.count("OFF") >= 1
+                and link[-1] == "ON"
+                and panel.seteventmessages_calls > setevent_before
+            )
+            if resumed:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        link = mqtt.payloads_for("texecom/panel_connection/state")
+        assert "OFF" in link
+        assert link[-1] == "ON"
+        assert mqtt.payloads_for("texecom/status") == before_status or (
+            mqtt.payloads_for("texecom/status")[-1] == AVAILABILITY_ONLINE
+        )
+        assert "offline" not in mqtt.payloads_for("texecom/status")[len(before_status) :]
+        assert mqtt.payloads_for("texecom/zone/1/state")[-1] == zone_before
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == alarm_before
+        new_cmds = panel.commands_seen[len(cmds_before) :]
+        assert CMD_LOGIN in new_cmds
+        assert CMD_GET_ZONE_STATE in new_cmds
+        assert CMD_GET_AREA_FLAGS in new_cmds
+        assert CMD_SETEVENTMESSAGES in new_cmds
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
