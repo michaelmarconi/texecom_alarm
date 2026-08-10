@@ -1,10 +1,10 @@
 ---
 id: TASK-28
 title: Bounded tear-down and re-login when trust stays degraded
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-09 23:50'
-updated_date: '2026-08-10 08:44'
+updated_date: '2026-08-10 08:50'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -79,6 +79,12 @@ How we'll know = FakePanel unit/integration for corroboration recover vs bounded
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Soft-trust failures prefer corroboration; if Connection stays OFF past a tunable 90s fail window the app tears down, re-logins, re-syncs, and restores Connection ON without auto-retrying arm/disarm.
+Changed files: texecom-alarm-app/src/texecom_alarm/panel_trust.py, texecom-alarm-app/src/texecom_alarm/app.py, texecom-alarm-app/src/texecom_alarm/config.py, config.yaml, translations/en.yaml, DOCS.md, texecom-alarm-app/tests/fake_panel.py, texecom-alarm-app/tests/test_panel_trust.py, texecom-alarm-app/tests/test_session_heal.py, texecom-alarm-app/tests/test_e2e_fake_panel.py, texecom-alarm-app/tests/test_config.py, texecom-alarm-app/tests/test_reconnect.py
+Verification: python -m pytest tests/test_panel_trust.py tests/test_session_heal.py tests/test_e2e_fake_panel.py -q → 32 passed; full suite 225 passed, 92.69% coverage; ruff clean
+Notes/assumptions: Stuck soft-trust uses ForcedDisconnect into existing reconnect_after_disconnect; trust_fail_window_seconds defaults to 90 (tunable). No panel_link tombstones.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
