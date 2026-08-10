@@ -1,10 +1,10 @@
 ---
 id: TASK-29
 title: 'Checkpoint: texecom-alarm-app session-heal wave'
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-09 23:51'
-updated_date: '2026-08-10 12:08'
+updated_date: '2026-08-10 12:09'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
@@ -25,8 +25,15 @@ ordinal: 23000
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Verification result
+verdict: pass
+- #1 Rename + heal suites pass: pass — `pytest … -q` → 60 passed in 5.43s, exit 0
+- #2 FakePanel health-check death → keep-trying reconnect and stuck-trust → bounded re-login: pass — covered green in `test_session_heal.py` / `test_e2e_fake_panel.py` (e.g. `test_health_check_death_heals_without_restart`, `test_trust_stuck_past_fail_window_tears_down_and_relogins`, `test_e2e_stuck_trust_fail_window_relogins_without_arm_retry`)
+- #3 Build/import clean: pass — `.venv/bin/python -c 'import texecom_alarm'` exit 0; collection 60 tests OK
+Notes: DoD OK — discovery name "Alarm Panel Connection"; heal keeps availability online; ADR-011 heal with no arm auto-retry; 90s fail window documented tunable in config.py/panel_trust.py.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
