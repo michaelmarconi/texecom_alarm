@@ -205,7 +205,7 @@ async def _e2e_discovery_retained_and_lwt() -> None:
             await observer.subscribe("homeassistant/binary_sensor/+/config")
             await observer.subscribe("homeassistant/alarm_control_panel/+/config")
             await observer.subscribe("texecom/status")
-            await observer.subscribe("texecom/panel_link/state")
+            await observer.subscribe("texecom/panel_connection/state")
 
             app_task = asyncio.create_task(
                 run(settings, panel=panel_client, mqtt=mqtt, idle=stop.wait)
@@ -213,7 +213,7 @@ async def _e2e_discovery_retained_and_lwt() -> None:
             try:
                 deadline = asyncio.get_running_loop().time() + 15.0
                 alarm_cfg = "homeassistant/alarm_control_panel/texecom_alarm_arm_status/config"
-                link_cfg = "homeassistant/binary_sensor/texecom_alarm_panel_link/config"
+                link_cfg = "homeassistant/binary_sensor/texecom_alarm_panel_connection/config"
                 link_states: list[str] = []
                 while asyncio.get_running_loop().time() < deadline and not (
                     len(discovered) >= 4
@@ -233,10 +233,13 @@ async def _e2e_discovery_retained_and_lwt() -> None:
                     topic = str(message.topic)
                     payload = message.payload.decode("utf-8")
                     if topic.startswith("homeassistant/"):
+                        # Empty retained payload = HA discovery tombstone (legacy retire).
+                        if not payload:
+                            continue
                         discovered[topic] = json.loads(payload)
                     elif topic == "texecom/status":
                         status_payloads.append(payload)
-                    elif topic == "texecom/panel_link/state":
+                    elif topic == "texecom/panel_connection/state":
                         link_states.append(payload)
 
                 assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in discovered
@@ -257,10 +260,10 @@ async def _e2e_discovery_retained_and_lwt() -> None:
 
                 link = discovered[link_cfg]
                 assert link["availability_topic"] == "texecom/status"
-                assert link["name"] == "Alarm Panel Connected"
-                assert link["unique_id"] == "texecom_alarm_panel_link"
+                assert link["name"] == "Alarm Panel Connection"
+                assert link["unique_id"] == "texecom_alarm_panel_connection"
                 assert link["device_class"] == "connectivity"
-                assert link["state_topic"] == "texecom/panel_link/state"
+                assert link["state_topic"] == "texecom/panel_connection/state"
                 assert link["device"]["identifiers"] == ["texecom_alarm"]
                 assert link["device"] == front["device"]
 
@@ -272,7 +275,7 @@ async def _e2e_discovery_retained_and_lwt() -> None:
                     timeout=20.0,
                 ) as late:
                     await late.subscribe(link_cfg)
-                    await late.subscribe("texecom/panel_link/state")
+                    await late.subscribe("texecom/panel_connection/state")
                     got_cfg: dict | None = None
                     got_state: str | None = None
                     late_deadline = asyncio.get_running_loop().time() + 5.0
@@ -287,11 +290,13 @@ async def _e2e_discovery_retained_and_lwt() -> None:
                         payload = message.payload.decode("utf-8")
                         if topic == link_cfg:
                             got_cfg = json.loads(payload)
-                        elif topic == "texecom/panel_link/state":
+                        elif topic == "texecom/panel_connection/state":
                             got_state = payload
-                    assert got_cfg is not None, "panel_link discovery was not retained on broker"
+                    assert (
+                        got_cfg is not None
+                    ), "panel_connection discovery was not retained on broker"
                     assert got_cfg["device_class"] == "connectivity"
-                    assert got_state == "ON", "panel_link state was not retained ON on broker"
+                    assert got_state == "ON", "panel_connection state was not retained ON on broker"
 
                 # Simulate app-process crash: abort MQTT TCP without DISCONNECT → LWT.
                 await mqtt.abort()
@@ -358,14 +363,14 @@ async def test_e2e_app_run_with_recording_mqtt() -> None:
         topics = [m.topic for m in mqtt.messages]
         assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in topics
         assert "homeassistant/alarm_control_panel/texecom_alarm_arm_status/config" in topics
-        link_cfg = "homeassistant/binary_sensor/texecom_alarm_panel_link/config"
+        link_cfg = "homeassistant/binary_sensor/texecom_alarm_panel_connection/config"
         assert link_cfg in topics
-        assert "texecom/panel_link/state" in topics
-        assert mqtt.payloads_for("texecom/panel_link/state")[0] == "ON"
+        assert "texecom/panel_connection/state" in topics
+        assert mqtt.payloads_for("texecom/panel_connection/state")[0] == "ON"
         # TASK-10 AC-1/AC-2/AC-3: discovery + panel-link state must be retained.
         link_disc = next(m for m in mqtt.messages if m.topic == link_cfg)
         assert link_disc.retain is True
-        link_state = next(m for m in mqtt.messages if m.topic == "texecom/panel_link/state")
+        link_state = next(m for m in mqtt.messages if m.topic == "texecom/panel_connection/state")
         assert link_state.retain is True
         assert link_state.payload == "ON"
         assert "texecom/status" in topics
@@ -381,7 +386,7 @@ async def test_e2e_app_run_with_recording_mqtt() -> None:
             zone_disc.payload if isinstance(zone_disc.payload, str) else zone_disc.payload.decode()
         )
         assert zone_payload["availability_topic"] == "texecom/status"
-        assert zone_payload["availability_topic"] != "texecom/panel_link/state"
+        assert zone_payload["availability_topic"] != "texecom/panel_connection/state"
     finally:
         await panel.stop()
 
@@ -862,7 +867,7 @@ async def test_e2e_arm_nak_republishes_disarmed_state() -> None:
 
 @pytest.mark.asyncio
 async def test_e2e_quiet_house_panel_link_stays_on() -> None:
-    """ADR-010 / AC2: no zone pushes alone must not degrade Alarm Panel Connected."""
+    """ADR-010 / AC2: no zone pushes alone must not degrade Alarm Panel Connection."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
@@ -906,14 +911,14 @@ async def test_e2e_quiet_house_panel_link_stays_on() -> None:
             )
         )
         for _ in range(150):
-            if mqtt.payloads_for("texecom/panel_link/state"):
+            if mqtt.payloads_for("texecom/panel_connection/state"):
                 break
             if task.done():
                 exc = task.exception()
                 if exc is not None:
                     raise exc
             await asyncio.sleep(0.02)
-        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
 
         for _ in range(50):
             if panel.area_flags_calls >= 2 and panel.keepalive_attempts >= 1:
@@ -922,8 +927,8 @@ async def test_e2e_quiet_house_panel_link_stays_on() -> None:
 
         assert panel.area_flags_calls >= 2
         assert panel.keepalive_attempts >= 1
-        assert "OFF" not in mqtt.payloads_for("texecom/panel_link/state")
-        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+        assert "OFF" not in mqtt.payloads_for("texecom/panel_connection/state")
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)
@@ -933,7 +938,7 @@ async def test_e2e_quiet_house_panel_link_stays_on() -> None:
 
 @pytest.mark.asyncio
 async def test_e2e_arm_nak_degrades_panel_link_keepalive_still_ok() -> None:
-    """ADR-010 / AC1: FakePanel arm NAK → panel_link OFF; app availability stays online."""
+    """ADR-010 / AC1: FakePanel arm NAK → panel_connection OFF; app availability stays online."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
@@ -977,7 +982,7 @@ async def test_e2e_arm_nak_degrades_panel_link_keepalive_still_ok() -> None:
         )
         for _ in range(150):
             if (
-                mqtt.payloads_for("texecom/panel_link/state")
+                mqtt.payloads_for("texecom/panel_connection/state")
                 and "texecom/alarm/command" in mqtt.subscribed
             ):
                 break
@@ -991,7 +996,7 @@ async def test_e2e_arm_nak_degrades_panel_link_keepalive_still_ok() -> None:
         panel.nak_next_arm = True
         await mqtt.push_inbound("texecom/alarm/command", "ARM_HOME")
         for _ in range(100):
-            if mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF":
+            if mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF":
                 break
             if task.done():
                 exc = task.exception()
@@ -999,7 +1004,7 @@ async def test_e2e_arm_nak_degrades_panel_link_keepalive_still_ok() -> None:
                     raise exc
             await asyncio.sleep(0.02)
 
-        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
         assert mqtt.payloads_for("texecom/status") == before_status
         assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
 

@@ -15,11 +15,14 @@ AVAILABILITY_ONLINE = "online"
 AVAILABILITY_OFFLINE = "offline"
 
 ALARM_OBJECT_ID = "texecom_alarm_arm_status"
-CONNECTIVITY_OBJECT_ID = "texecom_alarm_panel_link"
+CONNECTIVITY_OBJECT_ID = "texecom_alarm_panel_connection"
+# Pre-rename identity (Panel Link / Connected). Cleared on discovery publish so HA
+# does not keep a second retained entity alongside Alarm Panel Connection.
+LEGACY_CONNECTIVITY_OBJECT_ID = "texecom_alarm_panel_link"
 PANEL_LINK_ON = "ON"
 PANEL_LINK_OFF = "OFF"
 
-# Shared across zone, alarm, and panel-link discovery so HA groups one device.
+# Shared across zone, alarm, and panel-connection discovery so HA groups one device.
 MQTT_DEVICE: dict[str, object] = {
     "identifiers": ["texecom_alarm"],
     "name": "Texecom Alarm",
@@ -76,6 +79,10 @@ def alarm_discovery_topic(object_id: str = ALARM_OBJECT_ID) -> str:
 
 
 def connectivity_state_topic(topic_prefix: str) -> str:
+    return f"{topic_prefix}/panel_connection/state"
+
+
+def legacy_connectivity_state_topic(topic_prefix: str) -> str:
     return f"{topic_prefix}/panel_link/state"
 
 
@@ -130,7 +137,7 @@ def alarm_discovery_payload(
 
 def connectivity_discovery_payload(*, topic_prefix: str) -> dict[str, object]:
     return {
-        "name": "Alarm Panel Connected",
+        "name": "Alarm Panel Connection",
         "unique_id": CONNECTIVITY_OBJECT_ID,
         "object_id": CONNECTIVITY_OBJECT_ID,
         "default_entity_id": f"binary_sensor.{CONNECTIVITY_OBJECT_ID}",
@@ -190,7 +197,22 @@ async def publish_connectivity_discovery(
     *,
     topic_prefix: str,
 ) -> None:
-    """Publish retained panel-link connectivity binary_sensor discovery (ADR-004)."""
+    """Publish retained panel-connection connectivity binary_sensor discovery (ADR-004).
+
+    Also tombstones the legacy panel_link discovery/state so existing brokers drop
+    the old Connected / Panel Link identity (empty retained = HA MQTT removal).
+    """
+    legacy_discovery = connectivity_discovery_topic(LEGACY_CONNECTIVITY_OBJECT_ID)
+    await mqtt.publish(legacy_discovery, "", retain=True)
+    await mqtt.publish(legacy_connectivity_state_topic(topic_prefix), "", retain=True)
+    logger.debug(
+        "mqtt_legacy_connectivity_retired",
+        extra={
+            "discovery_topic": legacy_discovery,
+            "object_id": LEGACY_CONNECTIVITY_OBJECT_ID,
+        },
+    )
+
     topic = connectivity_discovery_topic()
     payload = connectivity_discovery_payload(topic_prefix=topic_prefix)
     body = json.dumps(payload, separators=(",", ":"))

@@ -121,14 +121,14 @@ async def test_reconnect_normal_budget_connectivity_and_resume_sequence() -> Non
 
         task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
         for _ in range(150):
-            if mqtt.payloads_for("texecom/panel_link/state"):
+            if mqtt.payloads_for("texecom/panel_connection/state"):
                 break
             if task.done():
                 exc = task.exception()
                 if exc is not None:
                     raise exc
             await asyncio.sleep(0.02)
-        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
         assert mqtt.payloads_for(availability_topic("texecom"))[-1] == AVAILABILITY_ONLINE
 
         # Snapshot + SETEVENTMESSAGES already happened at startup.
@@ -139,7 +139,7 @@ async def test_reconnect_normal_budget_connectivity_and_resume_sequence() -> Non
         await panel.force_disconnect()
 
         for _ in range(200):
-            link = mqtt.payloads_for("texecom/panel_link/state")
+            link = mqtt.payloads_for("texecom/panel_connection/state")
             resumed = (
                 link.count("OFF") >= 1
                 and link[-1] == "ON"
@@ -153,7 +153,7 @@ async def test_reconnect_normal_budget_connectivity_and_resume_sequence() -> Non
                     raise exc
             await asyncio.sleep(0.02)
 
-        link = mqtt.payloads_for("texecom/panel_link/state")
+        link = mqtt.payloads_for("texecom/panel_connection/state")
         assert "OFF" in link
         assert link[-1] == "ON"
 
@@ -243,7 +243,7 @@ async def test_reconnect_trigger_budget_after_triggered() -> None:
             await panel.force_disconnect()
 
             for _ in range(200):
-                link = mqtt.payloads_for("texecom/panel_link/state")
+                link = mqtt.payloads_for("texecom/panel_connection/state")
                 if link.count("OFF") >= 1 and link[-1] == "ON":
                     break
                 if task.done():
@@ -252,7 +252,7 @@ async def test_reconnect_trigger_budget_after_triggered() -> None:
                         raise exc
                 await asyncio.sleep(0.02)
 
-            assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+            assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
             assert any(
                 abs(s - 0.05) < 1e-9 for s in sleeps
             ), f"expected trigger interval in {sleeps}"
@@ -310,8 +310,8 @@ async def test_reconnect_helper_uses_existing_zones_no_reenumeration() -> None:
 
         assert panel.zone_detail_queries == detail_before
         assert sleeps == [settings.reconnect_normal_interval_seconds]
-        assert mqtt.payloads_for("texecom/panel_link/state")[0] == "OFF"
-        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[0] == "OFF"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
         assert CMD_LOGIN in panel.commands_seen
         assert CMD_GET_ZONE_STATE in panel.commands_seen
         assert CMD_GET_AREA_FLAGS in panel.commands_seen
@@ -371,8 +371,8 @@ async def test_reconnect_helper_retries_after_failed_attempt() -> None:
         )
         assert payload == "disarmed"
         assert len(sleeps) == 2  # one failed attempt + one success
-        assert mqtt.payloads_for("texecom/panel_link/state")[0] == "OFF"
-        assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "ON"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[0] == "OFF"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
         await client.close()
     finally:
         await panel.stop()
@@ -428,7 +428,7 @@ async def test_reconnect_publishes_trigger_snapshot_from_preserved_buffer() -> N
         await panel.force_disconnect()
 
         for _ in range(200):
-            link = mqtt.payloads_for("texecom/panel_link/state")
+            link = mqtt.payloads_for("texecom/panel_connection/state")
             attrs = mqtt.payloads_for("texecom/alarm/attributes")
             if link.count("OFF") >= 1 and link[-1] == "ON" and attrs:
                 break
@@ -499,7 +499,7 @@ async def test_reconnect_already_triggered_does_not_invent_snapshot() -> None:
         await panel.force_disconnect()
 
         for _ in range(200):
-            link = mqtt.payloads_for("texecom/panel_link/state")
+            link = mqtt.payloads_for("texecom/panel_connection/state")
             if link.count("OFF") >= 1 and link[-1] == "ON":
                 break
             if task.done():
@@ -523,7 +523,7 @@ async def test_non_recoverable_listen_failure_publishes_panel_link_off() -> None
     """Listen crash must flip panel-link OFF; must not touch alarm/zone availability."""
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
-    await mqtt.publish("texecom/panel_link/state", "ON", retain=True)
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
     await mqtt.publish(availability_topic("texecom"), AVAILABILITY_ONLINE, retain=True)
     settings = _static_settings()
     zones = [Zone(number=1, zone_type=1, name="DOOR")]
@@ -545,6 +545,6 @@ async def test_non_recoverable_listen_failure_publishes_panel_link_off() -> None
                 alarm_state=_SharedAlarmState(payload="disarmed"),
             )
 
-    assert mqtt.payloads_for("texecom/panel_link/state")[-1] == "OFF"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
     # Availability unchanged — only app LWT / clean shutdown may flip it (ADR-004).
     assert mqtt.payloads_for(availability_topic("texecom")) == [AVAILABILITY_ONLINE]
