@@ -80,5 +80,5 @@ How we'll know = end-to-end against FakePanel stand-in + recording MQTT (session
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
