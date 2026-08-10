@@ -91,6 +91,9 @@ class FakePanel:
         self.area_flags_override: bytes | None = None
         self.area_flags_calls = 0
         self.nak_next_area_flags = 0
+        # Soft-zombie shape: NAK house/arm trust polls until a fresh LOGIN
+        # (bounded tear-down / re-login heal — ADR-011). Cleared on successful login.
+        self.nak_area_flags_until_relogin = False
         self.last_seteventmessages_body: bytes | None = None
         self.seteventmessages_calls = 0
         self.last_arm_mode: int | None = None
@@ -284,6 +287,8 @@ class FakePanel:
             self.authenticated = True
             # New session after mid-run health-check death: answer keepalive again.
             self.silence_keepalive = False
+            # Fresh login clears soft-zombie trust-poll NAK (ADR-011 bounded re-login).
+            self.nak_area_flags_until_relogin = False
             return bytes([CMD_LOGIN, ACK])
         return bytes([CMD_LOGIN, 0x15])
 
@@ -329,6 +334,8 @@ class FakePanel:
         self.area_flags_calls += 1
         if self.nak_next_area_flags > 0:
             self.nak_next_area_flags -= 1
+            return bytes([CMD_GET_AREA_FLAGS, NAK])
+        if self.nak_area_flags_until_relogin:
             return bytes([CMD_GET_AREA_FLAGS, NAK])
         if self.area_flags_override is not None:
             override = self.area_flags_override
