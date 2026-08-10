@@ -75,3 +75,10 @@ ordinal: 22000
 
 How we'll know = FakePanel unit/integration for corroboration recover vs bounded re-login (session-heal AC2/AC3/AC4). Command: `cd texecom-alarm-app && python -m pytest tests/test_panel_trust.py tests/test_session_heal.py tests/test_e2e_fake_panel.py -q`. Shorten fail window in tests. Live zombie corroboration remains `/accept`.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
