@@ -1,9 +1,10 @@
 ---
 id: TASK-27
 title: Heal mid-run health-check death via keep-trying reconnect
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-09 23:50'
+updated_date: '2026-08-10 00:32'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
