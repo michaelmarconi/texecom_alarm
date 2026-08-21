@@ -24,3 +24,6 @@ node_modules/
 # raw packet captures - may contain LAN topology/hardware details; findings
 # are written up in docs/protocol-reference.md and the relevant spike instead
 docs/captures/
+
+# local acceptance / soak evidence (logs, timing extracts) — not for the repo
+docs/evidence/
