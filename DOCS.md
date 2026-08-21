@@ -7,14 +7,31 @@ zones are open or closed, and tell whether the link to the panel is healthy.
 
 ## Before you start
 
-- A Texecom Premier Elite panel with a network module (ComIP / Texecom Connect)
+- A Texecom Premier Elite panel
 - An MQTT broker Home Assistant can use (for example the Mosquitto add-on)
-- Stop anything else that already holds a **Connect/ComIP login** to the panel
-  before you **start** this add-on (the panel’s network module only accepts one
-  of those sessions at a time). Once this add-on is logged in, you can normally
-  use the official Texecom smartphone app at the same time — it does not
-  monopolise the link. Commands may occasionally be slower or rejected under
-  heavy concurrent use; that is not the same as the app “taking over” the channel.
+- A **dedicated local network module** for this add-on — usually a **ComIP**
+  (or equivalent Ethernet board) that is *not* the same module the installer
+  fitted for the Texecom smartphone app and the monitoring station
+
+Premier Elite systems often have two IP-capable boards: one for alarm
+reporting and the vendor app, and optionally a second for local LAN control.
+Each COM port on the panel can only do one job at a time. If Home Assistant
+logs into the reporting module, a real alarm will seize that port, kick HA
+off, and Disarm from the dashboard will do nothing until signalling finishes.
+Hayes modem commands (`ATH0`, `ATZ`) in the add-on log are a strong sign you
+are on that path.
+
+**Buy and fit a ComIP (or keep HA on one you already have that is unused for
+reporting)** so this add-on has a clean Connect channel. Leave the installer's
+module for the app and monitoring. Point **Panel host** at the dedicated
+module’s IP. If you only have the signalling module, day-to-day arm and zone
+status can still work; disarm-during-alarm probably will not. More detail:
+[Home Assistant loses your Texecom panel the moment the alarm goes off](docs/ha-loses-panel-during-alarm.md).
+
+- Stop anything else that already holds a **Connect login** to the *same*
+  module before you **start** this add-on (one Connect session per module).
+  Once this add-on is logged in, you can normally use the official Texecom
+  smartphone app at the same time if that app uses a *different* module.
 
 ## Installation
 
@@ -28,7 +45,7 @@ zones are open or closed, and tell whether the link to the panel is healthy.
 
 | Option | What it is |
 |--------|------------|
-| **Panel host** | IP address or hostname of the panel’s network module on your LAN. **Required.** |
+| **Panel host** | IP address or hostname of the **dedicated local network module** this add-on should use (typically a ComIP reserved for Home Assistant). Not the module used for the Texecom app or monitoring-station signalling. Both often answer on port 10001 — picking the signalling box is a common trap. See [Before you start](#before-you-start). **Required.** |
 | **Panel port** | Network port for the panel connection. Default: `10001`. |
 | **Panel UDL password** | Password used to log in to the panel (same idea as Wintex / Connect). Default is often `1234` — ask your installer if login fails. |
 
@@ -63,8 +80,10 @@ Do not assign the same Home Assistant mode (Home or Night) to more than one slot
 ### Reconnect behaviour
 
 If the panel connection drops, the add-on retries automatically. After a normal
-disconnect it retries more quickly; after a real alarm trigger it waits longer
-and tries more times (panels often block the network briefly while sirens run).
+disconnect it retries more quickly; after a drop that follows a real alarm it
+waits longer and tries more times. That longer wait is a safety net for when
+Home Assistant still shares the panel’s alarm-reporting module. A dedicated
+ComIP used only for local control is not expected to drop at trigger.
 
 You can leave the defaults unless you have a reason to change them.
 
