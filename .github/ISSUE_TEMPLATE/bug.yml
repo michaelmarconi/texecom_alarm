@@ -1,0 +1,77 @@
+name: Bug report
+description: Something is not working as documented.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please **redact UDL passwords, MQTT passwords, and full LAN IPs**.
+        If Disarm only fails while the siren is going, read [wrong network module](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md) before filing — that is often configuration, not a crash.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I have read [DOCS.md](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md)
+          required: true
+        - label: This report does not include UDL/MQTT passwords or a full household LAN address
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: input
+    id: addon-version
+    attributes:
+      label: Add-on version
+      placeholder: "0.0.1"
+    validations:
+      required: true
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.8.0 (HAOS / Supervised / Container)"
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Which network module is Panel host pointed at?
+      options:
+        - Dedicated ComIP / local module (not used for the Texecom app or monitoring)
+        - Same module as the Texecom app / monitoring station
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Alarm Panel Connection sensor
+      options:
+        - On (live)
+        - Off (catching up / recovering)
+        - Entity missing
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: panel
+    attributes:
+      label: Panel model (and firmware if you know it)
+      placeholder: Premier Elite 88, firmware …
+  - type: textarea
+    id: logs
+    attributes:
+      label: Add-on log excerpt
+      description: Paste the relevant lines only. Set log level to DEBUG if the failure is a connection issue. Redact passwords.
+      render: text
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Part-Arm mapping, MQTT broker type, recent panel engineer changes, …

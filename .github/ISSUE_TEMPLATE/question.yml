@@ -1,0 +1,40 @@
+name: Help / question
+description: Install, configuration, or “is this expected?” — after reading the docs.
+title: "[Question]: "
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please skim [DOCS.md](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md) first.
+        Common traps: [wrong network module](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md) and [another Connect client holding the slot](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md).
+        Do not paste UDL or MQTT passwords.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I have read [DOCS.md](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md)
+          required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you need help with?
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Which network module is Panel host pointed at?
+      options:
+        - Dedicated ComIP / local module (not used for the Texecom app or monitoring)
+        - Same module as the Texecom app / monitoring station
+        - Not sure
+        - Not relevant
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Setup notes
+      description: Add-on version, Home Assistant version, and a redacted log excerpt if it helps.

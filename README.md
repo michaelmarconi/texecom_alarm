@@ -33,7 +33,7 @@ wire, a dropped socket, or a session that looks up but is no longer trustworthy.
 
 If Disarm from Home Assistant does nothing **only while the alarm is sounding**,
 Home Assistant may be on the panel’s reporting module rather than a dedicated
-ComIP — see [this guide](docs/ha-loses-panel-during-alarm.md). Hayes `ATH0` /
+ComIP — see [this guide](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md). Hayes `ATH0` /
 `ATZ` in the add-on log on that session is the same tell.
 
 ## Getting started
@@ -44,7 +44,7 @@ ComIP — see [this guide](docs/ha-loses-panel-during-alarm.md). Hayes `ATH0` /
 - An MQTT broker Home Assistant can use (for example the Mosquitto add-on)
 - A **dedicated ComIP** (or equivalent) for this add-on, not the same module
   the installer uses for the Texecom app and monitoring station — see
-  [Documentation](DOCS.md) for why, and how to tell the two apart
+  [Documentation](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md) for why, and how to tell the two apart
 - Only **one** Connect login per module — stop anything else using that
   network connection before you start this add-on
 
@@ -54,17 +54,17 @@ ComIP — see [this guide](docs/ha-loses-panel-during-alarm.md). Hayes `ATH0` /
 2. Install **Texecom Alarm**.
 3. Open **Configuration** and set the panel address, UDL password, MQTT
    settings, and which Part-Arm slots mean Home / Night on your panel.
-   Details: [Documentation](DOCS.md). Part-Arm walkthrough:
-   [Configure Home and Night](docs/how-to/configure-part-arm.md).
+   Details: [Documentation](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md). Part-Arm walkthrough:
+   [Configure Home and Night](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/configure-part-arm.md).
 4. If another Connect client still holds the same module, stop it first:
-   [Free the panel module](docs/how-to/stop-other-connect-clients.md).
+   [Free the panel module](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md).
 5. Start the add-on and check the log for a successful panel login.
 6. Confirm an alarm control panel, in-use zone sensors, and **Alarm Panel
    Connection** appear in Home Assistant.
 
 ### This repository (local development)
 
-Recorded boot recipe: [`docs/run.md`](docs/run.md). From the apps
+Recorded boot recipe: [`docs/run.md`](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/run.md). From the apps
 devcontainer at the repo root:
 
 ```bash
@@ -106,27 +106,43 @@ defaults and use entity IDs in automations.
 
 ## Documentation
 
-| Need | Where |
-|------|--------|
-| Install and configuration options | [Documentation](DOCS.md) (`DOCS.md` is also the Supervisor docs tab) |
-| Map Home / Night to Part-Arm | [How to configure Part-Arm](docs/how-to/configure-part-arm.md) |
-| Free the panel’s Connect slot | [Stop other Connect clients](docs/how-to/stop-other-connect-clients.md) |
-| Disarm fails only during an alarm | [Wrong network module](docs/ha-loses-panel-during-alarm.md) |
-| Why zones stay available when the link drops | [Availability vs panel connection](docs/concepts/availability-and-connection.md) |
-| How the Connect session works | [Protocol overview](docs/protocol-overview.md) |
-| MQTT topics and payloads | [MQTT reference](docs/reference/mqtt.md) |
-| Byte-level protocol lookup | [Protocol reference](docs/protocol-reference.md) |
-| Local ports, reset, rebuild | [Run recipe](docs/run.md) |
+Supervisor only ships this README and `DOCS.md` into the App UI. Links below
+open the GitHub repository (relative paths in this file do not resolve inside
+Home Assistant).
+
+| Need                                         | Where                                                                                                                                      |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Install and configuration options            | [Documentation](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md) (`DOCS.md` is also the Supervisor docs tab)             |
+| Map Home / Night to Part-Arm                 | [How to configure Part-Arm](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/configure-part-arm.md)                   |
+| Free the panel’s Connect slot                | [Stop other Connect clients](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md)          |
+| Disarm fails only during an alarm            | [Wrong network module](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md)                      |
+| Why zones stay available when the link drops | [Availability vs panel connection](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/concepts/availability-and-connection.md) |
+| How the Connect session works                | [Protocol overview](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/protocol-overview.md)                                   |
+| MQTT topics and payloads                     | [MQTT reference](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/reference/mqtt.md)                                         |
+| Byte-level protocol lookup                   | [Protocol reference](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/protocol-reference.md)                                 |
+| Local ports, reset, rebuild                  | [Run recipe](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/run.md)                                                        |
+
+## Support
+
+Bugs and questions: [open an issue](https://github.com/michaelmarconi/texecom_alarm/issues/new/choose)
+(templates ask for panel/module details). Do not include UDL or MQTT passwords.
+
+Want to send a change? [Contributing](https://github.com/michaelmarconi/texecom_alarm/blob/main/CONTRIBUTING.md).
+Security reports: [Security policy](https://github.com/michaelmarconi/texecom_alarm/blob/main/SECURITY.md).
 
 ## Credits
+
+Developed by **Michael Marconi**.
 
 Add-on icon: [Home security icons created by juicy_fish - Flaticon](https://www.flaticon.com/free-icons/home-security).
 
 ## License
 
-Code is licensed under the [MIT License](LICENSE). The add-on icon remains under
+Copyright © 2026 Michael Marconi.
+
+Code is licensed under the [MIT License](https://github.com/michaelmarconi/texecom_alarm/blob/main/LICENSE). The add-on icon remains under
 Flaticon terms (see Credits). Protocol notes are observational — see
-[legal stance](docs/legal-stance.md).
+[legal stance](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/legal-stance.md).
 
 [aarch64-shield]: https://img.shields.io/badge/aarch64-yes-green.svg
 [amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
