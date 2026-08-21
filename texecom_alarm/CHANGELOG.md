@@ -7,16 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.2] - 2026-08-21
-
-Internal: Ruff pin so CI format matches pre-commit. Shipped under an earlier
-every-merge-is-a-release policy; not a product change.
-
-## [0.1.1] - 2026-08-21
-
-Internal: version files land via pull request under branch protection. Not a
-product change.
-
 ## [0.1.0] - 2026-08-21
 
 ### Added
