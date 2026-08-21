@@ -4,7 +4,7 @@
 > Human-oriented narrative and flow diagrams: [protocol overview](protocol-overview.md).  
 > Legal position: [legal stance](legal-stance.md).
 
-**Panel under test:** Elite 88, firmware `ENG->SW V6.02.02LS1`, ComIP.  
+**Panel under test:** Elite 88, firmware `ENG->SW V6.02.02LS1`. Supported path is the dedicated **ComIP**. Captures that showed Hayes modem commands (`ATH0` / `ATZ`) and a trigger-time TCP drop (SPIKE-002) were later identified as the installer **SmartCom**, not this ComIP.  
 **Status:** Living map — incomplete by design. Gaps are gaps.
 
 ### Confidence legend
@@ -162,8 +162,9 @@ Exit/entry **not** from this snapshot — live AREA pushes.
 |-------|------------|-----|
 | Single TCP Connect client | Confirmed ✅ | SPIKE-001 |
 | Idle hang ~60 s without keepalive | Confirmed ✅ | 2026-08-04 |
-| Non-Connect junk on socket around arm/trigger → must resync | Confirmed ✅ | SPIKE-002 / ADR-002 |
-| Trigger force-closes TCP; long recovery | Confirmed ✅ | SPIKE-002 / ADR-002 |
+| Non-Connect junk → must resync (never fatal) | Confirmed ✅ | ADR-002 / ADR-014 |
+| Hayes `ATH0`/`ATZ` on the HA socket | Confirmed ✅ **on SmartCom only** | SPIKE-002; wrong `panel_host`. Not seen on dedicated ComIP (SPIKE-010). |
+| Trigger force-closes HA TCP; long recovery | Confirmed ✅ **on SmartCom only** | SPIKE-002 / SPIKE-009. Dedicated ComIP stayed up (SPIKE-010 / ADR-014). |
 | Home disarm AREA path unreliable vs Night | Confirmed ✅ (reproduced) | 2026-08-07–08 |
 
 ---
@@ -171,10 +172,10 @@ Exit/entry **not** from this snapshot — live AREA pushes.
 ## Open questions
 
 - LOG types 1, 3, 31, 41 and group-byte map
-- Cmd 9 before disarm-in-alarm (**SPIKE-009**)
+- Cmd 9 before disarm-in-alarm — SPIKE-009 was SmartCom (session already dead). SPIKE-010 disarmed a live alarm on ComIP with ordinary disarm (cmd 8).
+- Bound on post-trigger disruption window — SmartCom-path; not the expected ComIP path (ADR-014).
 - Calibrate `GETSYSTEMPOWER` formula on this panel
 - Serial probe `03 5A A2` live
-- Bound on post-trigger disruption window
 - Home disarm: omitted AREA vs destroyed frame
 - Part-Arm 3 settled AREA value (if slot used)
 
@@ -188,9 +189,9 @@ Other bridges’ **client policies** — not panel law, not ADRs:
 |-------|-----------|--------------|
 | Keepalive | `GETSYSTEMPOWER` ~30 s | `GETDATETIME` ~15 s |
 | Bad CRC | Full reconnect | Resync (ADR-002) |
-| Reconnect | Fixed ~10 s | Asymmetric budgets (ADR-002) |
+| Reconnect | Fixed ~10 s | Asymmetric budgets as wrong-host safety net (ADR-014) |
 | Re-arm | Disarm then arm | Direct arm |
-| In alarm | Cmd 9 then 8 | Cmd 8 until SPIKE-009 |
+| In alarm | Cmd 9 then 8 | Cmd 8 (SPIKE-010 on ComIP) |
 | MQTT death | Process exit | LWT + panel_link (ADR-004) |
 
 ---
@@ -200,10 +201,12 @@ Other bridges’ **client policies** — not panel law, not ADRs:
 | Spike / work | Topic |
 |--------------|--------|
 | [SPIKE-001](spikes/spike-001-zone-enumeration/SPIKE.md) | Enumeration, single connection |
-| [SPIKE-002](spikes/spike-002-arm-home-triggered-framing/SPIKE.md) | Collisions, trigger disconnect |
+| [SPIKE-002](spikes/spike-002-arm-home-triggered-framing/SPIKE.md) | Collisions; Hayes modem + trigger drop **on SmartCom** (disposition: not universal ComIP) |
 | [SPIKE-005](spikes/spike-005-arm-disarm-command-framing/SPIKE.md) | Arm/disarm bytes |
 | [SPIKE-006](spikes/spike-006-startup-zone-state-read/SPIKE.md) | Zone snapshot |
 | [SPIKE-007](spikes/spike-007-area-arm-state-startup-read/SPIKE.md) | Area flags snapshot |
+| [SPIKE-009](spikes/spike-009-ha-disarm-after-alarm/SPIKE.md) | HA Disarm-during-alarm failed **on SmartCom** (superseded) |
+| [SPIKE-010](spikes/spike-010-comip-stays-online/SPIKE.md) | Dedicated ComIP stays up; HA Disarm during alarm works |
 | Live 2026-08-04 / 07–08 | Zones walk; Home vs Night disarm |
 
 ## How to update

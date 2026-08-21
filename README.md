@@ -20,26 +20,31 @@ a zone list by hand.
 
 ## Reliability
 
-Built to keep working when the panel link gets messy — for example during an
-alarm, when other apps share the network path, or when the connection drops.
+Built to keep working when the panel link gets messy — unexpected bytes on the
+wire, a dropped socket, or a session that looks up but is no longer trustworthy.
 
 - Ignores unexpected panel chatter instead of crashing
-- Reconnects on its own (and waits longer after a real alarm, when the panel
-  often blocks the network briefly)
-
-If Disarm from Home Assistant does nothing **only while the alarm is sounding**,
-HA may be pointed at the installer's signalling module rather than your ComIP —
-see [this guide](docs/ha-loses-panel-during-alarm.md).
+- Reconnects on its own (and waits longer after an alarm-adjacent drop, which
+  is what you need if Home Assistant still shares the panel’s reporting
+  module; a dedicated ComIP is not expected to drop at trigger)
 - Keeps your last known alarm and zone states in Home Assistant; a separate
   **panel connection** sensor shows whether the link is live or catching up
 - Recovers stuck sessions without a manual add-on restart
 
+If Disarm from Home Assistant does nothing **only while the alarm is sounding**,
+Home Assistant may be on the panel’s reporting module rather than a dedicated
+ComIP — see [this guide](docs/ha-loses-panel-during-alarm.md). Hayes `ATH0` /
+`ATZ` in the add-on log on that session is the same tell.
+
 ## Before you start
 
-- A Texecom Premier Elite panel with a network module (ComIP / Texecom Connect)
+- A Texecom Premier Elite panel
 - An MQTT broker Home Assistant can use (for example the Mosquitto add-on)
-- Only **one** app may talk to the panel at a time — stop anything else using
-  that network connection before you start this add-on
+- A **dedicated ComIP** (or equivalent) for this add-on, not the same module
+  the installer uses for the Texecom app and monitoring station — see
+  [Documentation](DOCS.md) for why, and how to tell the two apart
+- Only **one** Connect login per module — stop anything else using that
+  network connection before you start this add-on
 
 ## Setup
 

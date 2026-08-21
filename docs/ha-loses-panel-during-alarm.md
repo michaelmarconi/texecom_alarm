@@ -29,14 +29,21 @@ malfunctioning; it's prioritising, exactly as designed. Alarm signalling wins.
 Once signalling finishes, the port frees up and HA reconnects. Which is why the
 outage is temporary and why it *only* ever happens during real alarms.
 
+A strong log-line tell: **Hayes modem commands** such as `ATH0` (hang up) and
+`ATZ` (reset modem) on the Home Assistant TCP session. Those are the signalling
+module's dialer talking on the same serial port you thought was a clean Connect
+login. They are **not** normal traffic on a dedicated ComIP used only for local
+control. If you see them, you are on the wrong module (or reporting is bound to
+the module HA is using).
+
 ## The most likely cause, and it's an easy one to miss
 
 **Home Assistant is talking to the wrong module.**
 
-Lots of these systems have two IP modules — the installer's one for the app and
-the monitoring station, plus a ComIP the homeowner added later for local
-control. If HA got pointed at the installer's module rather than the one you
-added, you're sharing the signalling path, and you'll get exactly this
+Lots of these systems have two IP modules — one the installer fitted for the
+app and the monitoring station, plus a ComIP added later for local control.
+If Home Assistant is pointed at the reporting module rather than the local
+one, you're sharing the signalling path, and you'll get exactly this
 behaviour.
 
 It's a very easy mistake, because both modules sit on the same network, both

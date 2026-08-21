@@ -4,6 +4,8 @@
 
 **Date:** 2026-08-10
 **State:** Accepted ✅
+<!-- Update 2026-08-21: ADR-013 / ADR-014 — modem/AT noise and trigger force-drop
+     are SmartCom / wrong-host, not dedicated-ComIP behaviour. -->
 <!-- Update 2026-08-10: cited ADR-012 for Python 3 (clears review-12 technology gap); prior same-day fold of ADR-011 + session-heal. -->
 <!-- Prior: 2026-08-09 folded Accepted spec-startup-login-backoff (progressive first-login waits). -->
 
@@ -27,13 +29,16 @@ mechanism `the prior MQTT bridge` uses today. Nothing on the consuming side (the
 HomeKit bridges) needs to change to keep working.
 
 The hard part here isn't scale — this is a handful of TCP messages a second against 40
-in-use zones. It's two coordination problems the live panel itself forces: the panel's
-own SmartCom/ComIP hardware periodically pollutes the same TCP session with unrelated
-modem traffic around arm/disarm/trigger events — a real, panel-level behaviour that
-any client assuming every byte is Connect-protocol will trip over, regardless of which
-software is on the other end; and the panel's ComIP module only accepts one TCP client
-at a time, so the handoff between `the prior MQTT bridge` and this app has to be sequenced
-deliberately, not just installed alongside it.
+in-use zones. It's two coordination problems the live panel itself forces: Home
+Assistant must use the dedicated local network module (ComIP), not the installer
+signalling module (SmartCom) — on the SmartCom, alarm reporting seizes the port,
+kicks off the Connect login, and the same TCP session can show Hayes modem
+commands (`ATH0` / `ATZ`) from the dialer (SPIKE-002, later identified as the
+wrong host; ADR-013 / ADR-014). Any client that treats unexpected bytes as fatal
+still has to skip them, because mis-pointed installs and ordinary frame noise
+exist; and each network module only accepts one TCP Connect client at a time, so
+the handoff between `the prior MQTT bridge` and this app has to be sequenced deliberately,
+not just installed alongside it.
 
 Building this commits the project to:
 
@@ -47,9 +52,10 @@ Building this commits the project to:
   snapshot from the panel and publishing that for the alarm entity before treating it
   as current — live area/log change events then keep it updated, rather than assuming
   disarmed or relying on retained MQTT alone.
-- Treating any unrecognised byte on the wire as recoverable rather than fatal, and
-  reconnecting with a budget that is deliberately longer after a real alarm trigger
-  than after an ordinary arm or disarm.
+- Treating any unrecognised byte on the wire as recoverable rather than fatal.
+  Reconnect-on-drop stays; a longer retry budget after a trigger-adjacent drop is
+  a safety net for a mis-pointed signalling module, not the expected path on a
+  correctly configured ComIP (ADR-014).
 - Publishing to Home Assistant purely via MQTT discovery, with all household-specific
   arming and notification logic staying entirely outside this app.
 - Issuing arm and disarm with the empirically confirmed shared command mechanism.
@@ -107,15 +113,18 @@ broker) and its internal shape are detailed under `## Components` below.
   connect/login with progressive waits (5 s → 10 s → 20 s → 30 s, then 30 s
   until success), logging each next wait so operators can tell patience from a
   hang (`spec-startup-login-backoff`). This schedule does not redefine mid-run
-  reconnect patience after a session was already healthy (ADR-002).
+  reconnect patience after a session was already healthy (ADR-014 / former ADR-002).
 - **Unexpected byte on the wire** — the app scans forward for the next valid frame
-  header instead of tearing down the connection (ADR-002).
-- **Connection dropped** — the app reconnects with a budget sized to what dropped it
-  (short after an ordinary arm/disarm, much longer after a real trigger) and flips
-  **Alarm Panel Connection** off for the duration (ADR-002). The `alarm_control_panel`
-  and zone entities themselves keep reporting their last known state throughout —
-  they are never marked unavailable because of this; only the app process itself being
-  down does that (ADR-004).
+  header instead of tearing down the connection. Hayes `ATH0`/`ATZ` on this
+  household’s wire came from the installer SmartCom (wrong `panel_host`), not from
+  the dedicated ComIP (ADR-014).
+- **Connection dropped** — the app reconnects and flips **Alarm Panel Connection**
+  off for the duration. A longer retry budget still exists after a trigger-adjacent
+  drop as a fallback if Home Assistant shares a signalling module; a correctly
+  pointed ComIP is not expected to drop at trigger (ADR-013, ADR-014, SPIKE-010).
+  The `alarm_control_panel` and zone entities themselves keep reporting their last
+  known state throughout — they are never marked unavailable because of this; only
+  the app process itself being down does that (ADR-004).
 - **Session looks live but is untrustworthy** — arm/disarm reject or timeout, or a
   failed house/arm-state trust poll, flips **Alarm Panel Connection** off even while
   the idle heartbeat still succeeds (ADR-010). Brief glitches may clear on the next
@@ -262,18 +271,18 @@ Key behaviours:
   auto-retry the failed arm/disarm command. FakePanel must cover health-check →
   reconnect-heal, trust-fail → corroboration recover, and trust-fail → bounded
   re-login.
-- **Frame resync** (ADR-002): treats a byte that doesn't match the expected frame
-  header as recoverable — scans forward for the next valid header instead of raising —
-  because the panel's own SmartCom/ComIP hardware is confirmed to multiplex unrelated
-  modem traffic onto the same session around arm/disarm/trigger events, on ordinary
-  keypad use alone.
-- **Asymmetric reconnect** (ADR-002): on a dropped connection — and, per ADR-011, on
-  an unanswered mid-run health-check — uses a short retry budget (~10s) after an
-  ordinary arm/disarm-adjacent drop, and a substantially longer budget (tens of
-  seconds to a minute or more) after a real-trigger-adjacent forced disconnect,
-  flipping **Alarm Panel Connection** off throughout — never the
-  `alarm_control_panel`/zone entities themselves (ADR-004). Exact budgets remain
-  tunable (ADR-002 / ADR-011 open follow-ons); ADR-011 does not newly finalise them.
+- **Frame resync** (ADR-002, host-scoped by ADR-014): treats a byte that doesn't match
+  the expected frame header as recoverable — scans forward for the next valid header
+  instead of raising. Skip unconditionally: truncated frames and mis-pointed hosts
+  still happen. Literal Hayes modem commands (`ATH0`, `ATZ`) on this install were
+  the installer **SmartCom** multiplexing dialer/reporting traffic onto the Connect
+  session (SPIKE-002); they are not established dedicated-ComIP behaviour (SPIKE-010).
+- **Asymmetric reconnect** (ADR-014): on a dropped connection — and, per ADR-011, on
+  an unanswered mid-run health-check — reconnects and flips **Alarm Panel Connection**
+  off throughout — never the `alarm_control_panel`/zone entities themselves (ADR-004).
+  A longer post-trigger budget remains as a safety net when Home Assistant shares a
+  signalling module; it is not the expected outcome on a correctly pointed ComIP.
+  Exact budgets remain tunable; ADR-011 does not newly finalise them.
 - **Availability and trigger snapshot** (ADR-004): the `alarm_control_panel` and zone
   entities' availability is governed solely by whether the app process itself is
   running (MQTT Last-Will) — never by panel-link health, so a panel-link outage never
@@ -409,40 +418,45 @@ existing mid-run reconnect budgets stay plan-time / live-tunable (ADR-011).
 
 ### Protocol collision recovery
 
-The flow that exists specifically because of the confirmed crash mechanism: the
-panel's own hardware, not client timing, is the source of the disruption.
+Skip unexpected bytes always. On this household, the crash mechanism that looked like
+“the panel always multiplexes modem traffic at arm/trigger” was the installer
+**SmartCom** (SPIKE-002), not the dedicated ComIP. A correctly pointed ComIP stayed
+up through a live alarm (SPIKE-010). The long post-trigger reconnect branch is a
+fallback if `panel_host` is still the signalling module.
 
 ```mermaid
 flowchart LR
     Trigger["Panel decodes<br/>in alarm event"]:::external
     Snap["Publish trigger<br/>snapshot"]:::owned
-    Multiplex["Panel multiplexes<br/>non-protocol bytes"]:::external
+    Junk["Unexpected bytes?<br/>(SmartCom: AT modem)"]:::external
     Resync["App resyncs to<br/>next frame header"]:::owned
-    Drop{"Forced TCP<br/>disconnect?"}:::owned
-    Short["Short reconnect<br/>budget (~10s)"]:::owned
-    Long["Long reconnect<br/>budget (60s+)"]:::owned
+    Drop{"TCP disconnect?"}:::owned
+    Stay["Session stays up<br/>HA Disarm works"]:::owned
+    Short["Short reconnect"]:::owned
+    Long["Long reconnect<br/>(wrong-host safety net)"]:::owned
     Degrade["Flip connectivity<br/>sensor degraded"]:::owned
     Resume["Re-LOGIN, zone + area<br/>snapshots, resubscribe"]:::owned
 
     Trigger --> Snap
-    Trigger --> Multiplex
-    Multiplex --> Resync
+    Trigger --> Junk
+    Junk --> Resync
     Resync --> Drop
-    Drop -->|ordinary arm/disarm| Short --> Degrade --> Resume
-    Drop -->|real trigger| Long --> Degrade
+    Drop -->|no, dedicated ComIP| Stay
+    Drop -->|ordinary drop| Short --> Degrade --> Resume
+    Drop -->|trigger on signalling module| Long --> Degrade
 
     classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
 ```
 
-Most collisions never reach the "forced disconnect" branch at all — resync alone
-keeps the session alive through an ordinary arm/disarm's corrupted-byte burst, as
-SPIKE-002 demonstrated twice. Only a real trigger has been confirmed to force a full
-disconnect. After a forced disconnect recovers, Resume re-runs LOGIN, the ADR-006
-zone-state snapshot, the ADR-009 area-flags snapshot, and `SETEVENTMESSAGES` before
-live reporting continues. The `alarm_control_panel` entity itself is unaffected by
-this whole flow — it keeps reporting `triggered` throughout; only the dedicated
-connectivity `binary_sensor` reflects the degraded/recovering link (ADR-004).
+On the dedicated ComIP, most alarms never reach a forced-disconnect branch at all
+(SPIKE-010). SPIKE-002’s “real trigger always force-disconnects” finding was the
+SmartCom path (ADR-014). If a disconnect does happen, Resume re-runs LOGIN, the
+ADR-006 zone-state snapshot, the ADR-009 area-flags snapshot, and `SETEVENTMESSAGES`
+before live reporting continues. The `alarm_control_panel` entity itself is
+unaffected by this whole flow — it keeps reporting last-known state (including
+`triggered`) throughout; only the dedicated connectivity `binary_sensor` reflects
+the degraded/recovering link (ADR-004).
 
 ### Arm/disarm command
 
@@ -476,7 +490,7 @@ appear on that Part-Arm option surface.
 
 | Outside system | In CI | What CI may claim | Live-only |
 |---|---|---|---|
-| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), frame resync, reconnect paths; silent-death / command-reject / quiet-house detector shapes (ADR-010 / SPIKE-008); mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login (ADR-011); progressive startup-login backoff (fail-N-then-succeed waits strictly increasing then capped at 30 s; recovery without process exit) | Real Away/Night/Home arm sequences, trigger-time forced disconnect recovery, live quiet-house / zombie corroboration, mid-run heal under real ComIP contention; live Supervisor timing (RISK-015) |
+| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), frame resync, reconnect-when-TCP-dies (including a simulated trigger-time drop — CI must not claim a correctly pointed ComIP always drops); silent-death / command-reject / quiet-house detector shapes (ADR-010 / SPIKE-008); mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login (ADR-011); progressive startup-login backoff (fail-N-then-succeed waits strictly increasing then capped at 30 s; recovery without process exit) | Real Away/Night/Home arm sequences; which module `panel_host` is (ADR-013); survive-trigger and HA Disarm-during-alarm on dedicated ComIP (SPIKE-010 / ADR-014 — live-only; FakePanel must not claim the opposite); live quiet-house / zombie corroboration; mid-run heal under real ComIP contention; live Supervisor timing (RISK-015) |
 | MQTT broker | Hermetic / test broker (or FakePanel + recording MQTT client) | Discovery payloads, state/command publish/subscribe, connectivity sensor and last-trigger snapshot attributes | Household HA entity behaviour, wrapper/HomeKit/automations |
 
 CI never targets the live household panel or a production broker account. Product
@@ -523,19 +537,20 @@ module accepts only one TCP client at a time (ADR-001).
 
 **Open questions.**
 
-- **Exact reconnect wait times/retry counts are not finalised** (ADR-002 follow-on;
-  only one real trigger data point exists). This architecture assumes a short (~10s)
-  budget for arm/disarm-adjacent drops and a longer, configurable (60s+) budget for
-  trigger-adjacent drops — treat both as tunable defaults, not final values. ADR-011
-  heal cadence may align with these; do not treat them as newly finalised by heal alone.
+- **Exact reconnect wait times/retry counts are not finalised.** Treat the short
+  ordinary-drop budget and the longer trigger-adjacent budget as tunable defaults.
+  ADR-014: the long budget is a wrong-host safety net, not the expected ComIP path.
+  ADR-011 heal cadence may align with these; do not treat them as newly finalised by
+  heal alone.
 - **What "alarm reset" means as a product-observable signal is unresolved** (ADR-002
-  follow-on) — no distinct Connect-protocol event was observed for clearing the
-  alarm-memory indicator. This architecture assumes the `AREA` event returning to
-  `armed`/`disarmed` is the practical signal — needs confirmation before building a
-  dedicated reset signal. Distinct from SPIKE-009 (whether cmd 9 is required on the wire).
+  follow-on, still open) — no distinct Connect-protocol event was observed for
+  clearing the alarm-memory indicator. This architecture assumes the `AREA` event
+  returning to `armed`/`disarmed` is the practical signal — needs confirmation
+  before building a dedicated reset signal.
 - **Whether the ComIP module's one-connection-at-a-time behaviour is a fixed
   hardware/firmware limit or a configurable installer setting** was not tested — cutover
   still assumes a hard stop of `the prior MQTT bridge` before this app connects (ADR-001).
+  Two *different* module IPs can each hold a login (ADR-013).
 - **Whether to add a last-known-good cached zone list fallback** when the panel can't be
   reached at startup (ADR-001 Option C) remains an open follow-on — no offline fallback
   in this architecture.
@@ -544,11 +559,14 @@ module accepts only one TCP client at a time (ADR-001).
   those transients until corroborated.
 - **Concrete shape of the Part-Arm mapping add-on options** (ADR-008) — e.g. three
   fields vs one ordered list — settles at `/plan` / build; Away must stay excluded.
-- **Com Port / reporting isolation** (RISK-011) remains an optional installer probe; do
-  not assume it shortens the trigger-time forced disconnect (ADR-004).
-- **Whether production disarm while `triggered` must send ResetArea (cmd 9) before
-  disarm (cmd 8)** remains open (RISK-018 / SPIKE-009). Do not wire cmd 9 until that
-  live spike validates ACK/effect on this Elite 88.
+- **Com Port / reporting isolation** (RISK-011) remains an optional installer probe.
+  SPIKE-010 showed a live ARC report concurrent with a dedicated-ComIP session that
+  did not drop; do not assume isolation is required for that outcome, and do not
+  assume a trigger always force-disconnects ComIP (ADR-014).
+- **ResetArea (cmd 9) before disarm-in-alarm** — SPIKE-009 failed on the SmartCom
+  because the session had already dropped. SPIKE-010 on the ComIP disarmed a live
+  alarm with ordinary disarm (cmd 8). Do not wire cmd 9 unless a ComIP run shows it
+  is actually required.
 
 ## Review
 
