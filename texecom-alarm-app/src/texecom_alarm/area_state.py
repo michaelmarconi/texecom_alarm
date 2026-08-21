@@ -25,7 +25,7 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-# Flag indices used by the prior MQTT bridge updateAreaStates / SPIKE-007 decode.
+# Flag indices used by the SPIKE-007 area-flags decode.
 FLAG_ALARM = 0
 FLAG_ARMED = 21
 FLAG_FULL_ARMED = 22

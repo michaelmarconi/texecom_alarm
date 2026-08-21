@@ -37,8 +37,8 @@ Same as VS Code / Cursor task **Start Home Assistant** (wired to this script).
 What it does:
 
 1. Bring up Supervisor/Core if needed; pin `http.server_port` to **8123**.
-2. Ensure **Mosquitto** (`core_mosquitto`) is installed, has the sim login (`texecom` / `texecom-accept`), and is started.
-3. Ensure **Texecom Alarm** (`local_texecom_alarm`) is installed; if `panel_host` is empty, apply sim defaults (`192.168.1.183`, Part-Arm Night/Home/Unused, MQTT → `core-mosquitto`); start it.
+2. Ensure **Mosquitto** (`core_mosquitto`) is installed, has the local-sim MQTT login, and is started.
+3. Ensure **Texecom Alarm** (`local_texecom_alarm`) is installed; if `panel_host` is empty, apply sim defaults from `TEXECOM_*` (or the script’s local placeholders): Part-Arm Night/Home/Unused, MQTT → `core-mosquitto`; start it.
 4. Print UI URLs. Prefer **`http://localhost:7123/`**; if that fails, use **`http://localhost:8123/`**.
 
 Idempotent: re-run is safe (no DB/registry wipe). Override panel/MQTT via `TEXECOM_PANEL_HOST`, `TEXECOM_UDL_PASSWORD`, `TEXECOM_MQTT_*`, `TEXECOM_PART_ARM_{1,2,3}`.
@@ -66,7 +66,7 @@ What it does:
 
 Then hard-refresh `http://localhost:8123/`, start Texecom when you want a clean rediscovery.
 
-**Expected leftovers:** Supervisor add-on metrics (`binary_sensor.texecom_alarm_running`, etc.) — not MQTT zone entities. Prefixed zones like `binary_sensor.texecom_alarm_michael_stdy_pir_4` after a **fresh** start are normal panel inventory (`_4` = zone number), not wipe dirt.
+**Expected leftovers:** Supervisor add-on metrics (`binary_sensor.texecom_alarm_running`, etc.) — not MQTT zone entities. Prefixed zones like `binary_sensor.texecom_alarm_front_door_1` after a **fresh** start are normal panel inventory (`_1` = zone number), not wipe dirt.
 
 ## Disk space (Supervisor ≥2 GiB gate)
 

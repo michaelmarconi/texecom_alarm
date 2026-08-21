@@ -4,7 +4,7 @@
 > Human-oriented narrative and flow diagrams: [protocol overview](protocol-overview.md).  
 > Legal position: [legal stance](legal-stance.md).
 
-**Panel under test:** Elite 88, firmware `ENG->SW V6.02.02LS1`. Supported path is the dedicated **ComIP**. Captures that showed Hayes modem commands (`ATH0` / `ATZ`) and a trigger-time TCP drop (SPIKE-002) were later identified as the installer **SmartCom**, not this ComIP.  
+**Observed on:** Premier Elite (firmware example: `ENG->SW V6.02.02LS1`). Supported path is a dedicated **ComIP**. Captures that showed Hayes modem commands (`ATH0` / `ATZ`) and a trigger-time TCP drop were later identified as an installer **SmartCom**, not that ComIP.  
 **Status:** Living map — incomplete by design. Gaps are gaps.
 
 ### Confidence legend
@@ -50,10 +50,10 @@
 
 | Cmd | Name | Body (this panel) | Confidence | Notes |
 |---:|---|---|---|---|
-| 1 | `LOGIN` | UDL password bytes | Confirmed ✅ | Default on this panel: `1234` (SPIKE-001) |
+| 1 | `LOGIN` | UDL password bytes | Confirmed ✅ | Factory default is often `1234`; use the password your installer set |
 | 2 | `GETZONESTATE` | `[startZone][count]` (1-byte start if zones ≤256) | Confirmed ✅ | ≤168 zones/request; status bytes share ZONE push low-2-bit map (SPIKE-006 / ADR-006) |
 | 3 | `GETZONEDETAILS` | zone number (1 byte) | Confirmed ✅ | Type + area bitmap + name |
-| 6 | `SETAREAARM` | `[mode] 01` — `00` Away, `01` Night, `02` Home **on this install** | Confirmed ✅ | Shared command; slot↔HA mode is install config (SPIKE-005 / ADR-008) |
+| 6 | `SETAREAARM` | `[mode] 01` — `00` full arm (HA Away); `01`/`02`/`03` Part-Arm slots 1–3 | Confirmed ✅ | Shared command; HA Home/Night labels come from install config, not from the mode byte (ADR-008) |
 | 8 | `SETAREADISARM` | `01` | Confirmed ✅ | Mode-independent; AREA `disarmed` push not uniform (esp. Home) |
 | 9 | `SETAREARESET` | Same area-select shape as disarm (`01`) | Unconfirmed ⚠️ | Candidate before disarm when in alarm — **SPIKE-009** / RISK-018; do not ship yet |
 | 11 | `GETAREAFLAGS` | `[start][count]` | Confirmed ✅ | Elite 88: `0, 72`, `area_size=1` (SPIKE-007 / ADR-009). Alternate split read when `area_size===8`: `0,30` then `50,3` — not used here |
@@ -68,7 +68,7 @@
 | 35 | `GETAREADETAILS` | area number (≥1) | Confirmed ✅ | Area **name/identity** only — not Part-Arm roles |
 | 37 | `SETEVENTMESSAGES` | u16 LE bitmask | Confirmed ✅ | Subscribe Zone \| Area \| Log (etc.) |
 
-**Part-Arm scoping:** mode bytes above are **this household’s** engineer layout. Mechanism generalises; mapping does not.
+**Part-Arm scoping:** mode bytes `01`/`02`/`03` are Part-Arm slots. Which slot is Home or Night is install-time configuration (ADR-008). Away is always full arm (`00`), never a Part-Arm slot.
 
 ---
 
@@ -86,7 +86,7 @@ First body byte = subtype:
 
 ZONE pushes are sensor-class agnostic (door/PIR/shock share framing).
 
-### AREA state byte (0-indexed on this panel)
+### AREA state byte (0-indexed)
 
 | Value | Meaning | Confidence |
 |---:|---|---|
@@ -96,8 +96,8 @@ ZONE pushes are sensor-class agnostic (door/PIR/shock share framing).
 | 3 | armed (full) | Confirmed ✅ |
 | 4 | part armed (transient?) | Hypothesis 🔬 |
 | 5 | in alarm | Unconfirmed ⚠️ live as push value |
-| 6 | settled Night (Part-Arm 1) on this install | Hypothesis 🔬 (strong) |
-| 7 | settled Home (Part-Arm 2) on this install | Hypothesis 🔬 (strong) |
+| 6 | settled Part-Arm slot 1 | Hypothesis 🔬 (strong) |
+| 7 | settled Part-Arm slot 2 | Hypothesis 🔬 (strong) |
 
 **Disarm → AREA `disarmed`:** observed after Away/Night network disarm; **not** reliably observed after Home on 2026-08-07–08 (ACK yes; nine-byte LOG-shaped discard while awaiting response — open whether omit vs collision).
 
@@ -133,12 +133,12 @@ Exit/entry **not** from this snapshot — live AREA pushes.
 | 42 | Mode/action marker (disarm group 5; Away arm group 6) | Hypothesis 🔬 |
 | 45 | Reset After Alarm | Unconfirmed ⚠️ (not seen post-trigger clear) |
 | 53 | Remote-session / “download” style marker | Hypothesis 🔬 |
-| 78–80 | Part Arm 1–3 | Mixed (79 Confirmed ✅ as Home slot here) |
+| 78–80 | Part Arm 1–3 | Mixed (79 Confirmed ✅ as Part-Arm 2) |
 | 113 | Remote Command | Hypothesis 🔬 |
 | 204–206 | Quick Part Arm 1–3 | Unconfirmed ⚠️ |
 | 207–209 | Remote Part Arm 1–3 | 207/208 Confirmed ✅ live; 209 Unconfirmed ⚠️ |
 
-**Arm-mode LOG signatures (Hypothesis 🔬):** Night → 113/g9 then 207/g6; Home → 113/g9 then 208/g6; Away → 42/g6; Disarm (Away/Night) → 42/g5. Group byte otherwise largely unmapped.
+**Arm-mode LOG signatures (Hypothesis 🔬):** Part-Arm 1 → 113/g9 then 207/g6; Part-Arm 2 → 113/g9 then 208/g6; Away → 42/g6; Disarm (Away / Part-Arm 1) → 42/g5. Group byte otherwise largely unmapped. HA Home/Night names for those slots are install config.
 
 ---
 

@@ -38,7 +38,7 @@ Part-Arm mapping uses three discrete mode-byte fields (configurable per install,
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Typed settings expose panel, MQTT, and three Part-Arm mode-byte fields from options/schema
-- [x] #2 DOCS.md describes every option and the the prior MQTT bridge stop-before-start cutover note
+- [x] #2 DOCS.md describes every option and the prior MQTT bridge stop-before-start cutover note
 - [x] #3 Invalid or missing required options fail with a clear error in tests
 <!-- AC:END -->
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This is a functional spec of everything the existing `the prior MQTT bridge` add-on + the
+This is a functional spec of everything the existing MQTT bridge add-on + the
 Marconi household's Home Assistant config layer does today with the Texecom alarm
 system. It's meant to be handed to whoever (human or agent) designs/builds the
 `texecom_alarm` replacement app, as the "must not regress" checklist. See
@@ -16,7 +16,7 @@ dashboards.
 ## Entity architecture (two-layer)
 
 1. **Raw entity** `alarm_control_panel.texecom_alarm_arm_status` — created by
-   `the prior MQTT bridge`'s MQTT discovery. Reflects the panel's real state.
+   the prior MQTT bridge's MQTT discovery. Reflects the panel's real state.
 2. **Wrapper entity** `alarm_control_panel.house_alarm_panel` — a Template Alarm
    Control Panel (`configuration/templates/house_alarm.yaml`) that is the entity
    **every single automation, script, and HomeKit exposure actually targets.** It:
@@ -36,7 +36,7 @@ dashboards.
    contacts, window contacts, shock sensors, PIR motion sensors) — full inventory
    below.
 
-**No raw MQTT topics** (`the prior MQTT bridge/...`) are consumed directly anywhere in the
+**No raw MQTT topics** (`{prefix}/...`) are consumed directly anywhere in the
 config — everything goes through HA's MQTT-discovered entities. This gives some
 flexibility on wire-level topic design for the replacement, as long as it still ends
 up creating equivalent HA entities (via MQTT discovery or a native integration).
@@ -136,7 +136,7 @@ names/states stable; the aggregation logic itself doesn't need to move.
     sunset); most other alarm-related notices use `notify.notify_michael` /
     `notify.notify_michael_talia` directly.
 
-## Arm-mode mapping currently configured in the `the prior MQTT bridge` add-on
+## Arm-mode mapping currently configured in the MQTT bridge add-on
 
 | Texecom mode | Home Assistant state | Wired into `house_alarm_panel`? |
 |---|---|---|

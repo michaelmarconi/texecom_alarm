@@ -28,7 +28,7 @@ We believe that after LOGIN the panel will accept a dedicated area/arm-state pol
 - **This repo's protocol reference** documents AREA *push* events after `SETEVENTMESSAGES` (state bytes 0–7, with 6/7 as settled Night/Home hypotheses) and `GETAREADETAILS` (cmd 35 — area *identity/name* only). It does **not** list a current arm/area-state poll. ADR-006 / architecture explicitly park whether alarm entities need a startup snapshot analogous to `GetZoneState`.
 - **SPIKE-006** confirmed zone startup poll (`GetZoneState` cmd 2) and left open: *Whether area-state startup poll (`GetAreaFlags` / similar, seen in add-on image research) is needed for alarm entity re-sync.*
 - **Open prior art** (`davidMbrooke/texecom-connect`) has no area-state poll — area state arrives only via unsolicited AREA events after subscribe.
-- **Published add-on image inspection (research only, not the experiment):** the distributed `a prior MQTT bridge` image embeds JS that:
+- **Published add-on image inspection (research only, not the experiment):** a published MQTT-bridge image embeds JS that:
   - Names `GetAreaFlags = 11` in the same command enum as `GetZoneState = 2`.
   - Builds request body `[start, count]` via `createGetAreaFlagsInput`.
   - On startup logs `Updating all area states...` then calls `getAreaFlags(0, maxFlag, areaSize)`.
@@ -36,7 +36,7 @@ We believe that after LOGIN the panel will accept a dedicated area/arm-state pol
   - Decodes per-area bits with priority: Alarm(0) → InAlarm; else Armed(21)/FullArmed(22)/PartArmed(23)/ForceArmed(26) → Armed or PartArmed (+ part-arm slot); else Disarmed.
   - `areaMap[88] = 8` → `tAreaSize = ceil(8/8) = 1` byte per flag for this Elite 88; `maxFlag = 72` when `areaSize !== 8`.
 - **Product need:** `spec-alarm-control.md` requires restart while armed/triggered to re-sync to the panel’s actual state, not default to disarmed. Live AREA pushes alone leave a restart gap until the next event (same class of failure ADR-006 closed for zones).
-- **Panel under test:** Elite 88 at `192.168.1.183:10001`, UDL `1234` (SPIKE-001); ComIP single-connection — `the prior MQTT bridge` must be stopped.
+- **Panel under test:** Elite 88 at `192.168.1.183:10001`, UDL `1234` (SPIKE-001); ComIP single-connection — the prior MQTT bridge must be stopped.
 
 Research frames the candidate; live ACK + decodable payload against this panel is still required.
 

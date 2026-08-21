@@ -1,9 +1,8 @@
 # Texecom Alarm — HA Integration Replacement
 
-A ground-up, self-built Home Assistant integration for a Texecom Premier Elite
-alarm panel (via ComIP/Texecom Connect), replacing the closed-source, unreliable
-`the prior MQTT bridge` add-on with something that doesn't crash and finally supports Home
-arm mode.
+A Home Assistant app for a Texecom Premier Elite alarm panel (via ComIP/Texecom
+Connect) that publishes zones and an alarm control panel over MQTT, including
+Home arm mode.
 
 **Date:** 2026-08-01
 **State:** Accepted ✅
@@ -11,18 +10,15 @@ arm mode.
 ## Problem & Context
 
 The household currently bridges its Texecom Premier Elite alarm panel to MQTT/Home
-Assistant via the [`a prior MQTT bridge add-on`](a prior MQTT bridge)
-add-on, communicating with the panel through a ComIP module on the LAN. It works, but:
+Assistant via an MQTT add-on on a ComIP module. It works, but:
 
-- The add-on falls over occasionally (crashes/restarts) — an HA community thread
-  suggests this may stem from a panel-firmware bug triggered when TX and RX collide,
-  and a [known GitHub issue](community reports of MQTT-bridge crashes after Supervisor restart)
-  ties another crash pattern to HA Supervisor restarts.
+- The add-on falls over occasionally (crashes/restarts) — community reports
+  suggest this may stem from a panel-firmware bug triggered when TX and RX collide,
+  and another crash pattern is tied to HA Supervisor restarts.
 - Arming to **Home** mode (`part_arm_2` in the current config) has **never** worked
   without crashing the add-on — there's no `arm_home` handler in the HA-side wrapper
   at all today, because it's never been safe to expose one.
-- The core application (`a prior MQTT bridge`) is **closed-source** — only the
-  thin `-hassio` add-on wrapper repo is public — so it can't be forked or patched.
+- The bridge core is not available to fork or patch.
 
 Because the Texecom Connect wire protocol is only partially documented publicly (see
 References below), and no code/prior art implements arm/disarm commands, the
@@ -45,11 +41,11 @@ Non-goals for what that does *not* include).
 
 **Goals**
 
-- Full feature-parity replacement for `the prior MQTT bridge`: reproduce all ~35 zone
+- Full feature-parity replacement for the prior MQTT bridge: reproduce all ~35 zone
   entities and the alarm control panel entity, without regressing anything in the
   existing HA automation/dashboard/HomeKit layer (full checklist in
   `docs/ha-alarm-usage-spec.md`).
-- A working, non-crashing Home arm mode — the one capability `the prior MQTT bridge` has
+- A working, non-crashing Home arm mode — the one capability the prior MQTT bridge has
   never supported. (This household's panel maps Home to Part-Arm slot 2, but
   that mapping is engineer-configured per installation, not a protocol constant
   — see the generality goal below.)
@@ -74,7 +70,7 @@ Non-goals for what that does *not* include).
   documented add-on options plus a README, not an interactive wizard (this
   project is distributed as an Add-on, not a native `custom_components`
   integration).
-- Automatically migrating an existing `the prior MQTT bridge` installation's configuration
+- Automatically migrating an existing MQTT bridge installation's configuration
   — a fresh setup following the documented options is expected instead.
 - Support for the older UDL/Wintex protocol (engineer-level config access) — only
   the Texecom Connect protocol (zones/areas/arm/disarm/log/power) needed for
@@ -120,11 +116,10 @@ documented add-on configuration, not hardcoded to this household's own panel.
   integration) equivalent to today's — but there's no dependency anywhere in the HA
   config on today's exact MQTT topic structure, so the wire/topic schema is
   otherwise free.
-- No control over the panel firmware or the closed-source `the prior MQTT bridge` core —
-  can't fork or patch either, so any crash-avoidance fix (e.g. the suspected TX/RX
-  collision bug) has to be handled at the protocol/timing level in the new app.
+- No control over the panel firmware — crash-avoidance has to be handled at the
+  protocol/timing level in this app.
 - Distributed as a public GitHub Add-on repository (added via the HA Supervisor's
-  Add-on Store, the same mechanism `a prior MQTT bridge add-on` itself used) — not
+  Add-on Store) — not
   through HACS, and not as a natively-registered `custom_components` integration.
   Scope stays to the Premier Elite panel family.
 
@@ -162,15 +157,11 @@ publicly, so this doesn't start from zero):
   [alarm-server](https://github.com/mikestir/alarm-server) (ARC receiver over TCP).
 - [RoganDawes/WintexProtocol](https://github.com/RoganDawes/WintexProtocol) — Java
   decoder, same protocol family as pytexalarm.
-- HA community thread: [the prior MQTT bridge: Texecom alarm panel and MQTT integration with
-  HA support](Home Assistant community reports of Premier Elite MQTT bridges).
-- [`a prior MQTT bridge add-on` GitHub issue #106](community reports of MQTT-bridge crashes after Supervisor restart).
-- `a prior MQTT bridge add-on`'s own [README](a prior MQTT bridge)
-  documents the full MQTT topic surface and panel log event types — useful as a
-  cross-check for the functional spec.
+- Home Assistant community reports of Premier Elite MQTT bridges (crash and
+  framing discussions).
 
 Current setup, at time of writing: HA OS host on `enp0s18` (`192.168.1.35`);
-`the prior MQTT bridge` add-on `the prior add-on` v1.3.1 on the internal `hassio`
+an MQTT bridge add-on v1.3.1 on the internal `hassio`
 Docker bridge (container `172.30.33.2`, NAT'd out through `enp0s18`); panel at
 `192.168.1.183`, default port 10001, no `udl_password` set; `cache: false`,
 `log: info`.
@@ -178,7 +169,7 @@ Docker bridge (container `172.30.33.2`, NAT'd out through `enp0s18`); panel at
 ## Related docs
 
 - `docs/ha-alarm-usage-spec.md` — full functional spec of everything today's
-  `the prior MQTT bridge` + HA config layer does with the alarm: entity architecture, the
+  MQTT bridge + HA config layer does with the alarm: entity architecture, the
   full ~35-zone inventory, every dependent automation/script, and the arm-mode
   mapping. This is the phase 2 "must not regress" checklist.
 

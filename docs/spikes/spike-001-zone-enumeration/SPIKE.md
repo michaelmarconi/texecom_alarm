@@ -98,9 +98,9 @@ so it does not exercise the collision-crash conditions RISK-001/SPIKE-002 is sco
 
 *Actuals are populated from experiment output only — not from documentation, vendor claims, or community reports.*
 
-**Unplanned but load-bearing sub-experiment.** The first several connection attempts (with `the prior MQTT bridge`
+**Unplanned but load-bearing sub-experiment.** The first several connection attempts (with the prior MQTT bridge
 still running) hung at the TCP `connect()` stage for the full 8s timeout with zero response — not a fast
-"connection refused". Stopping the `the prior MQTT bridge` add-on made the very next `connect()` succeed instantly
+"connection refused". Stopping the prior MQTT bridge add-on made the very next `connect()` succeed instantly
 (0.00s), and the enumeration run above completed immediately afterward. This is strong evidence the
 ComIP module accepts only **one TCP client at a time**; see `## Decisions required`.
 
@@ -115,7 +115,7 @@ which is a different (and correctable) fact; see `## Decisions required` and `##
 ## Results
 
 Raw output of `experiment.py`, run against the live panel at `192.168.1.183:10001` with
-`TEXECOM_UDL_PASSWORD=1234` and `the prior MQTT bridge` stopped:
+`TEXECOM_UDL_PASSWORD=1234` and the prior MQTT bridge stopped:
 
 ```
 === SPIKE-001 experiment: zone enumeration feasibility ===
@@ -185,7 +185,7 @@ no_crash_or_collision: True
 
 Prior to this successful run, four separate connection attempts (three from Python, one from a
 raw `bash /dev/tcp` probe) each hung for their full timeout (8s) with zero bytes returned, while
-`the prior MQTT bridge` was still running. The very next attempt, immediately after `the prior MQTT bridge` was
+the prior MQTT bridge was still running. The very next attempt, immediately after the prior MQTT bridge was
 stopped, connected in 0.00s.
 
 ## Conclusion
@@ -266,9 +266,9 @@ at runtime.
 - Should the new integration retrieve the zone inventory dynamically via
   `GETPANELIDENTIFICATION` + `GETZONEDETAILS` at startup (Option A), rather than a hand-maintained
   zone list in configuration (Option B)?
-- Given the ComIP module accepted no second TCP client while `the prior MQTT bridge` held its session (four
-  consecutive silent connect-timeouts, resolved instantly once `the prior MQTT bridge` was stopped), should
-  the phase 2 cutover plan require `the prior MQTT bridge` to be **stopped**, not just present-but-idle,
+- Given the ComIP module accepted no second TCP client while the prior MQTT bridge held its session (four
+  consecutive silent connect-timeouts, resolved instantly once the prior MQTT bridge was stopped), should
+  the phase 2 cutover plan require the prior MQTT bridge to be **stopped**, not just present-but-idle,
   before the new integration first connects — foreclosing a side-by-side testing period on the same
   ComIP module unless a second module/port is used?
 - `docs/brief.md`'s Current Setup note ("no `udl_password` set") and RISK-009's severity rationale
@@ -287,7 +287,7 @@ at runtime.
 
 - Whether the ComIP module's one-connection-at-a-time behavior is a fixed hardware/firmware limit
   or a configurable setting (e.g. via panel engineer/Wintex programming) was not tested here — if
-  it can be relaxed, a side-by-side testing period alongside `the prior MQTT bridge` might become possible
+  it can be relaxed, a side-by-side testing period alongside the prior MQTT bridge might become possible
   after all. Would need a follow-up check (not necessarily a full spike) against the panel's
   installer-level configuration options.
 - The `areaBitmap` field returned alongside each zone's type/name was received but not decoded or

@@ -7,7 +7,7 @@ This document states how this project treats Texecom Connect / ComIP protocol kn
 
 ## Short version
 
-This Home Assistant add-on exists so a household can **interoperate** with a Premier Elite panel it already owns, over the local network module the panel exposes.
+This Home Assistant add-on exists so an operator can **interoperate** with a Premier Elite panel they already own, over the local network module the panel exposes.
 
 Protocol behaviour documented and implemented here was obtained by **independent observation** of wire traffic and panel responses on that equipment — not by receiving, copying, or republishing Texecom’s confidential protocol documentation.
 
@@ -26,7 +26,7 @@ We do **not** publish Texecom’s internal protocol manuals, NDA packs, SDK dump
 
 ## How protocol knowledge was obtained
 
-1. **Live capture and probe** against a household Premier Elite panel (model/firmware recorded in the protocol overview/reference), using the network path the panel already offers for Connect/ComIP-style clients.
+1. **Live capture and probe** against a Premier Elite panel (model/firmware recorded in the protocol overview/reference), using the network path the panel already offers for Connect/ComIP-style clients.
 2. **Independent implementation** of a client and tests from those observations (and from this project’s own spikes), rather than importing proprietary Texecom documentation into the tree.
 3. **Public prior art** (open-source clients, forum reports) may be **cited for corroboration or contrast**, and is labelled when a fact is not yet independently confirmed on this panel. Citation ≠ copying confidential Texecom documents.
 

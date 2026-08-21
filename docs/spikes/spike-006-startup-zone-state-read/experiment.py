@@ -6,7 +6,7 @@ Read-only probe against a live Texecom Premier Elite panel (Connect protocol,
 ComIP transport) to test whether current per-zone open/closed state can be
 retrieved after LOGIN via GetZoneState (cmd=2).
 
-Candidate framing came from research (published the prior MQTT bridge image strings /
+Candidate framing came from research (published MQTT-bridge image strings /
 embedded JS naming GetZoneState=2). This script is the experiment — Actuals
 come only from live panel output.
 
@@ -251,7 +251,7 @@ def main() -> int:
         zone_count = parse_zone_count(ident)
         log(f"GETPANELIDENTIFICATION: {ident!r} → zone_count={zone_count}")
 
-        # Full panel poll in batches of MAX_ZONES_PER_REQUEST (the prior MQTT bridge pattern).
+        # Full panel poll in batches of MAX_ZONES_PER_REQUEST (published MQTT-bridge pattern).
         all_bytes = bytearray()
         remaining = zone_count
         start = 1

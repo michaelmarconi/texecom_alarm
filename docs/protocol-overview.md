@@ -1,12 +1,12 @@
 # Texecom Connect — protocol overview
 
 > **Observational explanation — not an official Texecom specification.**  
-> This page is the **human-facing** guide to how the Connect/ComIP dialogue works on our Premier Elite panel.  
+> This page is the **human-facing** guide to how the Connect/ComIP dialogue works on a Premier Elite panel.  
 > Byte-level tables live in the [protocol reference](protocol-reference.md).  
 > Project position: [Legal stance](legal-stance.md).
 
-**Audience:** practitioners and agents who need the *shape* of the protocol before diving into opcodes.  
-**Panel in mind:** Elite 88 via the dedicated **ComIP** (one TCP login at a time on that module). Other models/firmware may differ. Early captures that saw Hayes modem commands on the wire were on the installer **SmartCom**, not this ComIP — see [When the line misbehaves](#when-the-line-misbehaves).
+**Audience:** operators and maintainers who need the *shape* of the protocol before diving into opcodes.  
+**Panel in mind:** Premier Elite via a dedicated **ComIP** (one TCP login at a time on that module). Other models/firmware may differ. Captures that saw Hayes modem commands on the wire were on an installer **SmartCom** sharing alarm reporting, not a dedicated ComIP — see [When the line misbehaves](#when-the-line-misbehaves).
 
 ---
 
@@ -24,7 +24,7 @@ Three ideas that unlock everything else:
 
 1. **One shared socket** carries commands, replies, and unsolicited events — interleaved.
 2. **Arm modes share one command**; Home/Night are Part-Arm slots configured per install (Away is full arm).
-3. **Skip unexpected bytes; reconnect if the socket dies** — do not crash. Hayes modem noise (`ATH0` / `ATZ`) on this household’s wire was the installer **SmartCom** sharing its port with alarm reporting, not normal ComIP behaviour.
+3. **Skip unexpected bytes; reconnect if the socket dies** — do not crash. Hayes modem noise (`ATH0` / `ATZ`) is the installer **SmartCom** (or any module bound to alarm reporting) talking on the same serial port — not normal dedicated-ComIP behaviour.
 
 ---
 
@@ -77,7 +77,7 @@ If a response is late, retry **the same sequence**. Ordinary timing collisions a
 
 **Mechanism (general):** one arm command with a **mode byte**; one disarm command that does not care which mode you were in.
 
-**Meaning (per install):** which mode byte is “Night” or “Home” depends on how the engineer programmed Part-Arm slots. This household’s mapping is configuration, not a universal law.
+**Meaning (per install):** which mode byte is “Night” or “Home” depends on how the engineer programmed Part-Arm slots. That mapping is install-time configuration, not a protocol constant.
 
 ```mermaid
 flowchart LR
@@ -128,7 +128,7 @@ Zone pushes are **sensor-class agnostic**: a door and a PIR look the same on the
 
 **Required behaviour:** skip forward until the next valid Connect frame rather than crashing (ADR-002, kept unconditionally by ADR-014). Garbage still happens — truncated frames, bad CRC lead-in, other clients colliding. Treating it as fatal is what used to kill naive clients.
 
-**Hayes modem commands (`ATH0`, `ATZ`) are not normal ComIP traffic.** They were captured on this household’s installer **SmartCom** (SPIKE-002, address later identified as `192.168.1.183`): that module’s job is alarm reporting / dialer work, and it multiplexes AT commands onto the same TCP session around arm, disarm, and trigger. If you see that text on the Home Assistant session, you are almost certainly pointed at the signalling module, not the dedicated ComIP — see [Home Assistant loses the panel during an alarm](ha-loses-panel-during-alarm.md). On the dedicated ComIP, SPIKE-010 stayed Connect-clean through Home arm/disarm and through a real alarm plus HA Disarm.
+**Hayes modem commands (`ATH0`, `ATZ`) are not normal ComIP traffic.** They were captured on an installer **SmartCom** whose job is alarm reporting / dialer work: it multiplexes AT commands onto the same TCP session around arm, disarm, and trigger. If you see that text on the Home Assistant session, you are almost certainly pointed at the signalling module, not the dedicated ComIP — see [Home Assistant loses the panel during an alarm](ha-loses-panel-during-alarm.md). On a dedicated ComIP used only for local control, live walks stayed Connect-clean through Home arm/disarm and through a real alarm plus HA Disarm.
 
 ```mermaid
 flowchart TD
@@ -174,7 +174,7 @@ The socket can still look “up” (keepalive OK) while arm commands NAK or push
 - **Panel host is the dedicated ComIP**, not the installer SmartCom (ADR-013). Modem/AT bytes on the HA session are a wrong-module tell, not “how ComIP works.”
 - **Keepalive** — do not run forever listen-only.
 - **Resync, don’t panic** on unexpected bytes (including SmartCom modem piping if someone mis-points `panel_host`).
-- **Don’t hardcode Home/Night slots** from one house’s capture — use install config (Away = full arm).
+- **Don’t hardcode Home/Night slots** from one install’s capture — use install config (Away = full arm).
 - **Don’t treat MQTT retain alone** as truth after restart — snapshot after login.
 
 ---
@@ -185,7 +185,7 @@ The socket can still look “up” (keepalive OK) while arm commands NAK or push
 |------|---------|
 | Opcodes, bodies, flag indices, LOG types | [Protocol reference](protocol-reference.md) |
 | Why we reconnect the way we do | ADR-014 (host-scoped; supersedes ADR-002’s universal trigger-drop claim); ADR-002 kept for resync-on-junk |
-| Which IP Home Assistant must use | ADR-013; [wrong-module how-to](ha-loses-panel-during-alarm.md) |
+| Which module Home Assistant must use | ADR-013; [wrong-module how-to](ha-loses-panel-during-alarm.md) |
 | Why Away ≠ Part-Arm | ADR-008 |
 | Startup zone / area snapshots | ADR-006, ADR-009 |
 | Evidence for a specific claim | Linked spike under `docs/spikes/` |

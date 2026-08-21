@@ -6,7 +6,7 @@ Read-only probe (by default) against a live Texecom Premier Elite panel
 (Connect protocol, ComIP transport) to test whether current area arm state
 can be retrieved after LOGIN via GetAreaFlags (cmd=11).
 
-Candidate framing came from research (published the prior MQTT bridge image strings /
+Candidate framing came from research (published MQTT-bridge image strings /
 embedded JS naming GetAreaFlags=11). This script is the experiment — Actuals
 come only from live panel output.
 
@@ -55,10 +55,10 @@ NAK = 0x15
 CMD_TIMEOUT = 3.0
 CMD_RETRIES = 3
 
-# areaMap from the prior MQTT bridge image: zones → number of areas (bits in area bitmap)
+# areaMap from published MQTT-bridge image research: zones → number of areas (bits in area bitmap)
 AREA_MAP = {12: 2, 24: 2, 48: 4, 64: 4, 88: 8, 168: 16, 640: 64}
 
-# Flag indices used by the prior MQTT bridge updateAreaStates decode
+# Flag indices used by the observed updateAreaStates decode
 FLAG_ALARM = 0
 FLAG_ARMED = 21
 FLAG_FULL_ARMED = 22

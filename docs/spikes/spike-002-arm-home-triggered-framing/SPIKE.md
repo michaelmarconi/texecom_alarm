@@ -76,7 +76,7 @@ spike, and it directly refines the hypothesis:
 - **`shuuryou/texmond`** and **`JumpMaster/TexecomManager`** implement arm/disarm via the Crestron
   protocol (`PART1ARM`/`PART2ARM`/`FULLARM`/`DISARM` text commands, or virtual-keypad emulation) — a
   different wire protocol from Connect, not usable as a byte-level reference for this panel either.
-- **`a prior MQTT bridge`** (the closed-source core the household currently runs) is the only
+- **A closed-source Connect MQTT bridge** (the one the household currently runs) is the only
   known implementation that both speaks the Connect protocol *and* issues real arm/disarm commands —
   but its source is not available (per RISK-008/`docs/brief.md`), so it cannot be inspected for the
   command byte.
@@ -104,15 +104,15 @@ attempt shortly after also met a corrupted first response before the connection 
 
 Searching for independent corroboration turned up an **exact match to this symptom**, from a
 completely different (closed-source, Node.js) implementation of the same protocol, four years
-earlier: on the `the prior MQTT bridge` Home Assistant community thread, user Ben.S reported the identical
+earlier: on the prior MQTT bridge Home Assistant community thread, user Ben.S reported the identical
 crash class (`Error: CRC is invalid`, `Expected length to be 38, got 31, buffer: tR&Elite 88 ...`,
 `Unexpected start, expected 't', got <blank>`) and noted *"this error happens every time I log into
 the alarm on a keypad... I wrote a quick proxy app... I can see that on arming and disarming there
 are another couple of packets sent out by the alarm. But they are not in the Texecom Connect protocol
 format... I have no protocols set up on my alarm for any com port so I am surprised to see anything
 there... Now I figured maybe using COM1 was part of the issues, so I have moved to COM2 and now I
-don't get any of these extra packets."* `a prior MQTT bridge add-on` [issue
-#106](community reports of MQTT-bridge crashes after Supervisor restart) (already cited in
+don't get any of these extra packets."* A public GitHub issue about Supervisor
+restarts (already cited in
 `docs/brief.md`) turned out, on inspection, to describe a *different* crash cause entirely (HA
 Supervisor stopping/restarting the add-on container during an update) — it is not the same bug as
 this one, and `docs/brief.md`'s framing of it should be corrected.
@@ -123,7 +123,7 @@ different panels, points to the same root cause: **the panel itself multiplexes 
 non-Connect-protocol byte stream (most likely ARC/alarm-reporting-format traffic) onto the same
 physical Com Port around login/arm/disarm events**, and any client that assumes every frame on that
 socket is Connect-protocol (as `davidMbrooke/texecom-connect`, this experiment's script, and
-presumably `the prior MQTT bridge`'s closed-source core all do) will throw a framing/CRC error and tear down
+presumably the prior MQTT bridge's closed-source core all do) will throw a framing/CRC error and tear down
 the connection the moment this happens. It is not primarily about *our own* command timing colliding
 with an incoming message (that scenario, tested in the dress-rehearsal run, recovers cleanly via
 timeout+retry) — it is a **protocol-format collision**, triggered by a login/arm/disarm-adjacent
@@ -187,7 +187,7 @@ existing prior art against real panels) already do.
 *Actuals are populated from experiment output only — not from documentation, vendor claims, or community reports.*
 
 **Independent corroboration (not an Actual, but directly informing the Conclusion):** a 2020 report on
-the `the prior MQTT bridge` HA community thread from a different closed-source implementation, on different
+the prior MQTT bridge HA community thread from a different closed-source implementation, on different
 panel hardware, describes the identical failure signature (`CRC is invalid`, wrong-length buffers,
 `Unexpected start, expected 't'`) occurring specifically around keypad/arm/disarm events, with a
 root-caused fix (moving the ComIP connection to a Com Port with no ARC/reporting protocol bound to
@@ -374,7 +374,7 @@ different, closed-source software: **arm/disarm/login/trigger-adjacent events ca
 SmartCom/ComIP hardware to emit non-Connect-protocol bytes onto the same TCP session** — identified
 here, specifically, as **literal Hayes AT modem commands (`ATH0`, `ATZ`) from the module's own dialer/
 reporting subsystem**. Any client that assumes every frame is Connect-protocol (this experiment's
-first-iteration script, `davidMbrooke/texecom-connect`, and presumably `the prior MQTT bridge`'s core, which
+first-iteration script, `davidMbrooke/texecom-connect`, and presumably the prior MQTT bridge's core, which
 throws `CRC is invalid` / `Unexpected start, expected 't'` — the exact same symptom class) will error
 out and, unless built to recover, crash. This reframes RISK-001: it is not primarily a TX/RX *timing*
 problem solvable by our own send discipline — it is a **protocol-multiplexing problem on the panel/
@@ -463,8 +463,7 @@ recover after a real alarm.
    the ComIP module is on, and what — if anything, including the SmartCom dialer confirmed here to leak
    AT-command traffic — is bound to it for ARC/remote reporting) to confirm whether Option B (physical
    isolation) is available on this specific installation.
-4. **`docs/brief.md`'s citation of `a prior MQTT bridge add-on` [issue
-   #106](community reports of MQTT-bridge crashes after Supervisor restart) should be corrected** — on
+4. **`docs/brief.md`'s citation of a Supervisor-restart crash report should be corrected** — on
    inspection, that issue is about HA Supervisor stopping the add-on container during an OS/Supervisor
    update, which is an unrelated failure mode, not the collision/framing crash this spike
    investigated.
