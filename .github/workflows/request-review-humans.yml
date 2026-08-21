@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   request:
-    if: github.actor != "dependabot[bot]" && github.actor != github.repository_owner
+    if: github.actor != 'dependabot[bot]' && github.actor != github.repository_owner
     runs-on: ubuntu-latest
     steps:
       - name: Request the maintainer
