@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: pip
-    directory: /texecom-alarm-app
+    directory: /texecom_alarm/texecom-alarm-app
     schedule:
       interval: weekly
     groups:

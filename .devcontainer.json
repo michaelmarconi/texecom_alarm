@@ -25,10 +25,10 @@
   },
   "postStartCommand": "bash devcontainer_bootstrap",
   "runArgs": ["-e", "GIT_EDITOR=code --wait", "--privileged"],
-  "workspaceFolder": "/mnt/supervisor/apps/local/${localWorkspaceFolderBasename}",
-  "workspaceMount": "source=${localWorkspaceFolder},target=${containerWorkspaceFolder},type=bind,consistency=cached",
+  "workspaceFolder": "/workspaces/texecom_alarm",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/texecom_alarm,type=bind,consistency=cached",
   "containerEnv": {
-    "WORKSPACE_DIRECTORY": "${containerWorkspaceFolder}",
+    "WORKSPACE_DIRECTORY": "/workspaces/texecom_alarm",
     "SUPERVISOR_CHANNEL": "beta"
   },
   "customizations": {
@@ -52,6 +52,7 @@
     "type=volume,target=/var/lib/docker",
     "type=volume,target=/var/lib/containerd",
     "type=volume,target=/mnt/supervisor",
-    "type=tmpfs,target=/tmp"
+    "type=tmpfs,target=/tmp",
+    "source=${localWorkspaceFolder}/texecom_alarm,target=/mnt/supervisor/apps/local/texecom_alarm,type=bind,consistency=cached"
   ]
 }

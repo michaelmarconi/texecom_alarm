@@ -24,7 +24,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | CI security scans | pass | `bandit` + `pip-audit` in `.github/workflows/ci.yml` |
 | Backups | n/a | No extra datastore; HA backup of add-on options is sufficient |
 | Official HA Apps store | n/a | Will not take this; community GitHub repository is the intended path (`TODO.md`) |
-| Store-shaped repository | fail | Root `config.yaml` = local-app layout (`local_texecom_alarm`). Supervisor custom repositories need root `repository.yaml` + the App in a **subdirectory**. Adding `https://github.com/michaelmarconi/texecom_alarm` in App Store will not install today. |
+| Store-shaped repository | pass | Root `repository.yaml` + App in `texecom_alarm/` (catalogue layout). Local apps-devcontainer dual-binds the app subfolder to `/mnt/supervisor/apps/local/texecom_alarm` so `local_texecom_alarm` still works. |
 | Pre-built images (GHCR) | fail | No `image:` in `config.yaml`; no builder workflow. Even after catalogue layout, Supervisor would local-build from git (acceptable early, worse UX). |
 | RISK-017 fingerprint | pass | Working tree + history rewrite complete; Critical/High LAN/name/UDL fingerprint purged from `main` |
 | CHANGELOG vs product | pass | `CHANGELOG.md` `[0.1.0]` describes the real App; `[0.0.1]` retained as historical scaffold only |
@@ -34,7 +34,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 ## Deploy
 
 - Authorized: no — waiting on pre-deploy Ask
-- Step performed: none. GitHub already hosts `main`; that is not a Supervisor-installable catalogue and is not treated as a completed publish.
+- Step performed: none. Catalogue layout is in place (`repository.yaml` + `texecom_alarm/`); GHCR/`image:` still open. GitHub host alone is not treated as a completed publish.
 
 ## Live smoke
 
