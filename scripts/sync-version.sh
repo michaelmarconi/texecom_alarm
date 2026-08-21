@@ -17,14 +17,14 @@ else
   CONFIG=config.yaml
 fi
 
-PYPROJECT=texecom-alarm-app/pyproject.toml
-if [[ -f texecom_alarm/texecom-alarm-app/pyproject.toml ]]; then
-  PYPROJECT=texecom_alarm/texecom-alarm-app/pyproject.toml
+PYPROJECT=pyproject.toml
+if [[ -f texecom_alarm/pyproject.toml ]]; then
+  PYPROJECT=texecom_alarm/pyproject.toml
 fi
 
-INIT=texecom-alarm-app/src/texecom_alarm/__init__.py
-if [[ -f texecom_alarm/texecom-alarm-app/src/texecom_alarm/__init__.py ]]; then
-  INIT=texecom_alarm/texecom-alarm-app/src/texecom_alarm/__init__.py
+INIT=src/texecom_alarm/__init__.py
+if [[ -f texecom_alarm/src/texecom_alarm/__init__.py ]]; then
+  INIT=texecom_alarm/src/texecom_alarm/__init__.py
 fi
 
 CHANGELOG=CHANGELOG.md

@@ -1,4 +1,4 @@
-# Texecom Alarm App for Home Assistant
+# Texecom Alarm
 
 Connect a Texecom Premier Elite alarm panel to Home Assistant over MQTT.
 

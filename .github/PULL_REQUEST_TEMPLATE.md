@@ -4,7 +4,7 @@
 
 ## How you tested
 
-- [ ] CI / local tests in `texecom-alarm-app/` (`ruff`, `pytest`)
+- [ ] CI / local tests in `texecom_alarm/` (`ruff`, `pytest`)
 - [ ] Live panel (say model/firmware if so)
 
 ## Checks

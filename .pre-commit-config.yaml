@@ -4,6 +4,6 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        files: ^texecom_alarm/texecom-alarm-app/
+        files: ^texecom_alarm/
       - id: ruff-format
-        files: ^texecom_alarm/texecom-alarm-app/
+        files: ^texecom_alarm/
