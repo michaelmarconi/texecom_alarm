@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Single SemVer: config.yaml is canonical; copies stay in lockstep.
 # Usage:
-#   ./scripts/sync-version.sh check   # exit 1 if copies drift (CI)
-#   ./scripts/sync-version.sh sync    # write copies from canonical
+#   ./scripts/sync-version.sh check              # exit 1 if copies drift (CI)
+#   ./scripts/sync-version.sh require-bump [ref] # exit 1 if canonical equals ref (default origin/main)
+#   ./scripts/sync-version.sh sync               # write copies from canonical
 #   ./scripts/sync-version.sh bump patch|minor|major [changelog-body]
 set -euo pipefail
 
@@ -125,6 +126,26 @@ case "$cmd" in
     fi
     echo "version sync ok: $canon"
     ;;
+  require-bump)
+    canon="$(read_canonical)"
+    [[ -n "$canon" ]] || { echo "No version in $CONFIG" >&2; exit 1; }
+    base_ref="${2:-origin/main}"
+    if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
+      echo "Cannot resolve $base_ref — fetch main before require-bump" >&2
+      exit 1
+    fi
+    base="$(git show "${base_ref}:${CONFIG}" 2>/dev/null | sed -nE 's/^version:[[:space:]]*"?([0-9]+\.[0-9]+\.[0-9]+)"?.*/\1/p' | head -1)"
+    if [[ -z "$base" ]]; then
+      echo "No version at ${base_ref}:${CONFIG}" >&2
+      exit 1
+    fi
+    if [[ "$canon" == "$base" ]]; then
+      echo "Version ${canon} is unchanged from ${base_ref}." >&2
+      echo "Bump in this PR before merge: ./scripts/sync-version.sh bump patch|minor|major \"why\"" >&2
+      exit 1
+    fi
+    echo "version bump ok: ${base} -> ${canon}"
+    ;;
   sync)
     canon="$(read_canonical)"
     [[ -n "$canon" ]] || { echo "No version in $CONFIG" >&2; exit 1; }
@@ -148,7 +169,7 @@ case "$cmd" in
     echo "$next"
     ;;
   *)
-    echo "Usage: $0 check|sync|bump patch|minor|major [changelog-body]" >&2
+    echo "Usage: $0 check|require-bump [ref]|sync|bump patch|minor|major [changelog-body]" >&2
     exit 2
     ;;
 esac

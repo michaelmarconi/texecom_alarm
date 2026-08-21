@@ -1,0 +1,34 @@
+name: Tag version
+
+# main already carries the release number. This job only creates vX.Y.Z when
+# that tag is missing — it never edits version files.
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Tag canonical version if missing
+        run: |
+          set -euo pipefail
+          V=$(sed -nE 's/^version:[[:space:]]*"?([0-9]+\.[0-9]+\.[0-9]+)"?.*/\1/p' texecom_alarm/config.yaml | head -1)
+          [[ -n "$V" ]] || { echo "No version in texecom_alarm/config.yaml" >&2; exit 1; }
+          if git rev-parse "v${V}" >/dev/null 2>&1; then
+            echo "Tag v${V} already exists"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "v${V}"
+          git push origin "v${V}"
+          echo "Tagged v${V}"

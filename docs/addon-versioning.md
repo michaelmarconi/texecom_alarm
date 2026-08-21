@@ -1,8 +1,11 @@
 # Add-on versioning
 
-One SemVer string is the release id. Supervisor, Python packaging, the healthcheck
-string, and the changelog all use the same value. Humans do not edit version
-numbers by hand.
+One SemVer string is the release id. Supervisor, Python packaging, the
+healthcheck string, and the changelog all use the same value.
+
+The version that lands on `main` is already the release number. Nothing on
+GitHub edits version files after merge. `main` itself only moves via pull
+request — including for the maintainer.
 
 ## Canonical source
 
@@ -16,34 +19,30 @@ Copies (kept in lockstep by `scripts/sync-version.sh`):
 
 ## When the version changes
 
-- **On every merge to `main`** (human PRs, Dependabot, anything): GitHub Actions
-  patch-bumps (`0.1.0` → `0.1.1` → …), updates the copies, prepends a changelog
-  line, and creates git tag `vX.Y.Z`. If that tag already exists, the job fails —
-  the same version is never reused.
-- **Bootstrap:** if the current canonical version has no tag yet, the workflow
-  tags it without bumping (so the first public release can be `0.1.0`).
-- **Minor / major:** manual `workflow_dispatch` on `.github/workflows/bump-version.yml`
-  with `bump=minor` or `bump=major`.
-- **Local rebuild / Configuration refresh:** do **not** bump. Use Rebuild — see
-  [run.md](run.md#refresh-local-add-on-without-a-version-bump).
+Bump **in the pull request**, before merge:
 
-## CI
+```bash
+./scripts/sync-version.sh bump patch "why this is a new add-on version"
+# or: minor | major
+```
 
-Pull requests fail if any copy disagrees with `config.yaml`
+CI on PRs to `main` fails if the canonical version still equals `main`
+(`./scripts/sync-version.sh require-bump`). Copies must also match
 (`./scripts/sync-version.sh check`).
 
-## Branch protection
+After merge, **Tag version** creates `vX.Y.Z` if that tag does not exist. It
+does not bump. Builder publishes GHCR for the tag.
 
-`main` requires pull requests. The bump workflow opens `chore/bump-X.Y.Z` and
-enables auto-merge (squash) so the bump lands after CI.
-
-**Required setting:** repository **Settings → Actions → General → Allow GitHub
-Actions to create and approve pull requests**. Without that, the workflow pushes
-the branch but cannot open the PR — open/merge `chore/bump-*` manually.
+| Event | Bump in the PR? |
+|--------|-----------------|
+| User-facing fix or feature | Yes (`patch` or `minor`) |
+| Breaking change | Yes (`major`) |
+| Dependabot | Yes — a workflow patch-bumps **on that PR** so CI can pass |
+| Local rebuild / Configuration refresh | No — use Rebuild; see [run.md](run.md#refresh-local-add-on-without-a-version-bump) |
 
 ## Do not
 
-- Hand-edit version strings to reload the local App
+- Hand-edit only one of the four version locations (use the script)
+- Open a follow-up “bump after merge” PR
 - Move or retag an existing `vX.Y.Z`
 - Invent a separate Python package version
-- Push version bumps straight to `main` from a laptop (use the workflow)
