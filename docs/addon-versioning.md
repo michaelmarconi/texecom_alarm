@@ -34,10 +34,12 @@ Pull requests fail if any copy disagrees with `config.yaml`
 
 ## Branch protection
 
-`main` requires pull requests. The bump workflow therefore opens
-`chore/bump-X.Y.Z` and enables auto-merge (squash) so the bump lands after CI.
-Allow GitHub Actions to create pull requests (repository Settings → Actions →
-General). If auto-merge is blocked, merge the bump PR manually — do not retag.
+`main` requires pull requests. The bump workflow opens `chore/bump-X.Y.Z` and
+enables auto-merge (squash) so the bump lands after CI.
+
+**Required setting:** repository **Settings → Actions → General → Allow GitHub
+Actions to create and approve pull requests**. Without that, the workflow pushes
+the branch but cannot open the PR — open/merge `chore/bump-*` manually.
 
 ## Do not
 

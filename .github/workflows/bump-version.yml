@@ -1,9 +1,11 @@
 name: Bump version
 
-# Direct pushes to main are blocked for GITHUB_TOKEN on this personal repo
-# (ruleset: PRs required; GitHub Actions cannot be a bypass actor).
-# Run this workflow manually until a maintainer PAT is wired as a secret.
+# After each push to main (human or Dependabot), open a SemVer bump PR.
+# Requires Settings → Actions → General → "Allow GitHub Actions to create and
+# approve pull requests". Branch protection on main stays; the bump lands via PR.
 on:
+  push:
+    branches: ["main"]
   workflow_dispatch:
     inputs:
       bump:
@@ -22,7 +24,6 @@ permissions:
 
 jobs:
   bump:
-    # Skip the bot's own bump PR merges (and any push authored as the Actions bot).
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
@@ -34,11 +35,7 @@ jobs:
       - name: Resolve canonical version
         id: ver
         run: |
-          if [[ -f texecom_alarm/config.yaml ]]; then
-            CONFIG=texecom_alarm/config.yaml
-          else
-            CONFIG=config.yaml
-          fi
+          CONFIG=texecom_alarm/config.yaml
           V=$(sed -nE 's/^version:[[:space:]]*"?([0-9]+\.[0-9]+\.[0-9]+)"?.*/\1/p' "$CONFIG" | head -1)
           echo "canonical=$V" >>"$GITHUB_OUTPUT"
           if git rev-parse "v${V}" >/dev/null 2>&1; then
@@ -66,7 +63,6 @@ jobs:
           set -euo pipefail
           KIND="${{ github.event.inputs.bump || 'patch' }}"
           SUBJECT=$(git log -1 --pretty=%s)
-          # Skip if this push was already a version bump (defence in depth).
           if [[ "$SUBJECT" == chore:\ bump\ version\ to\ * ]]; then
             echo "Already a bump commit; nothing to do"
             exit 0
@@ -83,25 +79,25 @@ jobs:
           git add -A
           git commit -m "chore: bump version to ${NEXT}"
           git push -u origin "HEAD:${BRANCH}" --force
-          # Open PR if missing; enable auto-merge so it lands after CI (branch protection).
-          # Requires: Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"
           if ! gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
             if ! gh pr create --base main --head "$BRANCH" \
               --title "chore: bump version to ${NEXT}" \
               --body "Automated SemVer patch after merge to \`main\`. See [docs/addon-versioning.md](docs/addon-versioning.md)."; then
-              echo "::error::Cannot create bump PR. Enable Settings → Actions → General → Allow GitHub Actions to create and approve pull requests. Branch ${BRANCH} was pushed — open the PR manually."
+              echo "::error::Cannot create bump PR. Enable Settings → Actions → General → Allow GitHub Actions to create and approve pull requests. Branch ${BRANCH} was pushed — open/merge the PR manually, then tag v${NEXT}."
               exit 1
             fi
           fi
           gh pr merge "$BRANCH" --squash --auto --delete-branch || \
-            echo "::warning::Could not auto-merge bump PR — merge ${BRANCH} when CI is green (tag after merge)."
-          # Do not tag until the version is on main; the merge push re-triggers this
-          # workflow as github-actions[bot] and is skipped. Tag in a follow-up step
-          # after merge by re-checking main, or tag here only if already merged.
-          sleep 5
-          git fetch origin main
-          MAIN_V=$(sed -nE 's/^version:[[:space:]]*"?([0-9]+\.[0-9]+\.[0-9]+)"?.*/\1/p' <(git show origin/main:texecom_alarm/config.yaml) | head -1)
-          if [[ "$MAIN_V" == "$NEXT" ]]; then
+            echo "::warning::Could not auto-merge ${BRANCH} — merge when CI is green, then ensure tag v${NEXT} exists."
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            git fetch origin main
+            MAIN_V=$(git show origin/main:texecom_alarm/config.yaml | sed -nE 's/^version:[[:space:]]*"?([0-9]+\.[0-9]+\.[0-9]+)"?.*/\1/p' | head -1)
+            if [[ "$MAIN_V" == "$NEXT" ]]; then
+              break
+            fi
+            sleep 6
+          done
+          if [[ "${MAIN_V:-}" == "$NEXT" ]]; then
             if git rev-parse "v${NEXT}" >/dev/null 2>&1; then
               echo "Tag v${NEXT} already exists"
             else
