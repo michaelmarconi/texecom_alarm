@@ -27,3 +27,6 @@ docs/captures/
 
 # local acceptance / soak evidence (logs, timing extracts) — not for the repo
 docs/evidence/
+
+# local session handovers — not for the repo
+handovers/
