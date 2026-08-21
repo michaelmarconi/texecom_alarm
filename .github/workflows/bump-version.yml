@@ -1,0 +1,74 @@
+name: Bump version
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: SemVer bump kind (ignored on bootstrap when current version is untagged)
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve canonical version
+        id: ver
+        run: |
+          if [[ -f texecom_alarm/config.yaml ]]; then
+            CONFIG=texecom_alarm/config.yaml
+          else
+            CONFIG=config.yaml
+          fi
+          V=$(sed -nE 's/^version:[[:space:]]*"?([0-9]+\.[0-9]+\.[0-9]+)"?.*/\1/p' "$CONFIG" | head -1)
+          echo "canonical=$V" >>"$GITHUB_OUTPUT"
+          if git rev-parse "v${V}" >/dev/null 2>&1; then
+            echo "tagged=yes" >>"$GITHUB_OUTPUT"
+          else
+            echo "tagged=no" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Bootstrap tag current version (no bump)
+        if: steps.ver.outputs.tagged == 'no'
+        run: |
+          V="${{ steps.ver.outputs.canonical }}"
+          ./scripts/sync-version.sh check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "v${V}"
+          git push origin "v${V}"
+          echo "Tagged v${V} (bootstrap, no bump)"
+
+      - name: Patch bump and tag
+        if: steps.ver.outputs.tagged == 'yes'
+        run: |
+          KIND="${{ github.event.inputs.bump || 'patch' }}"
+          SUBJECT=$(git log -1 --pretty=%s)
+          NEXT=$(./scripts/sync-version.sh bump "$KIND" "$SUBJECT")
+          if git rev-parse "v${NEXT}" >/dev/null 2>&1; then
+            echo "Tag v${NEXT} already exists — refusing to reuse version" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: bump version to ${NEXT}"
+          git tag "v${NEXT}"
+          git push origin HEAD:main
+          git push origin "v${NEXT}"

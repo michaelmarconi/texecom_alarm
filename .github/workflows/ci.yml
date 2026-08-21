@@ -16,6 +16,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Version sync check
+        working-directory: .
+        run: ./scripts/sync-version.sh check
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

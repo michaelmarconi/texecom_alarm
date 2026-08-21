@@ -48,6 +48,9 @@ in-repo FakePanel stand-in — do not point CI or unit tests at a live panel.
 
 Local Home Assistant boot (optional): see [docs/run.md](docs/run.md).
 
+Do not edit version numbers by hand — merging to `main` bumps SemVer. See
+[docs/addon-versioning.md](docs/addon-versioning.md).
+
 ## Pull requests
 
 Use the PR template. Keep the diff small, match existing style, and say how you

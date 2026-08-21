@@ -29,4 +29,4 @@ LABEL \
   org.opencontainers.image.title="Texecom Alarm" \
   org.opencontainers.image.description="Connect to a Texecom Premier Elite alarm panel and publish updates to MQTT" \
   org.opencontainers.image.source="https://github.com/michaelmarconi/texecom_alarm" \
-  org.opencontainers.image.licenses="Apache License 2.0"
+  org.opencontainers.image.licenses="MIT"

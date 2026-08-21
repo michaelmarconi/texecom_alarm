@@ -1,0 +1,18 @@
+name: Request review on human PRs
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  request:
+    if: github.actor != "dependabot[bot]" && github.actor != github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request the maintainer
+        run: gh api --method POST "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers" -f "reviewers[]=${{ github.repository_owner }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

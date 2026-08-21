@@ -1,31 +1,40 @@
-# Add-on versioning (local vs release)
+# Add-on versioning
 
-Supervisor treats `config.yaml` `version` as the add-on **release id**. This note is the project rule for when that field may change. It is intentionally short — the project is pre-ship.
+One SemVer string is the release id. Supervisor, Python packaging, the healthcheck
+string, and the changelog all use the same value. Humans do not edit version
+numbers by hand.
 
-## When `version` may be bumped
+## Canonical source
 
-Bump `config.yaml` `version` **only** for an intentional releasable build that should appear as a new add-on release (and, when we publish, as a matching `CHANGELOG.md` entry).
+`config.yaml` `version` (at the App folder root — today repo root; after catalogue
+layout, `texecom_alarm/config.yaml`).
 
-Do **not** bump it:
+Copies (kept in lockstep by `scripts/sync-version.sh`):
 
-- mid-task as a Supervisor cache-buster
-- so the Configuration tab / schema / translations refresh locally
-- for any other local-dev convenience
+- `texecom-alarm-app/pyproject.toml` `version`
+- `texecom-alarm-app/src/texecom_alarm/__init__.py` `__version__`
+- Latest `## [X.Y.Z]` heading in `CHANGELOG.md`
 
-Inventing release numbers for local reload is forbidden. Use rebuild/reload instead — see [run.md](run.md#refresh-local-add-on-without-a-version-bump).
+## When the version changes
 
-## Local development
+- **On every merge to `main`** (human PRs, Dependabot, anything): GitHub Actions
+  patch-bumps (`0.1.0` → `0.1.1` → …), updates the copies, prepends a changelog
+  line, and creates git tag `vX.Y.Z`. If that tag already exists, the job fails —
+  the same version is never reused.
+- **Bootstrap:** if the current canonical version has no tag yet, the workflow
+  tags it without bumping (so the first public release can be `0.1.0`).
+- **Minor / major:** manual `workflow_dispatch` on `.github/workflows/bump-version.yml`
+  with `bump=minor` or `bump=major`.
+- **Local rebuild / Configuration refresh:** do **not** bump. Use Rebuild — see
+  [run.md](run.md#refresh-local-add-on-without-a-version-bump).
 
-Leave `version` alone while iterating. Rebuild or reload the local add-on so schema, options, and translations pick up; do not invent semver.
+## CI
 
-## Relationship to `/ship` and CHANGELOG
+Pull requests fail if any copy disagrees with `config.yaml`
+(`./scripts/sync-version.sh check`).
 
-`/ship` is go-live readiness after docs-ready — it is **not** a licence to invent release trains during ordinary tasks.
+## Do not
 
-**Not decided yet** (stop and ask a human; do not guess):
-
-- when a published release is authorized and who bumps `version` for it
-- CHANGELOG cadence and how deeply we follow Keep a Changelog / SemVer for 1.0+
-- whether store/update UX requires a bump beyond what this local policy covers
-
-Until those are decided, agents must not silently bump `version` or invent release handbook detail. Point practitioners at this file and ask.
+- Hand-edit version strings to reload the local App
+- Move or retag an existing `vX.Y.Z`
+- Invent a separate Python package version

@@ -1,0 +1,20 @@
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+
+permissions:
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == "dependabot[bot]"
+    runs-on: ubuntu-latest
+    steps:
+      # Dependabot is a PR-only bypass on main; GitHub Actions is not.
+      # Ask Dependabot to squash-merge once required checks are green.
+      - name: Ask Dependabot to squash-merge
+        run: gh pr comment "$PR_URL" --body "@dependabot squash and merge"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
