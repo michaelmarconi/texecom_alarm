@@ -35,9 +35,11 @@ status can still work; disarm-during-alarm probably will not. More detail:
 
 ## Installation
 
-1. Install **Texecom Alarm**.
-2. Open **Configuration** and fill in the options below.
-3. Start the add-on and check the log for a successful panel login.
+1. Add `https://github.com/michaelmarconi/texecom_alarm` under
+   **Settings → Add-ons → Add-on store → ⋮ → Repositories**.
+2. Install **Texecom Alarm** from that repository.
+3. Open **Configuration** and fill in the options below.
+4. Start the add-on and check the log for a successful panel login.
 
 ## Configuration
 

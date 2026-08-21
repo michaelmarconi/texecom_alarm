@@ -7,6 +7,9 @@ open/closed status, and tell whether the panel link is healthy.
 
 ![Supports aarch64 Architecture][aarch64-shield]
 ![Supports amd64 Architecture][amd64-shield]
+[![CI][ci-shield]][ci-url]
+[![Version][version-shield]][version-url]
+[![License: MIT][license-shield]][license-url]
 
 ## What you get
 
@@ -51,15 +54,20 @@ ComIP — see [this guide](https://github.com/michaelmarconi/texecom_alarm/blob/
 ### On Home Assistant
 
 1. Install an MQTT broker if you do not already have one.
-2. Install **Texecom Alarm**.
-3. Open **Configuration** and set the panel address, UDL password, MQTT
+2. Add this GitHub repository under **Settings → Add-ons → Add-on store →
+   ⋮ → Repositories**:
+   `https://github.com/michaelmarconi/texecom_alarm`
+3. Install **Texecom Alarm** from that repository (pre-built images from GHCR
+   when the matching version tag has been published; otherwise Supervisor
+   builds from git).
+4. Open **Configuration** and set the panel address, UDL password, MQTT
    settings, and which Part-Arm slots mean Home / Night on your panel.
    Details: [Documentation](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md). Part-Arm walkthrough:
    [Configure Home and Night](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/configure-part-arm.md).
-4. If another Connect client still holds the same module, stop it first:
+5. If another Connect client still holds the same module, stop it first:
    [Free the panel module](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md).
-5. Start the add-on and check the log for a successful panel login.
-6. Confirm an alarm control panel, in-use zone sensors, and **Alarm Panel
+6. Start the add-on and check the log for a successful panel login.
+7. Confirm an alarm control panel, in-use zone sensors, and **Alarm Panel
    Connection** appear in Home Assistant.
 
 ### This repository (local development)
@@ -146,3 +154,9 @@ Flaticon terms (see Credits). Protocol notes are observational — see
 
 [aarch64-shield]: https://img.shields.io/badge/aarch64-yes-green.svg
 [amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
+[ci-shield]: https://github.com/michaelmarconi/texecom_alarm/actions/workflows/ci.yml/badge.svg?branch=main
+[ci-url]: https://github.com/michaelmarconi/texecom_alarm/actions/workflows/ci.yml
+[version-shield]: https://img.shields.io/github/v/tag/michaelmarconi/texecom_alarm?label=version
+[version-url]: https://github.com/michaelmarconi/texecom_alarm/tags
+[license-shield]: https://img.shields.io/github/license/michaelmarconi/texecom_alarm
+[license-url]: https://github.com/michaelmarconi/texecom_alarm/blob/main/LICENSE

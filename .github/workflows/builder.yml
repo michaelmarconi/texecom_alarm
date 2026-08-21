@@ -1,0 +1,105 @@
+name: Builder
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: SemVer without v prefix (defaults to tag or config.yaml)
+        required: false
+        type: string
+
+env:
+  ARCHITECTURES: '["amd64", "aarch64"]'
+  IMAGE_NAME: texecom-alarm
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve SemVer
+        id: ver
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            V="${{ github.event.inputs.version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            V="${GITHUB_REF#refs/tags/v}"
+          else
+            V=$(sed -nE 's/^version:[[:space:]]*"?([0-9]+\.[0-9]+\.[0-9]+)"?.*/\1/p' texecom_alarm/config.yaml | head -1)
+          fi
+          echo "version=${V}" >>"$GITHUB_OUTPUT"
+          echo "Building version ${V}"
+
+      - name: Get build matrix
+        id: matrix
+        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@2026.06.0
+        with:
+          architectures: ${{ env.ARCHITECTURES }}
+          image-name: ${{ env.IMAGE_NAME }}
+
+  build:
+    name: Build ${{ matrix.arch }}
+    needs: resolve
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select base image
+        id: base
+        run: |
+          case "${{ matrix.arch }}" in
+            amd64) echo "from=ghcr.io/home-assistant/amd64-base:3.23" >>"$GITHUB_OUTPUT" ;;
+            aarch64) echo "from=ghcr.io/home-assistant/aarch64-base:3.23" >>"$GITHUB_OUTPUT" ;;
+            *) echo "Unsupported arch" >&2; exit 1 ;;
+          esac
+
+      - name: Build image
+        uses: home-assistant/builder/actions/build-image@2026.06.0
+        with:
+          arch: ${{ matrix.arch }}
+          context: texecom_alarm
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          image: ${{ matrix.image }}
+          image-tags: |
+            ${{ needs.resolve.outputs.version }}
+            latest
+          push: "true"
+          version: ${{ needs.resolve.outputs.version }}
+          build-args: |
+            BUILD_FROM=${{ steps.base.outputs.from }}
+
+  manifest:
+    name: Publish multi-arch manifest
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      packages: write
+    steps:
+      - name: Publish multi-arch manifest
+        uses: home-assistant/builder/actions/publish-multi-arch-manifest@2026.06.0
+        with:
+          architectures: ${{ env.ARCHITECTURES }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          image-name: ${{ env.IMAGE_NAME }}
+          image-tags: |
+            ${{ needs.resolve.outputs.version }}
+            latest

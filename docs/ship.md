@@ -25,7 +25,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | Backups | n/a | No extra datastore; HA backup of add-on options is sufficient |
 | Official HA Apps store | n/a | Will not take this; community GitHub repository is the intended path (`TODO.md`) |
 | Store-shaped repository | pass | Root `repository.yaml` + App in `texecom_alarm/` (catalogue layout). Local apps-devcontainer dual-binds the app subfolder to `/mnt/supervisor/apps/local/texecom_alarm` so `local_texecom_alarm` still works. |
-| Pre-built images (GHCR) | fail | No `image:` in `config.yaml`; no builder workflow. Even after catalogue layout, Supervisor would local-build from git (acceptable early, worse UX). |
+| Pre-built images (GHCR) | pass | `image: ghcr.io/michaelmarconi/texecom-alarm` in `texecom_alarm/config.yaml`; builder workflow on `v*` tags (amd64 + aarch64 → multi-arch manifest) |
 | RISK-017 fingerprint | pass | Working tree + history rewrite complete; Critical/High LAN/name/UDL fingerprint purged from `main` |
 | CHANGELOG vs product | pass | `CHANGELOG.md` `[0.1.0]` describes the real App; `[0.0.1]` retained as historical scaffold only |
 | Licence label consistency | pass | `Dockerfile` OCI label is MIT (matches `LICENSE`) |
