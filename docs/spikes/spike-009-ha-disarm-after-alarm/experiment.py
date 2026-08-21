@@ -13,7 +13,7 @@ zone. The script waits until the panel is in alarm (or drops the link),
 reconnects, then Disarms. You then say whether the sirens actually stopped.
 
 Usage:
-    TEXECOM_HOST=192.0.2.10 TEXECOM_PORT=10001 TEXECOM_UDL_PASSWORD=1234 \
+    TEXECOM_HOST=<panel-ip> TEXECOM_PORT=10001 TEXECOM_UDL_PASSWORD=<udl> \
         python3 experiment.py
 """
 
@@ -25,9 +25,9 @@ import sys
 import time
 import traceback
 
-HOST = os.environ.get("TEXECOM_HOST", "192.0.2.10")
+HOST = os.environ.get("TEXECOM_HOST", "").strip()
 PORT = int(os.environ.get("TEXECOM_PORT", "10001"))
-UDL_PASSWORD = os.environ.get("TEXECOM_UDL_PASSWORD", "1234")
+UDL_PASSWORD = os.environ.get("TEXECOM_UDL_PASSWORD", "")
 AREA_NUMBER = int(os.environ.get("TEXECOM_AREA_NUMBER", "1"))
 WAIT_FOR_ALARM_SECONDS = float(os.environ.get("TEXECOM_WAIT_FOR_ALARM_SECONDS", "180"))
 AFTER_DISARM_LISTEN_SECONDS = float(
@@ -461,6 +461,11 @@ def run() -> int:
 
 
 if __name__ == "__main__":
+    if not HOST:
+        raise SystemExit(
+            "Set TEXECOM_HOST to the panel address (no default). "
+            "Optional: TEXECOM_PORT (default 10001), TEXECOM_UDL_PASSWORD."
+        )
     try:
         sys.exit(run())
     except Exception as exc:  # noqa: BLE001 — top-level: report, don't hide

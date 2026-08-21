@@ -17,7 +17,7 @@
 **Open follow-ons:**
 - Optional arm-then-re-poll corroboration was skipped in the spike run (optional hardening, not a blocker).
 - How exit/entry transient states appear in the flag block versus only on live area pushes was not observed in the Disarmed-only run — live pushes may still be required for arming/pending MQTT states even when the snapshot covers settled Disarmed/Armed/PartArmed/InAlarm.
-- Wider area-bitmap layouts (the dual-request path used on some larger panels) were not exercised on this Elite 88.
+- Wider area-bitmap layouts (the dual-request path used on some larger panels) were not exercised on one household's Elite 88.
 
 ## Context
 
@@ -41,7 +41,7 @@ The alarm-control spec requires that on integration restart, the alarm entity re
 
 Chosen option: **Panel area-flags snapshot after login (and on reconnect)**
 
-SPIKE-007 Validated that after LOGIN the panel accepts `GetAreaFlags` (command byte `11`) with body `[start][count]` (this Elite 88 used `00 48` for start 0 / count 72 with `area_size=1` derived from zone count 88) and returns exactly `count * area_size` flag bytes. Per-area bits decode with priority Alarm(0) → InAlarm; else Armed(21)/FullArmed(22)/PartArmed(23)/ForceArmed(26) → Armed or PartArmed (+ PartArm1/2/3 slot bits); else Disarmed — the same decode today’s add-on uses after its “Updating all area states…” step. Production must call this snapshot after login (and after reconnect re-login), publish MQTT alarm state for in-use areas, then use `SETEVENTMESSAGES` pushes for ongoing updates. Part-Arm slot numbers from the snapshot map to HA Home/Night/Away only through install-time configuration (ADR-005).
+SPIKE-007 Validated that after LOGIN the panel accepts `GetAreaFlags` (command byte `11`) with body `[start][count]` (one household's Elite 88 used `00 48` for start 0 / count 72 with `area_size=1` derived from zone count 88) and returns exactly `count * area_size` flag bytes. Per-area bits decode with priority Alarm(0) → InAlarm; else Armed(21)/FullArmed(22)/PartArmed(23)/ForceArmed(26) → Armed or PartArmed (+ PartArm1/2/3 slot bits); else Disarmed — the same decode today’s add-on uses after its “Updating all area states…” step. Production must call this snapshot after login (and after reconnect re-login), publish MQTT alarm state for in-use areas, then use `SETEVENTMESSAGES` pushes for ongoing updates. Part-Arm slot numbers from the snapshot map to HA Home/Night/Away only through install-time configuration (ADR-005).
 
 ## Consequences
 

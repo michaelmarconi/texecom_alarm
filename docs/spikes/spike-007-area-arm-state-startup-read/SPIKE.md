@@ -36,7 +36,7 @@ We believe that after LOGIN the panel will accept a dedicated area/arm-state pol
   - Decodes per-area bits with priority: Alarm(0) → InAlarm; else Armed(21)/FullArmed(22)/PartArmed(23)/ForceArmed(26) → Armed or PartArmed (+ part-arm slot); else Disarmed.
   - `areaMap[88] = 8` → `tAreaSize = ceil(8/8) = 1` byte per flag for this Elite 88; `maxFlag = 72` when `areaSize !== 8`.
 - **Product need:** `spec-alarm-control.md` requires restart while armed/triggered to re-sync to the panel’s actual state, not default to disarmed. Live AREA pushes alone leave a restart gap until the next event (same class of failure ADR-006 closed for zones).
-- **Panel under test:** Elite 88 at `192.0.2.10:10001`, UDL `1234` (SPIKE-001); ComIP single-connection — the prior MQTT bridge must be stopped.
+- **Panel under test:** a Premier Elite 88 (`TEXECOM_HOST`/`TEXECOM_PORT`, UDL from env; SPIKE-001); ComIP single-connection — the prior MQTT bridge must be stopped.
 
 Research frames the candidate; live ACK + decodable payload against this panel is still required.
 
@@ -44,7 +44,7 @@ Research frames the candidate; live ACK + decodable payload against this panel i
 
 Throwaway `experiment.py` in this spike folder (same Connect framing style as SPIKE-006) was run as designed:
 
-1. Connect to `TEXECOM_HOST`/`TEXECOM_PORT` (defaults `192.0.2.10:10001`), wait ≥500ms, `LOGIN` with `TEXECOM_UDL_PASSWORD` (default `1234`).
+1. Connect to `TEXECOM_HOST`/`TEXECOM_PORT` (required env; no hardcoded host default), wait ≥500ms, `LOGIN` with `TEXECOM_UDL_PASSWORD` (required; no hardcoded default).
 2. `GETPANELIDENTIFICATION` → parse zone count (expect 88) → derive `area_size = ceil(areaMap[zone_count]/8)` (Elite 88 → 1).
 3. Send **`GetAreaFlags` (cmd = 11)** with body `start=0`, `count=72` when `area_size != 8` (Elite 88 path); if `area_size == 8`, use `count=30` then a second call `start=50`, `count=3`. Print raw request/response hex, length, and ACK/NAK.
 4. Decode flag bytes for area 1 (HOUSE — bit index 0): report Alarm / Armed / FullArmed / PartArmed / ForceArmed / PartArm1–3 bits and the derived status (Disarmed / Armed / PartArmed / InAlarm) using the same priority as the add-on decode above.
@@ -64,11 +64,11 @@ Throwaway `experiment.py` in this spike folder (same Connect framing style as SP
 
 ## Results
 
-Raw output of `experiment.py` against `192.0.2.10:10001` (UDL default `1234`), 2026-08-04 15:56:50–51:
+Raw output of `experiment.py` against the configured panel (`TEXECOM_HOST`/`TEXECOM_UDL_PASSWORD`), 2026-08-04 15:56:50–51:
 
 ```
 [2026-08-04 15:56:50] SPIKE-007 GetAreaFlags probe
-[2026-08-04 15:56:50] Target: 192.0.2.10:10001
+[2026-08-04 15:56:50] Target: <redacted>:10001
 [2026-08-04 15:56:50] Area number under test: 1
 [2026-08-04 15:56:50] Arm corroboration: skipped unless TEXECOM_ARM_MODE is set
 [2026-08-04 15:56:50] TCP connected; waiting done; sending LOGIN

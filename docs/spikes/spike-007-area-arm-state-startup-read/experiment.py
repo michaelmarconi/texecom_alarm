@@ -15,9 +15,9 @@ Default path sends only LOGIN, GETPANELIDENTIFICATION, and GetAreaFlags
 TEXECOM_ARM_MODE is set (optional corroboration).
 
 Env:
-  TEXECOM_HOST            default 192.0.2.10
+  TEXECOM_HOST            required (no default)
   TEXECOM_PORT            default 10001
-  TEXECOM_UDL_PASSWORD    default 1234
+  TEXECOM_UDL_PASSWORD    required (no default)
   TEXECOM_ARM_MODE        optional 0/1/2 (Away/Night/Home); if set, arm,
                           re-poll, then disarm for before/after corroboration
   TEXECOM_AREA_NUMBER     default 1 (HOUSE on this panel)
@@ -31,9 +31,9 @@ import socket
 import sys
 import time
 
-HOST = os.environ.get("TEXECOM_HOST", "192.0.2.10")
+HOST = os.environ.get("TEXECOM_HOST", "").strip()
 PORT = int(os.environ.get("TEXECOM_PORT", "10001"))
-UDL_PASSWORD = os.environ.get("TEXECOM_UDL_PASSWORD", "1234")
+UDL_PASSWORD = os.environ.get("TEXECOM_UDL_PASSWORD", "")
 ARM_MODE = os.environ.get("TEXECOM_ARM_MODE")
 AREA_NUMBER = int(os.environ.get("TEXECOM_AREA_NUMBER", "1"))
 SETTLE_SECONDS = float(os.environ.get("TEXECOM_SETTLE_SECONDS", "35"))
@@ -324,6 +324,11 @@ def disarm_body(area_number: int, area_size: int) -> bytes:
 
 
 def main() -> int:
+    if not HOST:
+        raise SystemExit(
+            "Set TEXECOM_HOST to the panel address (no default). "
+            "Optional: TEXECOM_PORT (default 10001), TEXECOM_UDL_PASSWORD."
+        )
     log("SPIKE-007 GetAreaFlags probe")
     log(f"Target: {HOST}:{PORT}")
     log(f"Area number under test: {AREA_NUMBER}")

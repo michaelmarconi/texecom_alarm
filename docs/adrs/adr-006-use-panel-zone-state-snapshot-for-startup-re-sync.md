@@ -38,7 +38,7 @@ The zone-monitoring spec requires that on integration restart, zone entities re-
 
 Chosen option: **Panel zone-state snapshot after login (and on reconnect)**
 
-SPIKE-006 Validated that after LOGIN the panel accepts `GetZoneState` (command byte `2`) with body `[startZone][zoneCount]` (1-byte `startZone` when panel zone count ≤ 256; this Elite 88 used `01 58` for start 1 / count 88) and returns exactly `zoneCount` status bytes. Low two bits decode as Secure / Active / Tamper / Short — the same map already used for unsolicited ZONE events. Production must call this snapshot after login (and after reconnect re-login), publish MQTT state for in-use zones, then use `SETEVENTMESSAGES` pushes for ongoing updates. Batches of up to 168 zones per request match observed add-on behaviour; this panel’s 88 zones fit in one request.
+SPIKE-006 Validated that after LOGIN the panel accepts `GetZoneState` (command byte `2`) with body `[startZone][zoneCount]` (1-byte `startZone` when panel zone count ≤ 256; one household's Elite 88 used `01 58` for start 1 / count 88) and returns exactly `zoneCount` status bytes. Low two bits decode as Secure / Active / Tamper / Short — the same map already used for unsolicited ZONE events. Production must call this snapshot after login (and after reconnect re-login), publish MQTT state for in-use zones, then use `SETEVENTMESSAGES` pushes for ongoing updates. Batches of up to 168 zones per request match observed add-on behaviour; an 88-zone Premier Elite's zones fit in one request.
 
 ## Consequences
 

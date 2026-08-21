@@ -13,7 +13,7 @@
 **Decisions this unlocks:**
 - Whether to build dynamic, panel-driven zone discovery instead of a hand-maintained zone list
 - Whether the existing add-on needs to be fully stopped (not just left running) before the new integration can connect, which affects how the cutover between the two is sequenced
-- Whether the project's documentation should be corrected to say the panel is protected by its factory-default password rather than having no password at all
+- Whether the project's documentation should be corrected to say LOGIN requires a UDL password (often the common factory default on unaltered installs) rather than an empty credential at all
 - Whether the "~35 zones" figure used throughout the project's documentation should be updated to the actual number of in-use zones found on the panel
 
 ## Question
@@ -61,12 +61,10 @@ not refute the hypothesis — those projects target the older serial/Crestron tr
 Texecom Connect/ComIP protocol this spike is scoped to — but it is a useful caveat: even where a
 protocol-level enumeration capability exists, not every integration chooses to use it.
 
-**Live reachability check (this session).** A direct TCP probe from this sandbox to
-`192.0.2.10:10001` (the panel address/port recorded in `docs/brief.md`) succeeded
-(`cat < /dev/null > /dev/tcp/192.0.2.10/10001` returned exit 0, versus a connection-refused
-control against an unrelated address). This session appears to run with real LAN reachability to
-the live panel, which means the experiment below can run against the actual hardware rather than
-being deferred to an Unvalidated/research-only path.
+**Live reachability check (this session).** A direct TCP probe from the sandbox to the
+configured panel host/port (`TEXECOM_HOST`/`TEXECOM_PORT`) succeeded. The experiment below ran
+against live hardware rather than being deferred to an Unvalidated/research-only path.
+(Host addresses are not recorded here.)
 
 ## Experiment Design
 
@@ -74,9 +72,9 @@ A standalone Python 3 script (`experiment.py`) reimplements the minimal subset o
 above from first principles (not by importing the GPL/Apache-licensed prior art directly, to keep
 this project's own protocol notes self-produced per RISK-008) and runs it against the live panel:
 
-1. Open a TCP connection to the panel (`TEXECOM_HOST`/`TEXECOM_PORT` env vars, defaulting to the
-   address recorded in `docs/brief.md`), wait 500ms per the framing note above.
-2. Send `LOGIN` (command byte `0x01`) with an empty password body; confirm `ACK` (`0x06`).
+1. Open a TCP connection to the panel (`TEXECOM_HOST`/`TEXECOM_PORT` env vars — required, no
+   hardcoded default), wait 500ms per the framing note above.
+2. Send `LOGIN` (command byte `0x01`) with the UDL password from `TEXECOM_UDL_PASSWORD`; confirm `ACK` (`0x06`).
 3. Send `GETPANELIDENTIFICATION` (command byte `0x16`/22); parse the 32-byte response into
    panel type, zone count, and firmware version.
 4. Loop zone numbers `1..zone_count`; send `GETZONEDETAILS` (command byte `0x03`) with the zone
@@ -91,9 +89,9 @@ so it does not exercise the collision-crash conditions RISK-001/SPIKE-002 is sco
 
 | Criterion | Target | Actual |
 |-----------|--------|--------|
-| Panel reports a zone count without config input | `GETPANELIDENTIFICATION` returns a non-null integer zone count | **88** — raw response `'Elite 88     ENG->SW V6.02.02LS1'` (Elite 88 panel model, firmware V6.02.02LS1) |
+| Panel reports a zone count without config input | `GETPANELIDENTIFICATION` returns a non-null integer zone count | **88** — raw response identified an Elite 88 panel model (firmware V6.02.02LS1) |
 | Panel reports per-zone type without config input | `GETZONEDETAILS` returns a valid zone-type code (0–21) for every queried zone number | **88/88 zones queried successfully**; 6 distinct type codes observed (0 Unused, 1 Entry/Exit 1, 2 Entry/Exit 2, 3 Interior, 4 Perimeter, 8 Silent PA) |
-| Panel reports per-zone name/text without config input | `GETZONEDETAILS` returns a non-empty decoded name string for in-use zones | **40/88 zone slots returned non-empty, human-readable name text** (e.g. `'FRONT DOOR'`, `'STUDY EXAMPLE PIR'`, `'MSTR BED PANIC'`); the other 48 all decoded as `zoneType=0` (Unused) with empty text — consistent with unprogrammed hardware zone slots, not a decode failure |
+| Panel reports per-zone name/text without config input | `GETZONEDETAILS` returns a non-empty decoded name string for in-use zones | **40/88 zone slots returned non-empty, human-readable name text**; the other 48 all decoded as `zoneType=0` (Unused) with empty text — consistent with unprogrammed hardware zone slots, not a decode failure |
 | Read-only enumeration is safe (no crash/collision) | No forced disconnect (`+++`), repeated NAK, or CRC failure during the full enumeration pass | **True** — all 88 `GETZONEDETAILS` calls succeeded on the first attempt (zero retries, zero timeouts, zero CRC mismatches), login ACKed cleanly, socket closed cleanly |
 
 *Actuals are populated from experiment output only — not from documentation, vendor claims, or community reports.*
@@ -104,71 +102,28 @@ still running) hung at the TCP `connect()` stage for the full 8s timeout with ze
 (0.00s), and the enumeration run above completed immediately afterward. This is strong evidence the
 ComIP module accepts only **one TCP client at a time**; see `## Decisions required`.
 
-**Unplanned but load-bearing sub-experiment #2.** The first login attempt, with an empty password body
-(per `docs/brief.md`'s "no `udl_password` set" note), was cleanly **NAK**'d by the panel (not a timeout —
-framing/CRC round-tripped correctly). Retrying with the factory-default UDL password `1234` (documented in
-`davidMbrooke/texecom-connect`'s own `__main__` block as the standard factory default) was **ACK**'d
-immediately. This means the panel is not actually running with no password/authentication as
-`docs/brief.md`/RISK-009 currently state — it's running with the factory-default password still active,
-which is a different (and correctable) fact; see `## Decisions required` and `## Open questions`.
+**Unplanned but load-bearing sub-experiment #2.** A LOGIN with an empty password body was cleanly
+**NAK**'d (framing/CRC round-tripped). LOGIN with a non-empty UDL password (panels often ship with
+factory default `1234` — see consumer docs) was **ACK**'d. Empty credential is therefore not a valid
+assumption; UDL must be supplied. See `## Decisions required` and `## Open questions`.
 
 ## Results
 
-Raw output of `experiment.py`, run against the live panel at `192.0.2.10:10001` with
-`TEXECOM_UDL_PASSWORD=1234` and the prior MQTT bridge stopped:
+Raw output of `experiment.py` against the live panel (`TEXECOM_HOST`/`TEXECOM_PORT`,
+`TEXECOM_UDL_PASSWORD` set; the prior MQTT bridge stopped). Host address and zone name
+strings are redacted for publish hygiene (RISK-017):
 
 ```
 === SPIKE-001 experiment: zone enumeration feasibility ===
-Target: 192.0.2.10:10001
+Target: <redacted>:10001
 [ok] TCP connected
-[ok] LOGIN (password='1234')
+[ok] LOGIN (password set)
 [ok] GETPANELIDENTIFICATION raw: 'Elite 88     ENG->SW V6.02.02LS1'
      parsed parts: ['Elite', '88', 'ENG->SW', 'V6.02.02LS1']
 [ok] panel reports 88 zones
-  zone  1: type=Entry/Exit 1           name='FRONT DOOR'
-  zone  2: type=Perimeter              name='GF HALLWAY PIR'
-  zone  3: type=Interior               name='PLAYROOM PIR'
-  zone  4: type=Interior               name='STUDY EXAMPLE PIR'
-  zone  5: type=Interior               name='LIVING RM FR SLD'
-  zone  6: type=Unused                 name=''
-  zone  7: type=Interior               name='LIVING RM L SLDE'
-  zone  8: type=Interior               name='GUEST BATH WIND'
-  zone  9: type=Entry/Exit 2           name='UTILITY DOOR'
-  zone 10: type=Perimeter              name='UTILITY PIR'
-  zone 11: type=Interior               name='UTILITY L WINDOW'
-  zone 12: type=Interior               name='UTILITY R WINDOW'
-  zone 13: type=Interior               name='EXAMPLE RM L WIND'
-  zone 14: type=Interior               name='EXAMPLE RM R WIND'
-  zone 15: type=Interior               name='MSTR BATH BIG R'
-  zone 16: type=Interior               name='MSTR BATH BIG L'
-  zone 17: type=Interior               name='GUEST BED WIND R'
-  zone 18: type=Interior               name='MSTR BED L WIND'
-  zone 19: type=Interior               name='LIVING RM PIR'
-  zone 20: type=Interior               name='KITCHEN L SLIDE'
-  zone 21: type=Interior               name='PANTRY R WINDOW'
-  zone 22: type=Interior               name='KITCHEN R SLIDE'
-  zone 23: type=Interior               name='GUEST BED L WIND'
-  zone 24: type=Interior               name='GUEST BED SLIDE'
-  zone 25: type=Silent PA              name='MSTR BED PANIC'
-  zone 26: type=Interior               name='UTIL L WIN SHK'
-  zone 27: type=Interior               name='UTIL R WIN SHK'
-  zone 28: type=Unused                 name=''
-  zone 29: type=Interior               name='MSTR BATH SML L'
-  zone 30: type=Interior               name='MSTR BATH SML S'
-  zone 31: type=Interior               name='FF HALLWAY PIR'
-  zone 32: type=Interior               name='GUEST BED PIR'
-  zone 33: type=Interior               name='GUEST BD W R SHK'
-  zone 34: type=Interior               name='PANTRY R WIN SHK'
-  zone 35: type=Interior               name='GUEST BD R W SHK'
-  zone 36: type=Interior               name='MSTR BED L SHK'
-  zone 37: type=Interior               name='ETHAN L WIN SHK'
-  zone 38: type=Interior               name='ETHAN R WIN SHK'
-  zone 39: type=Interior               name='MSTR BTH BG L SH'
-  zone 40: type=Interior               name='MSTR BTH BG R SH'
-  zone 41: type=Interior               name='KITCHEN PIR'
-  zone 42: type=Entry/Exit 2           name='GARAGE MIR'
-  zone 43: type=Unused                 name=''
-  ... zones 43-88 all type=Unused, name='' ...
+  … 40 in-use zones with human-readable panel name text (types Entry/Exit, Perimeter,
+    Interior, Silent PA); 48 Unused empty slots …
+  (per-zone name dump omitted — household layout fingerprint)
 
 === Summary ===
 Zone count from panel: 88
@@ -193,18 +148,16 @@ stopped, connected in 0.00s.
 **Hypothesis supported.** The panel returned a usable zone count (`88`, via
 `GETPANELIDENTIFICATION`) and, for every one of those 88 zone slots, a decoded type and name/text
 via `GETZONEDETAILS` — with zero framing errors, zero retries, and zero timeouts across the full
-88-zone pass (`no_crash_or_collision: True`). 40 of the 88 slots came back with real, human-legible
-zone names matching the household's actual rooms/openings (`FRONT DOOR`, `STUDY EXAMPLE PIR`,
-`MSTR BED PANIC`, etc. — cross-checked against the zone slugs already documented in
-`docs/ha-alarm-usage-spec.md`); the remaining 48 decoded as `zoneType=0` (Unused), which is the
+88-zone pass (`no_crash_or_collision: True`). 40 of the 88 slots came back with non-empty
+human-legible name text; the remaining 48 decoded as `zoneType=0` (Unused), which is the
 expected signal for unprogrammed hardware zone slots on an 88-zone-capacity panel, not a decode
 failure. This directly refutes the alternative ("zones must be hand-transcribed into config") for
-this panel and firmware (`Elite 88`, `V6.02.02LS1`).
+a Premier Elite 88 on firmware `V6.02.02LS1`.
 
 Two secondary findings emerged that were not part of the original hypothesis but carry their own
 architectural consequences (see `## Decisions required`): the ComIP module appears to accept only
-one TCP client at a time, and the panel's UDL password is the factory default `1234`, not blank as
-`docs/brief.md` currently states.
+one TCP client at a time, and LOGIN requires a non-empty UDL password (blank is NAK'd; factory
+default `1234` is commonly accepted on unaltered installs — consumer docs note this generically).
 
 ## Options
 
@@ -273,7 +226,7 @@ at runtime.
   ComIP module unless a second module/port is used?
 - `docs/brief.md`'s Current Setup note ("no `udl_password` set") and RISK-009's severity rationale
   both describe the panel as unauthenticated; this experiment shows the panel is actually running
-  with the factory-default password (`1234`) active and required for every command, not an empty
+  with a UDL password (commonly the factory default `1234` on unaltered installs) active and required for every command, not an empty
   credential. Should these two documents be corrected to reflect an authenticated-with-a-known-
   default-password panel, which changes RISK-009's exact framing (still low real-world exposure per
   its own rationale, but for a different reason)?

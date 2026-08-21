@@ -38,8 +38,8 @@ side-by-side-friendly with the prior MQTT bridge bare slugs), with stable zone-n
   sensors, and the garage mirror sensor) reproduced as HA `binary_sensor` entities
   reflecting current physical/panel zone state.
 - Zone **Entity ID** shape: `binary_sensor.texecom_alarm_{slug}_zone_{N}` (e.g.
-  `binary_sensor.texecom_alarm_example_zone_l_win_shk_zone_37`). Stable `unique_id` keyed
-  by zone number (e.g. `texecom_alarm_zone_37`). Friendly **name** remains
+  `binary_sensor.texecom_alarm_front_door_zone_1`). Stable `unique_id` keyed
+  by zone number (e.g. `texecom_alarm_zone_1`). Friendly **name** remains
   Title-Cased panel text without `_zone_N`.
 - Entity naming/state accompanied by a documented migration path for consumers of
   today's `binary_sensor.texecom_alarm_*` (scheme match, not bit-identical legacy
@@ -108,15 +108,15 @@ side-by-side-friendly with the prior MQTT bridge bare slugs), with stable zone-n
    - **How we'll know:** end-to-end test (stand-in: FakePanel) for last-known zone
      state plus panel-link connectivity sensor; optional manual acceptance test for
      a live connection drop
-6. Given discovery for an in-use zone (e.g. Example L Win Shk, zone 37), When Home
+6. Given discovery for an in-use zone (e.g. Front Door, zone 1), When Home
    Assistant creates the entity, Then Entity ID is
    `binary_sensor.texecom_alarm_{slug}_zone_{N}` (e.g.
-   `binary_sensor.texecom_alarm_example_zone_l_win_shk_zone_37`) — not bare `_{N}` and not
+   `binary_sensor.texecom_alarm_front_door_zone_1`) — not bare `_{N}` and not
    slug-only without `_zone_{N}`.
    - **How we'll know:** unit test on discovery payload; end-to-end test
      (stand-in: FakePanel)
 7. Given the same zone rediscovered after a wipe/restart, When the entity is
-   recreated, Then `unique_id` remains zone-stable (e.g. `texecom_alarm_zone_37`)
+   recreated, Then `unique_id` remains zone-stable (e.g. `texecom_alarm_zone_1`)
    so a user-renamed Entity ID can stick across rediscovery.
    - **How we'll know:** unit test on discovery `unique_id`
 8. Given discovery, When the entity appears in Home Assistant, Then the friendly
@@ -166,7 +166,7 @@ side-by-side-friendly with the prior MQTT bridge bare slugs), with stable zone-n
   capability is delivered.
 - Entity naming/state values must use the `texecom_alarm_*` scheme with explicit
   `_zone_{N}` on zone Entity IDs, with a documented migration for consumers listed
-  in `docs/ha-alarm-usage-spec.md` (not bit-identical legacy IDs).
+  in `the product brief and capability specs` (not bit-identical legacy IDs).
 
 ## Open Questions
 

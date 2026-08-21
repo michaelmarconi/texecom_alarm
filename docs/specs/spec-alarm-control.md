@@ -146,7 +146,7 @@ normal arm/disarm cycles or an actual alarm trigger.
 - The `house_alarm_panel` wrapper entity's guard-condition and notification logic is
   not reimplemented here — this spec only needs to keep the underlying entity's
   forwarding contract (state in, command out) intact.
-- Must support all seven states referenced in `docs/ha-alarm-usage-spec.md`:
+- Must support all seven MQTT alarm states used by Home Assistant:
   disarmed, armed_away, armed_night, armed_home, triggered, pending, arming.
 
 ## Open Questions
