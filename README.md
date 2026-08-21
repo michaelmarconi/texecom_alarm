@@ -26,6 +26,10 @@ alarm, when other apps share the network path, or when the connection drops.
 - Ignores unexpected panel chatter instead of crashing
 - Reconnects on its own (and waits longer after a real alarm, when the panel
   often blocks the network briefly)
+
+If Disarm from Home Assistant does nothing **only while the alarm is sounding**,
+HA may be pointed at the installer's signalling module rather than your ComIP —
+see [this guide](docs/ha-loses-panel-during-alarm.md).
 - Keeps your last known alarm and zone states in Home Assistant; a separate
   **panel connection** sensor shows whether the link is live or catching up
 - Recovers stuck sessions without a manual add-on restart
