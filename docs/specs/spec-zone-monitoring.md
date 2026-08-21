@@ -8,7 +8,7 @@
 
 ## Problem
 
-Zone monitoring itself works fine today via `the prior MQTT bridge`'s MQTT discovery, but it
+Zone monitoring itself works fine today vithe prior MQTT bridge's MQTT discovery, but it
 depends entirely on that closed-source, unreliable add-on, which is being removed.
 Once it's gone, Home Assistant automations and the household's Security dashboard
 will lose all zone-state visibility unless that dependency is eliminated first.
@@ -23,7 +23,7 @@ do not claim the same bare `texecom_alarm_{slug}` ids.
 Home Assistant — the primary consumer, since automations and guard-condition
 aggregates run off zone state — and the household, who occasionally check the
 Security dashboard, have full zone-state visibility reproduced as native HA
-entities, with zero runtime dependency on `the prior MQTT bridge`, so it can be safely
+entities, with zero runtime dependency on the prior MQTT bridge, so it can be safely
 uninstalled once this is delivered.
 
 Zone Entity IDs use an explicit `_zone_{N}` disambiguator (readable, unique, and
@@ -48,7 +48,7 @@ side-by-side-friendly with the prior MQTT bridge bare slugs), with stable zone-n
   time-sensitive automations (e.g. the 60s auto-arm motion-cancel countdown, the
   "I'm leaving" script's wait for the front door to transition on→off) keep
   working correctly.
-- Operation fully independent of `the prior MQTT bridge`, which will be uninstalled once
+- Operation fully independent of the prior MQTT bridge, which will be uninstalled once
   this capability is delivered.
 - The same connectivity/freshness signal defined in `spec-alarm-control.md` covers
   zone entities too: their availability is governed solely by whether the app
@@ -77,12 +77,12 @@ side-by-side-friendly with the prior MQTT bridge bare slugs), with stable zone-n
 
 ## Acceptance Criteria
 
-1. Given the new integration is running with `the prior MQTT bridge` fully uninstalled,
+1. Given the new integration is running with the prior MQTT bridge fully uninstalled,
    When Home Assistant starts up, Then all ~35 zone entities are present with
    correct names/types (door contact, window contact, shock sensor, PIR motion,
    other).
    - **How we'll know:** manual acceptance test (live ~35 inventory match with
-     `the prior MQTT bridge` uninstalled); in-use zone discovery also covered by end-to-end
+     the prior MQTT bridge uninstalled); in-use zone discovery also covered by end-to-end
      test (stand-in: FakePanel)
 2. Given one representative zone from each of the five sensor classes (door,
    window, shock, PIR, other), When that zone is physically triggered and then
@@ -96,10 +96,10 @@ side-by-side-friendly with the prior MQTT bridge bare slugs), with stable zone-n
    continues to function correctly without modification to its own logic.
    - **How we'll know:** manual acceptance test (household HA aggregates/automations
      against live zone entities)
-4. Given `the prior MQTT bridge` has been fully uninstalled, When zone monitoring is
+4. Given the prior MQTT bridge has been fully uninstalled, When zone monitoring is
    exercised end-to-end, Then no functionality depends on it being present — no
    crashes, no missing data, no silent fallback behavior.
-   - **How we'll know:** manual acceptance test (`the prior MQTT bridge` uninstalled; zone
+   - **How we'll know:** manual acceptance test (the prior MQTT bridge uninstalled; zone
      monitoring exercised)
 5. Given the panel/network connection drops, When reconnection is in progress,
    Then every zone `binary_sensor` entity continues reporting its last known state
@@ -162,7 +162,7 @@ side-by-side-friendly with the prior MQTT bridge bare slugs), with stable zone-n
   trigger/clear, so time-sensitive automations (the 60s auto-arm countdown
   cancel-on-motion, front-door on→off transition detection) keep working
   correctly.
-- No runtime dependency on `the prior MQTT bridge` — it will be uninstalled once this
+- No runtime dependency on the prior MQTT bridge — it will be uninstalled once this
   capability is delivered.
 - Entity naming/state values must use the `texecom_alarm_*` scheme with explicit
   `_zone_{N}` on zone Entity IDs, with a documented migration for consumers listed

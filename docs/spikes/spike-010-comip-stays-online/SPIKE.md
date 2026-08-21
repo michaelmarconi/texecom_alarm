@@ -25,7 +25,7 @@ We believe the ComIP session will stay up through Arm Home → Disarm and throug
 
 ## Research
 
-Earlier live work treated “junk on the wire around Home arm/disarm” and “TCP drop at a real alarm” as normal Connect behaviour on this Elite 88 (SPIKE-002, ADR-002, SPIKE-009). Those sessions used `192.0.2.10:10001`. In 2026-08-21 that address was identified as the **installer SmartCom**, not the homeowner **ComIP**. Alarm reporting is supposed to seize the SmartCom; HA on that IP gets kicked off. `the prior MQTT bridge` historically crashed on Home arm/disarm (CRC / unexpected start byte) on the same kind of shared path.
+Earlier live work treated “junk on the wire around Home arm/disarm” and “TCP drop at a real alarm” as normal Connect behaviour on this Elite 88 (SPIKE-002, ADR-002, SPIKE-009). Those sessions used `192.0.2.10:10001`. In 2026-08-21 that address was identified as the **installer SmartCom**, not the homeowner **ComIP**. Alarm reporting is supposed to seize the SmartCom; HA on that IP gets kicked off. the prior MQTT bridge historically crashed on Home arm/disarm (CRC / unexpected start byte) on the same kind of shared path.
 
 The ComIP is a second Ethernet module. Two clients can be live at once if they use **different** IPs. A quiet Connection-ON stretch is **not** evidence; the bar is the two sequences that used to fail: **Arm Home → Disarm**, and **Arm → alarm → Disarm from HA**, with the link remaining ON.
 
@@ -33,7 +33,7 @@ This spike uses the **add-on on the ComIP**. It does not stop the add-on to send
 
 ## Experiment Design
 
-Add-on running; `panel_host` is the ComIP (not the SmartCom). `the prior MQTT bridge` off, or only on the SmartCom IP.
+Add-on running; `panel_host` is the ComIP (not the SmartCom). the prior MQTT bridge off, or only on the SmartCom IP.
 
 `experiment.py` in this folder: MQTT subscribe to panel connection and alarm state; print timestamped lines. Start it before Walk A; leave it running through Walk B.
 

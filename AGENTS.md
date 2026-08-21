@@ -5,7 +5,7 @@
 
 ## Project
 
-Texecom Alarm — HA Integration Replacement: a ground-up, self-built Home Assistant integration for a Texecom Premier Elite alarm panel (via ComIP/Texecom Connect), replacing the closed-source, unreliable `the prior MQTT bridge` add-on with something that doesn't crash and finally supports Home arm mode.
+Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel over ComIP/Texecom Connect and publishes zone sensors and an alarm control panel over MQTT discovery, including Home arm mode.
 
 ## Integration branch
 

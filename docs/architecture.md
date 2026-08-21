@@ -8,22 +8,22 @@
 
 ## Overview
 
-The household today arms, disarms, and watches its alarm through `the prior MQTT bridge`. Two
+The household today arms, disarms, and watches its alarm through the prior MQTT bridge. Two
 specific behaviours motivate this project: arming to Home mode has never completed
 without an add-on crash, and crashes/restarts happen occasionally under other
 conditions too — both empirically confirmed against the live panel in this project's
 own spikes. Every day, several times a day, the household's automations, dashboard,
-and HomeKit bridges all depend on `the prior MQTT bridge` staying up. The same app is also
+and HomeKit bridges all depend on the prior MQTT bridge staying up. The same app is also
 intended for other Premier Elite households, published as a public Home Assistant
 Add-on with install-time options for facts that differ per panel.
 
 The Texecom Alarm App takes over that role: a self-built Home Assistant App (add-on)
 that lives on the same Home Assistant OS host, talks to a **dedicated local network
 module** on the panel (not the installer module used for the vendor app and
-monitoring station), takes over that module’s Connect login once `the prior MQTT bridge` is
+monitoring station), takes over that module’s Connect login once the prior MQTT bridge is
 stopped on the same address, and republishes everything Home Assistant already
 consumes — zone state and alarm state — over the same MQTT discovery mechanism
-`the prior MQTT bridge` uses today. Nothing on the consuming side (the `house_alarm_panel`
+the prior MQTT bridge uses today. Nothing on the consuming side (the `house_alarm_panel`
 template wrapper, its automations, the Security dashboard, the HomeKit bridges)
 needs to change to keep working.
 
@@ -37,7 +37,7 @@ when sirens start”; pointing it at a ComIP reserved for local control does not
 socket dies — mis-pointed installs and ordinary frame noise exist — but the long
 wait after a trigger is a safety net, not the expected path on a correctly chosen
 module. Second, each network module only accepts one Connect login at a time, so
-the handoff from `the prior MQTT bridge` on *that* address has to be sequenced; a second
+the handoff from the prior MQTT bridge on *that* address has to be sequenced; a second
 module can hold its own login at the same time.
 
 Building this commits the project to:
@@ -141,7 +141,7 @@ broker) and its internal shape are detailed under `## Components` below.
   (ADR-011). Not the same schedule as progressive first-login backoff.
 - **MQTT broker unreachable** — out of scope to solve beyond standard client
   reconnect behaviour; this app has the same standing dependency on the broker that
-  `the prior MQTT bridge` does today.
+  the prior MQTT bridge does today.
 
 ## Components
 
@@ -176,7 +176,7 @@ flowchart LR
 ```
 
 **Role:** Bridges the Texecom Premier Elite panel's ComIP/Connect-protocol session to
-Home Assistant, taking over the role `the prior MQTT bridge` plays today.
+Home Assistant, taking over the role the prior MQTT bridge plays today.
 **Technology:** Python 3 (ADR-012), packaged as a Home Assistant App (Docker image on
 `ghcr.io/home-assistant/base`, s6-overlay-supervised process) — the App-not-integration
 shape is ADR-003. Framing/CRC/resync/decode and arm/disarm command work were validated
@@ -197,7 +197,7 @@ discovery payloads (ADR-003). Clean rename of that connectivity entity’s
   module** (ADR-001, ADR-013, ADR-014, ADR-006, ADR-008, ADR-009, ADR-010,
   ADR-011) — not the installer signalling module.
 - The household's MQTT broker, as a standing runtime dependency (ADR-003) — the same
-  broker `the prior MQTT bridge` already uses today.
+  broker the prior MQTT bridge already uses today.
 - App configuration (panel host/port, UDL password, MQTT broker settings, and the
   Home/Night→Part-Arm slot mapping) via the HA Supervisor's
   `config.yaml`/`options.json`/`bashio::config` mechanism, already scaffolded in this
@@ -303,7 +303,7 @@ Key behaviours:
   decodes a transition into `in alarm`, so the household retains immediate context
   even if the ensuing reconnect takes the full observed window to complete.
 - **Cutover dependency** (ADR-001, ADR-013): each network module accepts only one
-  Connect login at a time, so `the prior MQTT bridge` must be fully stopped on the **same**
+  Connect login at a time, so the prior MQTT bridge must be fully stopped on the **same**
   address before this app's first connection attempt. A second module (vendor app /
   monitoring) may keep its own login.
 - **Arm/disarm command handling** (ADR-008): accepts `arm_away` / `arm_night` /
@@ -321,8 +321,8 @@ Key behaviours:
 
 ### Startup and zone discovery
 
-Runs once per app start, after the operator has stopped `the prior MQTT bridge` as a one-time
-cutover step (the ComIP module will not accept a second client while `the prior MQTT bridge`
+Runs once per app start, after the operator has stopped the prior MQTT bridge as a one-time
+cutover step (the ComIP module will not accept a second client while the prior MQTT bridge
 still holds the session).
 
 ```mermaid
@@ -529,8 +529,8 @@ distinguish backoff from a hang.
 **Deployment:** Ships as a Home Assistant App (add-on) using the existing
 `config.yaml`/`Dockerfile`/`rootfs` scaffold (arch: `aarch64`, `amd64`), run as a
 single s6-supervised process that restarts automatically on a non-zero exit. Cutover
-from `the prior MQTT bridge` is a hard sequencing step **on the dedicated local module**, not
-a side-by-side rollout on that same IP: `the prior MQTT bridge` must be stopped before this
+from the prior MQTT bridge is a hard sequencing step **on the dedicated local module**, not
+a side-by-side rollout on that same IP: the prior MQTT bridge must be stopped before this
 app's first connection attempt (ADR-001). The installer signalling module may stay
 up for the vendor app and monitoring (ADR-013).
 
@@ -561,7 +561,7 @@ up for the vendor app and monitoring (ADR-013).
   needs confirmation before building a dedicated reset signal.
 - **Whether the ComIP module's one-connection-at-a-time behaviour is a fixed
   hardware/firmware limit or a configurable installer setting** was not tested — cutover
-  still assumes a hard stop of `the prior MQTT bridge` before this app connects (ADR-001).
+  still assumes a hard stop of the prior MQTT bridge before this app connects (ADR-001).
   Two *different* module IPs can each hold a login (ADR-013).
 - **Whether to add a last-known-good cached zone list fallback** when the panel can't be
   reached at startup (ADR-001 Option C) remains an open follow-on — no offline fallback

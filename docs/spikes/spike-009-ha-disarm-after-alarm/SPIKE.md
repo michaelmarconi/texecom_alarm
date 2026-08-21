@@ -45,7 +45,7 @@ One live siren. Add-on running. No `experiment.py` unless the HA path is impossi
 
 Quiet work (zones, arm/disarm each mode, phone app) happens **first**, with no sirens. Then:
 
-1. Add-on running; `the prior MQTT bridge` not running.
+1. Add-on running; the prior MQTT bridge not running.
 2. Arm from Home Assistant (one mode is enough for the siren).
 3. Open a zone so the alarm actually sounds. Do not enter a code yet.
 4. Watch Home Assistant: alarm shows triggered; connection goes off if the panel drops the link; last-trigger snapshot present; add-on still running; alarm entity not blanked.
@@ -68,7 +68,7 @@ Do not send Reset. Do not run a second trigger for this spike.
 
 ## Results
 
-Live run 2026-08-21, add-on `local_texecom_alarm` running (TRACE). `experiment.py` not used. `the prior MQTT bridge` stopped first.
+Live run 2026-08-21, add-on `local_texecom_alarm` running (TRACE). `experiment.py` not used. the prior MQTT bridge stopped first.
 
 MQTT (`/tmp/spike-009/mqtt.log`):
 

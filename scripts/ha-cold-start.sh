@@ -285,7 +285,7 @@ ensure_texecom() {
   st="$(app_state local_texecom_alarm)"
   log "local_texecom_alarm state=$st"
   if [[ "$st" == "error" ]]; then
-    log "WARNING: Texecom in error — often ComIP single-connection (stop the prior MQTT bridge / other clients). Tail:"
+    log "WARNING: Texecom in error — often ComIP single-connection (stop other Connect clients). Tail:"
     ha apps logs local_texecom_alarm 2>/dev/null | tail -n 15 | sed 's/^/  | /' || true
   fi
 }

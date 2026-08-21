@@ -142,11 +142,19 @@ known state. Use **Alarm Panel Connection** to tell live data from a stale link.
 Notifications, HomeKit, and household arming rules belong in your own Home
 Assistant setup — not inside this add-on.
 
+## Further reading
+
+- [Getting started](README.md#getting-started)
+- [Configure Home and Night](docs/how-to/configure-part-arm.md)
+- [Stop other Connect clients](docs/how-to/stop-other-connect-clients.md)
+- HA locked out only while the alarm is sounding:
+  [wrong network module / COM-port signalling](docs/ha-loses-panel-during-alarm.md)
+- [Availability vs panel connection](docs/concepts/availability-and-connection.md)
+- [MQTT topics](docs/reference/mqtt.md)
+
 ## Support
 
 - Overview: [README](README.md)
-- HA locked out only while the alarm is sounding:
-  [wrong network module / COM-port signalling](docs/ha-loses-panel-during-alarm.md)
 - Issues: use the GitHub repository linked from the add-on store listing
 
 ## Credits

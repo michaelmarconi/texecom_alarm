@@ -51,7 +51,7 @@ SPIKE-005 confirmed `cmd=6` as the shared set-arm-mode command (body mode byte `
 
 ## Confirmation
 
-Against a live panel with `the prior MQTT bridge` stopped, the app (or an equivalent client using the same commands) can arm Away, arm Night, arm Home, and disarm, each producing the expected panel acknowledgement and AREA-state sequence recorded in SPIKE-005 / `docs/protocol-reference.md`, and changing the configured mode-byte mapping changes which HA arm mode corresponds to which Part-Arm slot without a code change.
+Against a live panel with the prior MQTT bridge stopped, the app (or an equivalent client using the same commands) can arm Away, arm Night, arm Home, and disarm, each producing the expected panel acknowledgement and AREA-state sequence recorded in SPIKE-005 / `docs/protocol-reference.md`, and changing the configured mode-byte mapping changes which HA arm mode corresponds to which Part-Arm slot without a code change.
 
 ## Review
 

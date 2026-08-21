@@ -75,13 +75,13 @@ rather than the Local Connection mode `INS273-7 §6.1` describes, on this specif
 capturing it further is not expected to be productive without first confirming/changing that
 app-side setting, which is outside this project's control.
 
-**`the prior MQTT bridge` is a better capture target than the phone for this exact reason.** Per
-`docs/protocol-reference.md`, `the prior MQTT bridge` is "the only known implementation that issues real
+**the prior MQTT bridge is a better capture target than the phone for this exact reason.** Per
+`docs/protocol-reference.md`, the prior MQTT bridge is "the only known implementation that issues real
 arm/disarm over Connect protocol" against this same panel, and it demonstrably does so today over
 the same local `192.0.2.10:10001` ComIP connection this project's own experiments already use
 (confirmed by the single-TCP-client contention already observed in SPIKE-001/002). There is no
 cloud-relay ambiguity to resolve first — its traffic is known, today, to be genuine local
-Connect-protocol frames. Its one limitation: per the project brief, `the prior MQTT bridge` never
+Connect-protocol frames. Its one limitation: per the project brief, the prior MQTT bridge never
 implemented Home mode, so this route can resolve Disarm/Away/Night directly but not Home — that
 would remain open pending either a pattern inferred from the other three commands' body structure,
 or a separate follow-up.
@@ -90,15 +90,15 @@ or a separate follow-up.
 
 This is a **Feasibility** experiment in two parts: a network capture step the practitioner must
 perform on-site, and an offline decode step this project's own code performs against the resulting
-capture file. **Part A below now describes the `the prior MQTT bridge` route as primary**, given the
+capture file. **Part A below now describes the prior MQTT bridge route as primary**, given the
 empirical findings above; the original phone-app route is kept as Part A′, a fallback only if the
 primary route turns out to be unworkable.
 
-**Part A — capture via `the prior MQTT bridge` (practitioner-executed, on the household LAN):**
+**Part A — capture vithe prior MQTT bridge (practitioner-executed, on the household LAN):**
 
-1. Start `the prior MQTT bridge` (currently stopped) so it holds the panel's single ComIP TCP slot and its
+1. Start the prior MQTT bridge (currently stopped) so it holds the panel's single ComIP TCP slot and its
    Home Assistant `alarm_control_panel` entity is live and controllable from the HA dashboard.
-2. Set up a passive capture of the traffic between wherever `the prior MQTT bridge` runs (the HA host,
+2. Set up a passive capture of the traffic between wherever the prior MQTT bridge runs (the HA host,
    `192.0.2.12`) and `192.0.2.10:10001`. The UniFi gateway's built-in packet capture tool
    (used for the empirical findings above) only offers a whole-network/VLAN capture, not a
    per-client or BPF filter, in the dialog exercised so far — check whether the individual client's
@@ -111,12 +111,12 @@ primary route turns out to be unworkable.
    file's usable window ends, even though the tool reports the full requested duration. Do not rely
    on a long capture window with the action performed partway through. Instead: start the capture,
    then trigger the target action from the HA dashboard (Developer Tools → Actions, or the alarm
-   card) **within 2-3 seconds**, and stop/download shortly after. Because `the prior MQTT bridge` is
+   card) **within 2-3 seconds**, and stop/download shortly after. Because the prior MQTT bridge is
    controlled from HA rather than requiring physical travel to a phone or keypad, this tight timing
    is achievable reliably.
 4. Run one capture-and-trigger cycle per action per repetition: Disarm ×2, Arm Away ×2, Arm Night
    ×2 (six short captures total), matching SPIKE-002's own "reproduced twice" bar. Home mode is not
-   supported by `the prior MQTT bridge` and is out of scope for this route (see Research above).
+   supported by the prior MQTT bridge and is out of scope for this route (see Research above).
 5. This spike does **not** repeat SPIKE-002's live-trigger test — that side of RISK-001 is already
    Validated. This spike is scoped strictly to the still-open **issuing** gap.
 
@@ -129,7 +129,7 @@ primary route turns out to be unworkable.
 2. If corrected, capture and action steps are otherwise as originally designed: arm to **Home**,
    wait ~15s, disarm; then **Away**; then **Night** — each cycle twice — with the same whole-network
    capture and timing caveats as Part A. This route's one advantage over Part A is that it is the
-   only route that can reach **Home** mode, which `the prior MQTT bridge` does not support.
+   only route that can reach **Home** mode, which the prior MQTT bridge does not support.
 
 **Part B — offline decode (this repo's own code, `experiment.py`):**
 
@@ -138,7 +138,7 @@ art directly, per RISK-008 — consistent with SPIKE-001/002's own approach), th
 
 1. Reads the `.pcap`/`.pcapng` file produced by Part A/A′ using a minimal stdlib-only reader (no
    new third-party dependency) and reconstructs the TCP byte stream in each direction between the
-   client's IP (the HA host running `the prior MQTT bridge`, or the phone for Part A′) and
+   client's IP (the HA host running the prior MQTT bridge, or the phone for Part A′) and
    `192.0.2.10:10001`.
 2. Re-uses and extends SPIKE-002's frame-parsing/resync logic (`'t'` start byte, type/length/
    sequence/body/CRC-8 header, scan-forward-and-skip on any non-conforming byte) against each
@@ -158,8 +158,8 @@ art directly, per RISK-008 — consistent with SPIKE-001/002's own approach), th
 | Criterion | Target | Actual |
 |-----------|--------|--------|
 | Captured client traffic is plaintext Connect-protocol framing, not AES-encrypted | Decoded frames match the known header structure (`'t'` start byte, valid CRC-8) for at least the majority of the capture | **Met.** Every frame in the dry-run and Arm Away/Disarm captures decoded cleanly, zero CRC/framing errors. |
-| A Home-mode arm produces a decoded outbound command frame | Command byte + body captured, reproducible across both captured Home-arm cycles | **Met, via a directly-tested confirmation rather than a second passive capture.** `the prior MQTT bridge` never implemented Home and the app route stayed blocked on the cloud-relay finding, so `cmd=6, body=0201` (the next value in the already-confirmed Away/Night mode-byte sequence) was sent directly against the live panel. This was not a blind guess: the command *structure* was already proven safe from two prior modes, only the mode-byte value was untested. Result: clean ACK, an event sequence matching SPIKE-002's independently-recorded Home arm (settled AREA state `7`), and direct household confirmation via the Texecom Connect app ("part-armed to Home") before disarming. Three independent corroborating signals in place of a literal second repetition. |
-| Away-mode arm (via `the prior MQTT bridge` or the app) produces a decoded outbound command frame distinct from Home's | Command byte + body captured, reproducible across both cycles, and distinguishable from the Home-mode command | **Met.** `cmd=6, body=0001` captured twice, byte-for-byte identical, both cleanly ACK'd and followed by the expected exit/armed sequence. Distinct from Night's (`0101`) and Home's (`0201`) bodies via the same shared command byte. |
+| A Home-mode arm produces a decoded outbound command frame | Command byte + body captured, reproducible across both captured Home-arm cycles | **Met, via a directly-tested confirmation rather than a second passive capture.** the prior MQTT bridge never implemented Home and the app route stayed blocked on the cloud-relay finding, so `cmd=6, body=0201` (the next value in the already-confirmed Away/Night mode-byte sequence) was sent directly against the live panel. This was not a blind guess: the command *structure* was already proven safe from two prior modes, only the mode-byte value was untested. Result: clean ACK, an event sequence matching SPIKE-002's independently-recorded Home arm (settled AREA state `7`), and direct household confirmation via the Texecom Connect app ("part-armed to Home") before disarming. Three independent corroborating signals in place of a literal second repetition. |
+| Away-mode arm (vithe prior MQTT bridge or the app) produces a decoded outbound command frame distinct from Home's | Command byte + body captured, reproducible across both cycles, and distinguishable from the Home-mode command | **Met.** `cmd=6, body=0001` captured twice, byte-for-byte identical, both cleanly ACK'd and followed by the expected exit/armed sequence. Distinct from Night's (`0101`) and Home's (`0201`) bodies via the same shared command byte. |
 | Night-mode arm produces a decoded outbound command frame distinct from the other two | Command byte + body captured, reproducible across both cycles, and distinguishable from Home/Away | **Met.** `cmd=6, body=0101` captured three times, byte-for-byte identical — same command byte as Away and Home, distinguished by the body's first byte (`01` vs Away's `00` and Home's `02`). Confirms `cmd=6` is a shared "set arm mode" command, mode encoded in the body. |
 | Disarm produces a decoded outbound command frame | Command byte + body captured, reproducible across all six disarm actions (two per arm mode) | **Met, across all three modes.** `cmd=8, body=01` captured six times total (five across Away/Night, once after the directly-tested Home arm), byte-for-byte identical — disarming a fully-armed panel and cancelling an in-progress arm, all handled by the same mode-independent command. |
 | The captured command fits the already-implemented frame structure with no undocumented fields | Command decodes cleanly under the same `{start, type, length, seq, body, CRC-8}` structure already used for `LOGIN`/`GETZONEDETAILS`/etc. — no additional envelope or encoding discovered | **Met, for both candidates.** Both `cmd=6` and `cmd=8` decoded under the existing frame structure with no new envelope, across all observations to date. |
@@ -178,23 +178,23 @@ panel's own outbound HTTPS sessions to two external IPs (absent in the idle capt
 the app-driven ones) — consistent with a cloud-reporting channel, not local app traffic. Read
 together, this indicates the phone app is currently operating in cloud/remote mode on this
 household's setup, not Local Connection mode, which is why zero Connect-protocol frames were
-decoded. This finding motivated the pivot to `the prior MQTT bridge` as the primary capture target (Part A
+decoded. This finding motivated the pivot to the prior MQTT bridge as the primary capture target (Part A
 above).
 
-**`the prior MQTT bridge` route — dry run:** a 90-second, non-disruptive capture (via `tcpdump` run directly
-on the HAOS host, not the whole-network UniFi tool — see Part A step 2/3) caught `the prior MQTT bridge`'s own
+**the prior MQTT bridge route — dry run:** a 90-second, non-disruptive capture (via `tcpdump` run directly
+on the HAOS host, not the whole-network UniFi tool — see Part A step 2/3) caught the prior MQTT bridge's own
 `GETSYSTEMPOWER` idle-keepalive command plus a real `ZONE` active→secure event from ordinary
 household activity, with zero framing errors. This validated the entire pipeline (host-level Docker
 capture, file retrieval, decoding) before attempting anything disruptive.
 
-**`the prior MQTT bridge` route — first live Arm Away → Disarm capture:** produced two new candidate send-side
+**the prior MQTT bridge route — first live Arm Away → Disarm capture:** produced two new candidate send-side
 commands, each observed exactly once: `cmd=6, body=0001` immediately preceding the exit-delay/armed
 sequence (Arm Away), and `cmd=8, body=01` immediately preceding the `AREA event: state=disarmed`
 (Disarm). Both were cleanly ACK'd and decoded under the existing frame structure. Full detail
 recorded in `docs/protocol-reference.md` (Commands table, both marked provisional). This is **not
 yet a confirmed finding** per this spike's own reproduce-twice bar — next step is repeating Arm
 Away → Disarm at least once more, and separately capturing Arm Night, before treating these as
-final. Home mode remains entirely unaddressed (`the prior MQTT bridge` doesn't support it).
+final. Home mode remains entirely unaddressed (the prior MQTT bridge doesn't support it).
 
 This same capture also produced two incidental findings outside RISK-001's direct scope, recorded in
 `docs/protocol-reference.md` because they contradict or extend previously "confirmed" statements
@@ -203,7 +203,7 @@ of a 0-indexed scheme, and SPIKE-002's finding that "disarm produces no distinct
 contradicted by this network-originated disarm producing one — recorded as an open question, not
 resolved either way.
 
-**`the prior MQTT bridge` route — second capture, confirms both commands.** A follow-up capture spanning Arm
+**the prior MQTT bridge route — second capture, confirms both commands.** A follow-up capture spanning Arm
 Away → Disarm → (wait) → Arm Away → cancel-during-exit reproduced both candidate commands a second
 time, byte-for-byte identical: `cmd=6, body=0001` (Arm Away) and `cmd=8, body=01` (Disarm), meeting
 this spike's reproduce-twice bar for both. Bonus finding: the cancel-during-exit action used the
@@ -213,7 +213,7 @@ resulting event sequence (jumps straight from `in exit` to `disarmed`, skipping 
 needed. Arm Away and Disarm are therefore **confirmed** per this project's own bar. Arm Home (needs
 the app/Local-Connection route) and Arm Night (not yet captured at all) remain open.
 
-**`the prior MQTT bridge` route — Arm Night capture, confirms Night and strengthens Disarm.** A third capture
+**the prior MQTT bridge route — Arm Night capture, confirms Night and strengthens Disarm.** A third capture
 (three back-to-back Night-arm cycles: two completed, one cancelled-during-exit) reproduced `cmd=6`
 with body `0101` three times, byte-for-byte identical — and, critically, differing from Away's `0001`
 body only in its first byte, with the *same* command byte (`6`) used for both modes. This confirms
@@ -226,12 +226,12 @@ This capture also produced several incidental findings, all recorded in `docs/pr
 a previously-unexplained AREA state value (`7`, seen after Home's `part armed` in SPIKE-002) now has a
 sibling (`6`, seen after Night's `part armed` here), suggesting these are per-submode "settled"
 states rather than noise; a new LOG type (`207`) and a broadened role for LOG type `113` (previously
-thought app-specific, now also seen with `the prior MQTT bridge`) suggest the post-arm LOG signature encodes
+thought app-specific, now also seen with the prior MQTT bridge) suggest the post-arm LOG signature encodes
 *which arm mode* fired, not *which client* issued it; and the cancelled-during-exit signature
 (`LOG type=32 group=17`) reproduced a second time, this time cancelling a Night arm rather than Away,
 strengthening confidence it generalises across modes.
 
-**`the prior MQTT bridge` route could not reach Home** — it never implemented that mode, and the app's Local
+**the prior MQTT bridge route could not reach Home** — it never implemented that mode, and the app's Local
 Connection route remained blocked on the cloud-relay finding above. Rather than leave this as the
 spike's one unresolved gap, the natural next value in the confirmed mode-byte sequence (`02`, following
 `00`=Away and `01`=Night) was tested directly against the live panel — deliberately, not as a blind
@@ -269,10 +269,10 @@ expected event sequences) or for the mode-independent Disarm (`cmd=8, body=01`, 
 across every mode and every cancel-during-exit case). The Hypothesis's *specific* claim — that the
 **official Texecom Connect mobile app** would be the client whose Local Connection traffic supplied
 this — was refuted: three whole-network captures found zero evidence the app ever left cloud/remote
-mode on this household's setup (see Research/Results), so `the prior MQTT bridge` was substituted as the
+mode on this household's setup (see Research/Results), so the prior MQTT bridge was substituted as the
 capture source instead, which is a different client than the Hypothesis named, even though it
 validated the same underlying mechanism. Home mode sits outside both versions of the Hypothesis
-entirely, since neither the app nor `the prior MQTT bridge` reliably supplied it; it was closed by directly
+entirely, since neither the app nor the prior MQTT bridge reliably supplied it; it was closed by directly
 testing the one remaining value of an already-proven-safe command, corroborated by three independent
 signals (a clean ACK, an event sequence matching SPIKE-002's own independent prior observation, and
 direct household confirmation via the app) rather than by capturing anyone's traffic.
@@ -283,7 +283,7 @@ question is now fully answered. `cmd=6` is a single shared "set arm mode" comman
 modes, with the mode encoded in the body's first byte (`00`=Away, `01`=Night, `02`=Home for this
 panel's own slot configuration); `cmd=8, body=01` disarms from any mode and also cancels an
 in-progress arm during the exit delay. Away and Night were confirmed the conventional way — passive
-capture of `the prior MQTT bridge`'s own real traffic, reproduced twice and three times respectively. Home
+capture of the prior MQTT bridge's own real traffic, reproduced twice and three times respectively. Home
 could not be reached that way, so it was confirmed instead by directly testing the one remaining,
 low-risk value in an already-validated command structure, corroborated three independent ways rather
 than by a second repetition. RISK-001's send-side gap — the single hardest, highest-value unknown

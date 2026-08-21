@@ -24,7 +24,7 @@ CMD_SETEVENTMESSAGES = 37
 
 # GetAreaFlags: Elite 88 uses area_size=1 and requests this many flag indices.
 AREA_FLAGS_COUNT = 72
-# zone_count → number of areas (bits in the area bitmap); from the prior MQTT bridge areaMap.
+# zone_count → number of areas (bits in the area bitmap); from observed areaMap (SPIKE-007).
 AREA_MAP = {12: 2, 24: 2, 48: 4, 64: 4, 88: 8, 168: 16, 640: 64}
 
 # Unsolicited 'M' frame subtypes (first body byte after SETEVENTMESSAGES).

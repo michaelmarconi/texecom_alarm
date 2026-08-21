@@ -8,7 +8,7 @@
 ## Problem
 
 Today, arming to Home mode (`part_arm_2`) has never worked without crashing the
-`the prior MQTT bridge` add-on — the HA template wrapper has no `arm_home` handler at all,
+the prior MQTT bridge add-on — the HA template wrapper has no `arm_home` handler at all,
 because it's never been safe to expose one. Separately, the add-on also crashes when
 the alarm is actually triggered (siren activation) — the exact moment reliability
 matters most. On top of both of these specific failure modes, the add-on is also
@@ -44,7 +44,7 @@ normal arm/disarm cycles or an actual alarm trigger.
   currently live or degraded, independent of the `alarm_control_panel`/zone
   entities' own state — those entities' availability is governed solely by whether
   the app itself is running, never by panel-link health.
-- Operation fully independent of `the prior MQTT bridge`, which will be uninstalled once this
+- Operation fully independent of the prior MQTT bridge, which will be uninstalled once this
   capability is delivered.
 
 **Out of scope**
@@ -60,12 +60,12 @@ normal arm/disarm cycles or an actual alarm trigger.
 
 ## Acceptance Criteria
 
-1. Given the new integration is running with `the prior MQTT bridge` fully uninstalled, When
+1. Given the new integration is running with the prior MQTT bridge fully uninstalled, When
    `arm_away`, `arm_night`, and `arm_home` are each triggered 3 consecutive times,
    Then the panel transitions to the corresponding armed state each time without the
    integration crashing or restarting.
    - **How we'll know:** manual acceptance test (live panel ×3 arm cycles with
-     `the prior MQTT bridge` uninstalled); MQTT arm command path also covered by end-to-end
+     the prior MQTT bridge uninstalled); MQTT arm command path also covered by end-to-end
      test (stand-in: FakePanel)
 2. Given the panel is in any state (disarmed, armed_away, armed_night, armed_home,
    triggered, pending, or arming), When disarm is triggered, Then the panel
@@ -86,11 +86,11 @@ normal arm/disarm cycles or an actual alarm trigger.
    wrapper entity's state accurately reflects the outcome, preserving today's
    forwarding behavior.
    - **How we'll know:** manual acceptance test (household HA wrapper → new entity)
-5. Given `the prior MQTT bridge` has been fully uninstalled, When arm/disarm control is
+5. Given the prior MQTT bridge has been fully uninstalled, When arm/disarm control is
    exercised end-to-end (including a triggered alarm event), Then no functionality
    depends on it being present — no crashes, no missing state, no silent fallback
    behavior.
-   - **How we'll know:** manual acceptance test (`the prior MQTT bridge` uninstalled; arm/disarm
+   - **How we'll know:** manual acceptance test (the prior MQTT bridge uninstalled; arm/disarm
      plus trigger exercised)
 6. Given a zone triggers the alarm while armed, When the panel's connection is
    subsequently forced closed and reconnection is in progress, Then the
@@ -133,7 +133,7 @@ normal arm/disarm cycles or an actual alarm trigger.
 
 ## Constraints
 
-- No runtime dependency on `the prior MQTT bridge` — it will be uninstalled once this
+- No runtime dependency on the prior MQTT bridge — it will be uninstalled once this
   capability is delivered.
 - Away (`arm_away`) always maps to the panel's full-arm command (mode byte `0`),
   never to a Part-Arm slot. The mapping between HA's `arm_home` / `arm_night`
