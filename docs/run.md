@@ -24,6 +24,15 @@ After rebuild + cold-start, Ports should show **8123** (Home Assistant) and **43
 
 Sanity check inside the remote: `curl -sI http://127.0.0.1:8123/` → relative `location: /…` or 200 — never `Location: http://localhost/`.
 
+## Catalogue layout (dual-bind)
+
+This repo is Supervisor **catalogue**-shaped: root `repository.yaml`, App in
+`texecom_alarm/`. The apps devcontainer mounts the git root at
+`/workspaces/texecom_alarm` and binds `texecom_alarm/` to
+`/mnt/supervisor/apps/local/texecom_alarm` so Supervisor still sees
+`local_texecom_alarm`. Cold-start and other scripts still run from the **repo
+root** (`./scripts/…`).
+
 ## Cold start (deterministic)
 
 From the repo root in the apps devcontainer:

@@ -31,10 +31,11 @@ observation or your own clean-room work.
 
 ## Development
 
-Python 3.12. App package lives in `texecom-alarm-app/`.
+Python 3.12. App package lives in `texecom_alarm/texecom-alarm-app/`
+(Supervisor App folder is `texecom_alarm/`).
 
 ```bash
-cd texecom-alarm-app
+cd texecom_alarm/texecom-alarm-app
 pip install -e ".[dev]"
 ruff check .
 ruff format --check .

@@ -6,14 +6,13 @@ numbers by hand.
 
 ## Canonical source
 
-`config.yaml` `version` (at the App folder root — today repo root; after catalogue
-layout, `texecom_alarm/config.yaml`).
+`texecom_alarm/config.yaml` `version` (App folder root under catalogue layout).
 
 Copies (kept in lockstep by `scripts/sync-version.sh`):
 
-- `texecom-alarm-app/pyproject.toml` `version`
-- `texecom-alarm-app/src/texecom_alarm/__init__.py` `__version__`
-- Latest `## [X.Y.Z]` heading in `CHANGELOG.md`
+- `texecom_alarm/texecom-alarm-app/pyproject.toml` `version`
+- `texecom_alarm/texecom-alarm-app/src/texecom_alarm/__init__.py` `__version__`
+- Latest `## [X.Y.Z]` heading in `texecom_alarm/CHANGELOG.md`
 
 ## When the version changes
 
