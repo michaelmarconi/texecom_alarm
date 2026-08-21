@@ -4,6 +4,7 @@
 **Date:** 2026-08-01
 **Type:** Feasibility
 **State:** Validated ✅
+**Disposition:** Partially superseded (2026-08-21) — this run was on the installer SmartCom (`192.0.2.10`), not the dedicated ComIP. The framing/resync findings still stand as captured. The forced-disconnect-at-trigger and modem-noise findings no longer hold as universal panel behaviour: ADR-014 / SPIKE-010 show the dedicated ComIP stays connected and HA Disarm during a live alarm works. Treat this spike's disconnect finding as scoped to installs sharing a module with alarm reporting, not as an inherent protocol limitation.
 
 ## Overview
 
