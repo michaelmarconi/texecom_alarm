@@ -29,7 +29,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | RISK-017 fingerprint | pass | Working tree + history rewrite complete; Critical/High LAN/name/UDL fingerprint purged from `main` |
 | CHANGELOG vs product | pass | `CHANGELOG.md` `[0.1.0]` describes the real App; `[0.0.1]` retained as historical scaffold only |
 | Licence label consistency | pass | `Dockerfile` OCI label is MIT (matches `LICENSE`) |
-| Version bump policy | pass | Single SemVer `0.1.0` (canonical `config.yaml`); CI `sync-version.sh check`; bump-on-main + tag workflow; see `docs/addon-versioning.md` |
+| Version bump policy | pass | Supervisor SemVer only for notable product releases; CI checks copies match; tag `vX.Y.Z` when that version first lands on `main` |
 
 ## Deploy
 

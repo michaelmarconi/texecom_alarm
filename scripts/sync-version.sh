@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Single SemVer: config.yaml is canonical; copies stay in lockstep.
 # Usage:
-#   ./scripts/sync-version.sh check   # exit 1 if copies drift (CI)
-#   ./scripts/sync-version.sh sync    # write copies from canonical
+#   ./scripts/sync-version.sh check              # exit 1 if copies drift (CI)
+#   ./scripts/sync-version.sh require-bump [ref] # optional: fail if canonical equals ref
+#   ./scripts/sync-version.sh sync               # write copies from canonical
 #   ./scripts/sync-version.sh bump patch|minor|major [changelog-body]
 set -euo pipefail
 
@@ -45,6 +46,7 @@ read_init() {
 }
 
 read_changelog_latest() {
+  # Skip Keep a Changelog's ## [Unreleased]
   sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' "$CHANGELOG" | head -1
 }
 
@@ -75,28 +77,61 @@ bump_semver() {
   echo "${major}.${minor}.${patch}"
 }
 
+# Move ## [Unreleased] notes into ## [X.Y.Z] - date; leave an empty Unreleased.
+# If Unreleased is empty, use the fallback body under ### Changed.
 prepend_changelog() {
-  local v="$1" body="$2" date
+  local v="$1" fallback="$2" date tmp
   date="$(date -u +%Y-%m-%d)"
-  local tmp
   tmp="$(mktemp)"
-  {
-    # Keep header through the SemVer blurb, then insert new section.
-    awk -v ver="$v" -v d="$date" -v body="$body" '
+  if grep -qE '^## \[Unreleased\]' "$CHANGELOG"; then
+    awk -v ver="$v" -v d="$date" -v fallback="$fallback" '
+      BEGIN { mode="pre"; captured="" }
+      mode=="pre" && /^## \[Unreleased\]/ {
+        print
+        print ""
+        mode="unreleased"
+        next
+      }
+      mode=="unreleased" && /^## \[/ {
+        body=captured
+        while (body ~ /^\n/) body=substr(body, 2)
+        while (body ~ /\n$/) body=substr(body, 1, length(body)-1)
+        print "## [" ver "] - " d
+        print ""
+        if (body != "") {
+          print body
+          print ""
+        } else {
+          print "### Changed"
+          print ""
+          print "- " fallback
+          print ""
+        }
+        mode="rest"
+        print
+        next
+      }
+      mode=="unreleased" { captured = captured $0 "\n"; next }
+      { print }
+    ' "$CHANGELOG" >"$tmp"
+  else
+    awk -v ver="$v" -v d="$date" -v fallback="$fallback" '
       BEGIN { inserted=0 }
       /^## \[/ && !inserted {
+        print "## [Unreleased]"
+        print ""
         print "## [" ver "] - " d
         print ""
         print "### Changed"
         print ""
-        print "- " body
+        print "- " fallback
         print ""
         inserted=1
       }
       { print }
     ' "$CHANGELOG" >"$tmp"
-    mv "$tmp" "$CHANGELOG"
-  }
+  fi
+  mv "$tmp" "$CHANGELOG"
 }
 
 cmd="${1:-}"
@@ -125,6 +160,27 @@ case "$cmd" in
     fi
     echo "version sync ok: $canon"
     ;;
+  require-bump)
+    # Optional local check for a Supervisor *release* PR — not used in CI.
+    canon="$(read_canonical)"
+    [[ -n "$canon" ]] || { echo "No version in $CONFIG" >&2; exit 1; }
+    base_ref="${2:-origin/main}"
+    if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
+      echo "Cannot resolve $base_ref — fetch main before require-bump" >&2
+      exit 1
+    fi
+    base="$(git show "${base_ref}:${CONFIG}" 2>/dev/null | sed -nE 's/^version:[[:space:]]*"?([0-9]+\.[0-9]+\.[0-9]+)"?.*/\1/p' | head -1)"
+    if [[ -z "$base" ]]; then
+      echo "No version at ${base_ref}:${CONFIG}" >&2
+      exit 1
+    fi
+    if [[ "$canon" == "$base" ]]; then
+      echo "Version ${canon} is unchanged from ${base_ref}." >&2
+      echo "For a Supervisor release: ./scripts/sync-version.sh bump patch|minor|major" >&2
+      exit 1
+    fi
+    echo "version bump ok: ${base} -> ${canon}"
+    ;;
   sync)
     canon="$(read_canonical)"
     [[ -n "$canon" ]] || { echo "No version in $CONFIG" >&2; exit 1; }
@@ -139,16 +195,19 @@ case "$cmd" in
     ;;
   bump)
     kind="${2:-patch}"
-    body="${3:-Automated version bump}"
+    body="${3:-}"
     canon="$(read_canonical)"
     [[ -n "$canon" ]] || { echo "No version in $CONFIG" >&2; exit 1; }
     next="$(bump_semver "$canon" "$kind")"
     write_all "$next"
+    if [[ -z "$body" ]]; then
+      body="Notable changes for ${next}."
+    fi
     prepend_changelog "$next" "$body"
     echo "$next"
     ;;
   *)
-    echo "Usage: $0 check|sync|bump patch|minor|major [changelog-body]" >&2
+    echo "Usage: $0 check|require-bump [ref]|sync|bump patch|minor|major [changelog-body]" >&2
     exit 2
     ;;
 esac

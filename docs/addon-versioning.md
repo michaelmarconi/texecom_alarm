@@ -1,8 +1,11 @@
 # Add-on versioning
 
-One SemVer string is the release id. Supervisor, Python packaging, the healthcheck
-string, and the changelog all use the same value. Humans do not edit version
-numbers by hand.
+`texecom_alarm/config.yaml` `version` is the Supervisor release id. When it
+changes, households see an **Update** and read `CHANGELOG.md`. Bump it only
+for notable product changes — not for CI, docs, or Dependabot.
+
+`main` only moves via pull request, including for the maintainer. GitHub does
+not edit version files after merge.
 
 ## Canonical source
 
@@ -12,38 +15,51 @@ Copies (kept in lockstep by `scripts/sync-version.sh`):
 
 - `texecom_alarm/texecom-alarm-app/pyproject.toml` `version`
 - `texecom_alarm/texecom-alarm-app/src/texecom_alarm/__init__.py` `__version__`
-- Latest `## [X.Y.Z]` heading in `texecom_alarm/CHANGELOG.md`
+- Latest dated `## [X.Y.Z]` heading in `texecom_alarm/CHANGELOG.md`
+  (`## [Unreleased]` does not count)
 
-## When the version changes
+## Day to day
 
-- **On every merge to `main`** (human PRs, Dependabot, anything): GitHub Actions
-  patch-bumps (`0.1.0` → `0.1.1` → …), updates the copies, prepends a changelog
-  line, and creates git tag `vX.Y.Z`. If that tag already exists, the job fails —
-  the same version is never reused.
-- **Bootstrap:** if the current canonical version has no tag yet, the workflow
-  tags it without bumping (so the first public release can be `0.1.0`).
-- **Minor / major:** manual `workflow_dispatch` on `.github/workflows/bump-version.yml`
-  with `bump=minor` or `bump=major`.
-- **Local rebuild / Configuration refresh:** do **not** bump. Use Rebuild — see
-  [run.md](run.md#refresh-local-add-on-without-a-version-bump).
+Product PRs add bullets under `## [Unreleased]` (Added / Changed / Fixed /
+Removed). Docs, CI, and Dependabot skip the changelog unless a household
+would care.
 
-## CI
+CI only checks that the four version locations match
+(`./scripts/sync-version.sh check`). It does **not** require a bump.
 
-Pull requests fail if any copy disagrees with `config.yaml`
-(`./scripts/sync-version.sh check`).
+## Cutting a Supervisor release
 
-## Branch protection
+When Unreleased has something a household should read:
 
-`main` requires pull requests. The bump workflow opens `chore/bump-X.Y.Z` and
-enables auto-merge (squash) so the bump lands after CI.
+```bash
+./scripts/sync-version.sh bump patch
+# or: minor | major
+```
 
-**Required setting:** repository **Settings → Actions → General → Allow GitHub
-Actions to create and approve pull requests**. Without that, the workflow pushes
-the branch but cannot open the PR — open/merge `chore/bump-*` manually.
+That raises SemVer, moves Unreleased notes into `## [X.Y.Z] - date`, and
+leaves an empty Unreleased. Do it in the same PR as the product change, or in
+a small follow-up release PR — before merge, not after.
+
+After merge, **Tag version** creates `vX.Y.Z` if that tag does not exist.
+Builder publishes GHCR for the tag. Same version on `main` again is a no-op.
+
+| Event | Bump `config.yaml`? |
+|--------|---------------------|
+| User-facing fix or feature | Yes, when you mean to ship it |
+| Breaking change | Yes (`major`) |
+| Dependabot / CI / docs | No |
+| Local rebuild / Configuration refresh | No — use Rebuild; see [run.md](run.md#refresh-local-add-on-without-a-version-bump) |
+
+Optional local check that this PR actually raised SemVer vs `main`:
+
+```bash
+./scripts/sync-version.sh require-bump origin/main
+```
 
 ## Do not
 
-- Hand-edit version strings to reload the local App
+- Hand-edit only one of the four version locations (use the script)
+- Put Dependabot or commit subjects in the household changelog
+- Open a follow-up “bump after merge” robot PR
 - Move or retag an existing `vX.Y.Z`
 - Invent a separate Python package version
-- Push version bumps straight to `main` from a laptop (use the workflow)

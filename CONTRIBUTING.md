@@ -49,10 +49,21 @@ in-repo FakePanel stand-in — do not point CI or unit tests at a live panel.
 
 Local Home Assistant boot (optional): see [docs/run.md](docs/run.md).
 
-Do not edit version numbers by hand — merging to `main` bumps SemVer. See
-[docs/addon-versioning.md](docs/addon-versioning.md).
+`config.yaml` `version` is the Supervisor release. Bump it only when households
+should see an **Update** (notable product change). Docs, CI, and Dependabot
+PRs leave it alone. Product notes go under `## [Unreleased]` in
+`texecom_alarm/CHANGELOG.md` until you cut a release:
+
+```bash
+./scripts/sync-version.sh bump patch
+```
+
+See [docs/addon-versioning.md](docs/addon-versioning.md).
 
 ## Pull requests
+
+`main` only moves via pull request, including for the maintainer. Direct
+pushes are blocked.
 
 Use the PR template. Keep the diff small, match existing style, and say how you
 tested (CI-only vs a live panel).
