@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Configuration and install docs
+    url: https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md
+    about: Panel host, MQTT, Part-Arm mapping, and reconnect options.
+  - name: Disarm fails only while the alarm is sounding
+    url: https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md
+    about: Usually the wrong network module — not an add-on crash.
+  - name: Free the panel Connect slot
+    url: https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md
+    about: Only one Connect login per module; stop the other client first.
+  - name: Security or legal notice
+    url: https://github.com/michaelmarconi/texecom_alarm/security/advisories/new
+    about: Private vulnerability report, leaked credentials, or a Texecom confidentiality concern.

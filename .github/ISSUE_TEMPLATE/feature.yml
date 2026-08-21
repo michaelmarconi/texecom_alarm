@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest an enhancement to the add-on itself.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Notifications, HomeKit, and household arming rules belong in **your** Home Assistant configuration — not in this add-on. Feature requests that are really automations will usually be closed with a pointer to do them in HA.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like the add-on to do?
+    validations:
+      required: true
+  - type: dropdown
+    id: ha-automation
+    attributes:
+      label: Could this live in a Home Assistant automation instead?
+      options:
+        - No — it needs something the add-on does not expose today
+        - Maybe — not sure
+        - Yes, but an add-on change would still help
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra context
+      description: Panel model, Part-Arm layout, or links to related issues.

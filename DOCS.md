@@ -26,7 +26,7 @@ reporting)** so this add-on has a clean Connect channel. Leave the installer's
 module for the app and monitoring. Point **Panel host** at the dedicated
 module’s IP. If you only have the signalling module, day-to-day arm and zone
 status can still work; disarm-during-alarm probably will not. More detail:
-[Home Assistant loses your Texecom panel the moment the alarm goes off](docs/ha-loses-panel-during-alarm.md).
+[Home Assistant loses your Texecom panel the moment the alarm goes off](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md).
 
 - Stop anything else that already holds a **Connect login** to the *same*
   module before you **start** this add-on (one Connect session per module).
@@ -45,7 +45,7 @@ status can still work; disarm-during-alarm probably will not. More detail:
 
 | Option | What it is |
 |--------|------------|
-| **Panel host** | IP address or hostname of the **dedicated local network module** this add-on should use (typically a ComIP reserved for Home Assistant). Not the module used for the Texecom app or monitoring-station signalling. Both often answer on port 10001 — picking the signalling box is a common trap. See [Before you start](#before-you-start). **Required.** |
+| **Panel host** | IP address or hostname of the **dedicated local network module** this add-on should use (typically a ComIP reserved for Home Assistant). Not the module used for the Texecom app or monitoring-station signalling. Both often answer on port 10001 — picking the signalling box is a common trap. See **Before you start** above. **Required.** |
 | **Panel port** | Network port for the panel connection. Default: `10001`. |
 | **Panel UDL password** | Password used to log in to the panel (same idea as Wintex / Connect). Default is often `1234` — ask your installer if login fails. Treat this as a LAN credential: anyone who can reach the panel’s network module on this port can Connect-login with the same password, so change the factory UDL on the panel (and match it here) if your LAN is not fully trusted. |
 
@@ -90,7 +90,7 @@ You can leave the defaults unless you have a reason to change them.
 If Home Assistant is locked out **only during a real alarm** (Disarm does
 nothing; the Texecom app and keypad still work), you may be talking to the
 wrong network module — see
-[Home Assistant loses your Texecom panel the moment the alarm goes off](docs/ha-loses-panel-during-alarm.md).
+[Home Assistant loses your Texecom panel the moment the alarm goes off](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md).
 
 | Option | Default | Meaning |
 |--------|---------|---------|
@@ -144,18 +144,23 @@ Assistant setup — not inside this add-on.
 
 ## Further reading
 
-- [Getting started](README.md#getting-started)
-- [Configure Home and Night](docs/how-to/configure-part-arm.md)
-- [Stop other Connect clients](docs/how-to/stop-other-connect-clients.md)
+These open the GitHub repository — Home Assistant does not serve the extra
+markdown files from this App.
+
+- [Getting started](https://github.com/michaelmarconi/texecom_alarm/blob/main/README.md#getting-started)
+- [Configure Home and Night](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/configure-part-arm.md)
+- [Stop other Connect clients](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md)
 - HA locked out only while the alarm is sounding:
-  [wrong network module / COM-port signalling](docs/ha-loses-panel-during-alarm.md)
-- [Availability vs panel connection](docs/concepts/availability-and-connection.md)
-- [MQTT topics](docs/reference/mqtt.md)
+  [wrong network module / COM-port signalling](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md)
+- [Availability vs panel connection](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/concepts/availability-and-connection.md)
+- [MQTT topics](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/reference/mqtt.md)
 
 ## Support
 
-- Overview: [README](README.md)
-- Issues: use the GitHub repository linked from the add-on store listing
+- Overview: [README](https://github.com/michaelmarconi/texecom_alarm/blob/main/README.md)
+- Issues: [open with a template](https://github.com/michaelmarconi/texecom_alarm/issues/new/choose)
+  (do not paste UDL or MQTT passwords)
+- Contributing: [CONTRIBUTING.md](https://github.com/michaelmarconi/texecom_alarm/blob/main/CONTRIBUTING.md)
 
 ## Credits
 
@@ -165,5 +170,5 @@ Add-on icon: [Home security icons created by juicy_fish - Flaticon](https://www.
 
 Copyright © 2026 Michael Marconi.
 
-Code is licensed under the [MIT License](LICENSE). The add-on icon remains under
+Code is licensed under the [MIT License](https://github.com/michaelmarconi/texecom_alarm/blob/main/LICENSE). The add-on icon remains under
 Flaticon terms (see Credits).

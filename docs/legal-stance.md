@@ -47,7 +47,7 @@ Our aim is lawful **interoperability** with hardware end users already purchased
 If Texecom believes something in this repository crosses a line:
 
 1. Prefer a clear, specific notice (what file/passage, and why) over a blanket demand.
-2. Contact via the GitHub repository linked from the add-on’s `config.yaml` `url` field (issues or the maintainer’s published contact channel).
+2. Contact via [GitHub private vulnerability reporting](https://github.com/michaelmarconi/texecom_alarm/security/advisories/new) (preferred for confidentiality claims) or the maintainer [@michaelmarconi](https://github.com/michaelmarconi).
 3. We will review in good faith. Where a concern is about **copied confidential documentation**, that is taken seriously. Where a concern is solely that **independently observed wire behaviour** was written down for interoperability, we will say so and discuss.
 
 Nothing in this document waives any rights, admits liability, or claims that reverse engineering is risk-free in every jurisdiction. **This is not legal advice.** Maintainers and users should take their own counsel if they need certainty.
