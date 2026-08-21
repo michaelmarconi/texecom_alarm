@@ -17,13 +17,15 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   bump:
+    # Skip the bot's own bump PR merges (and any push authored as the Actions bot).
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -55,20 +57,40 @@ jobs:
           git push origin "v${V}"
           echo "Tagged v${V} (bootstrap, no bump)"
 
-      - name: Patch bump and tag
+      - name: Patch bump via pull request
         if: steps.ver.outputs.tagged == 'yes'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           KIND="${{ github.event.inputs.bump || 'patch' }}"
           SUBJECT=$(git log -1 --pretty=%s)
+          # Skip if this push was already a version bump (defence in depth).
+          if [[ "$SUBJECT" == chore:\ bump\ version\ to\ * ]]; then
+            echo "Already a bump commit; nothing to do"
+            exit 0
+          fi
           NEXT=$(./scripts/sync-version.sh bump "$KIND" "$SUBJECT")
           if git rev-parse "v${NEXT}" >/dev/null 2>&1; then
             echo "Tag v${NEXT} already exists — refusing to reuse version" >&2
             exit 1
           fi
+          BRANCH="chore/bump-${NEXT}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
           git add -A
           git commit -m "chore: bump version to ${NEXT}"
+          git push -u origin "HEAD:${BRANCH}" --force
+          # Open PR if missing; enable auto-merge so it lands after CI (branch protection).
+          if ! gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "chore: bump version to ${NEXT}" \
+              --body "Automated SemVer patch after merge to \`main\`. See [docs/addon-versioning.md](docs/addon-versioning.md)."
+          fi
+          gh pr merge "$BRANCH" --squash --auto --delete-branch || \
+            gh pr merge "$BRANCH" --squash --admin --delete-branch || \
+            echo "::warning::Could not auto-merge bump PR — merge chore/bump-${NEXT} when CI is green"
+          # Tag after the version exists on a branch tip (tag the bump commit).
           git tag "v${NEXT}"
-          git push origin HEAD:main
           git push origin "v${NEXT}"

@@ -32,8 +32,16 @@ Copies (kept in lockstep by `scripts/sync-version.sh`):
 Pull requests fail if any copy disagrees with `config.yaml`
 (`./scripts/sync-version.sh check`).
 
+## Branch protection
+
+`main` requires pull requests. The bump workflow therefore opens
+`chore/bump-X.Y.Z` and enables auto-merge (squash) so the bump lands after CI.
+Allow GitHub Actions to create pull requests (repository Settings → Actions →
+General). If auto-merge is blocked, merge the bump PR manually — do not retag.
+
 ## Do not
 
 - Hand-edit version strings to reload the local App
 - Move or retag an existing `vX.Y.Z`
 - Invent a separate Python package version
+- Push version bumps straight to `main` from a laptop (use the workflow)
