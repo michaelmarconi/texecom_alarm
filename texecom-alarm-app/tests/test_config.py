@@ -91,6 +91,27 @@ def test_udl_password_defaults_to_factory_1234() -> None:
     assert overridden.udl_password == "custom-udl"
 
 
+def test_settings_repr_hides_passwords() -> None:
+    settings = load_settings(_valid_options(udl_password="secret-udl", mqtt_password="secret-mqtt"))
+    text = repr(settings)
+    assert "secret-udl" not in text
+    assert "secret-mqtt" not in text
+
+
+def test_factory_udl_warns_without_logging_password(caplog: pytest.LogCaptureFixture) -> None:
+    from texecom_alarm.config import warn_if_factory_udl
+
+    with caplog.at_level(logging.INFO, logger="texecom_alarm.config"):
+        warn_if_factory_udl(load_settings(_valid_options(udl_password="1234")))
+    assert any("factory-default UDL" in r.message for r in caplog.records)
+    assert all("1234" not in r.message for r in caplog.records)
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="texecom_alarm.config"):
+        warn_if_factory_udl(load_settings(_valid_options(udl_password="custom")))
+    assert not any("factory-default UDL" in r.message for r in caplog.records)
+
+
 def test_reconnect_settings_defaults_and_overrides() -> None:
     defaults = load_settings(
         {

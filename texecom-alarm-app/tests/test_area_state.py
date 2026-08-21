@@ -72,6 +72,25 @@ def test_mqtt_payload_for_live_part_arm_uses_remapped_settings() -> None:
     assert mqtt_payload_for_area_state(7, remapped) == "armed_night"
 
 
+def test_mqtt_payload_for_unknown_live_area_state_is_none() -> None:
+    """Unknown AREA bytes must not guess disarmed (leave last HA state alone)."""
+    assert mqtt_payload_for_area_state(99, _settings()) is None
+    assert mqtt_payload_for_area_state(8, _settings()) is None
+
+
+@pytest.mark.asyncio
+async def test_handle_area_message_unknown_state_publishes_nothing() -> None:
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    # Seed a prior state so we can prove we do not overwrite with disarmed.
+    await mqtt.publish("texecom/alarm/state", "armed_home", retain=True)
+    published = await handle_area_message(
+        mqtt, bytes([2, 1, 99]), settings=_settings(), topic_prefix="texecom"
+    )
+    assert published is None
+    assert mqtt.payloads_for("texecom/alarm/state") == ["armed_home"]
+
+
 def test_flag_bit_reads_area_bit() -> None:
     flags = bytearray(_quiet_flags())
     _set_flag(flags, 21, 1)  # Armed for area 1

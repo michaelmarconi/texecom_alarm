@@ -75,9 +75,22 @@ class PanelClient:
         self._buf = bytearray()
         self._seq = 0
         self._authenticated = False
+        self._had_transport = False
         self._message_queue: asyncio.Queue[Frame] = asyncio.Queue()
         self._io_lock = asyncio.Lock()
         self._pending_cmd: int | None = None
+
+    def _not_connected_error(self, *, action: str) -> Exception:
+        """ProtocolError if never connected; ForcedDisconnect after a torn-down session."""
+        if self._had_transport:
+            return ForcedDisconnect(
+                f"Panel session at {self.host}:{self.port} is gone — cannot {action}. "
+                "The add-on will reconnect."
+            )
+        return ProtocolError(
+            f"Not connected to the panel — cannot {action}. "
+            "Wait for a successful login or check panel_host."
+        )
 
     @staticmethod
     def command_label(cmd: int) -> str:
@@ -131,6 +144,7 @@ class PanelClient:
             ) from exc
         self._buf.clear()
         self._authenticated = False
+        self._had_transport = True
         self._message_queue = asyncio.Queue()
         if self.login_delay > 0:
             await asyncio.sleep(self.login_delay)
@@ -313,9 +327,11 @@ class PanelClient:
     ) -> bytes:
         async with self._io_lock:
             if self._writer is None or self._reader is None:
+                raise self._not_connected_error(action="send commands")
+            if cmd != CMD_LOGIN and not self._authenticated:
                 raise ProtocolError(
-                    "Not connected to the panel — cannot send commands. "
-                    "Wait for a successful login or check panel_host."
+                    "Not authenticated to the panel — cannot send commands before LOGIN. "
+                    "Wait for a successful login."
                 )
             seq = self._next_seq()
             frame = encode_command(cmd, body, sequence=seq)
@@ -390,7 +406,7 @@ class PanelClient:
         """Read the next valid frame, skipping non-protocol bytes (ADR-002)."""
         reader = self._reader
         if reader is None:
-            raise ProtocolError("Not connected to the panel — cannot read from the session.")
+            raise self._not_connected_error(action="read from the session")
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
         skipped = 0
@@ -413,8 +429,9 @@ class PanelClient:
                     del self._buf[:consumed]
                     raise ForcedDisconnect(
                         f"Panel at {self.host}:{self.port} ended the session (sent +++). "
-                        "This often happens around arm/disarm or a real alarm trigger; "
-                        "the add-on will reconnect."
+                        "The add-on will reconnect. Session drops around arm/disarm or a "
+                        "real trigger are mainly expected when Home Assistant shares the "
+                        "alarm-reporting module — not on a dedicated local ComIP."
                     )
                 discarded = bytes(self._buf[:consumed])
                 del self._buf[:consumed]
@@ -448,7 +465,7 @@ class PanelClient:
                 )
                 return frame
 
-            # Need more bytes.
+            # Need more bytes. TimeoutError is an OSError subclass — catch it first.
             try:
                 chunk = await asyncio.wait_for(reader.read(4096), timeout=remaining)
             except TimeoutError:
@@ -460,6 +477,11 @@ class PanelClient:
                 raise TimeoutError(
                     f"Timed out waiting for data from the panel at {self.host}:{self.port}."
                 ) from None
+            except (OSError, asyncio.IncompleteReadError) as exc:
+                raise ForcedDisconnect(
+                    f"Panel at {self.host}:{self.port} dropped the network connection "
+                    f"({exc}). The add-on will reconnect."
+                ) from exc
             if not chunk:
                 raise ForcedDisconnect(
                     f"Panel at {self.host}:{self.port} closed the network connection. "

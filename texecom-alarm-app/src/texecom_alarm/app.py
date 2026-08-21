@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from texecom_alarm.area_state import handle_area_message, publish_area_state_snapshot
 from texecom_alarm.arm_commands import handle_alarm_command
-from texecom_alarm.config import Settings, load_settings
+from texecom_alarm.config import Settings, load_settings, warn_if_factory_udl
 from texecom_alarm.logging_setup import TRACE_LEVEL, configure_logging
 from texecom_alarm.mqtt.discovery import (
     AVAILABILITY_OFFLINE,
@@ -106,6 +106,7 @@ async def run(
 ) -> None:
     """Connect, enumerate, discover, snapshot zone+alarm state, subscribe, listen."""
     cfg = settings if settings is not None else load_settings()
+    warn_if_factory_udl(cfg)
     owns_panel = panel is None
     listen_idle_timeout = idle_timeout if idle_timeout is not None else _KEEPALIVE_IDLE_TIMEOUT
 
@@ -192,12 +193,15 @@ async def run(
                 if trust_fail_window is not None
                 else cfg.trust_fail_window_seconds
             ),
+            settings=cfg,
         )
         # Startup area-flags snapshot already corroborated house state.
         await trust.reset_after_reconnect()
 
         command_topic = alarm_command_topic(cfg.mqtt_topic_prefix)
         await mqtt_client.subscribe(command_topic)  # type: ignore[attr-defined]
+        # Clear any leftover retained ARM_*/DISARM so subscribe cannot replay them.
+        await mqtt_client.publish(command_topic, "", retain=True)
         logger.debug("mqtt_alarm_command_subscribed", extra={"topic": command_topic})
 
         alarm_state = _SharedAlarmState(payload=initial_alarm_payload)
@@ -225,6 +229,7 @@ async def run(
                 command_topic=command_topic,
                 alarm_state=alarm_state,
                 trust=trust,
+                zone_count=zone_count,
             ),
             name="mqtt-alarm-commands",
         )
@@ -320,6 +325,7 @@ async def _listen_alarm_commands(
     command_topic: str,
     alarm_state: _SharedAlarmState,
     trust: PanelTrust | None = None,
+    zone_count: int | None = None,
 ) -> None:
     """Subscribe loop: MQTT ARM_*/DISARM → shared panel arm/disarm (ADR-005)."""
     inbound = mqtt.inbound_messages  # type: ignore[attr-defined]
@@ -328,9 +334,16 @@ async def _listen_alarm_commands(
         topic = str(getattr(message, "topic", ""))
         if topic != command_topic:
             continue
+        if getattr(message, "retain", False):
+            logger.info(
+                "Ignoring retained MQTT alarm command on %s — "
+                "live Arm/Disarm taps are not retained; a leftover retain would replay on restart.",
+                command_topic,
+            )
+            continue
         payload = getattr(message, "payload", b"")
         try:
-            await handle_alarm_command(
+            new_payload = await handle_alarm_command(
                 panel,
                 settings,
                 payload,
@@ -338,7 +351,10 @@ async def _listen_alarm_commands(
                 topic_prefix=settings.mqtt_topic_prefix,
                 get_current_alarm_state=lambda: alarm_state.payload,
                 trust=trust,
+                zone_count=zone_count,
             )
+            if new_payload is not None:
+                alarm_state.payload = new_payload
         except Exception:
             logger.exception(
                 "Unexpected failure while handling an MQTT alarm command on topic %s.",
@@ -470,11 +486,43 @@ async def _listen_panel_messages(
                         trust.note_keepalive_failed()
                     raise
                 if trust is not None:
-                    await trust.maybe_poll(panel)
+                    previous = alarm_state.payload
+                    new_payload = await trust.maybe_poll(panel, current_alarm_payload=previous)
+                    if new_payload is not None:
+                        try:
+                            await maybe_publish_trigger_snapshot(
+                                mqtt,  # type: ignore[arg-type]
+                                previous_payload=previous,
+                                new_payload=new_payload,
+                                topic_prefix=topic_prefix,
+                                buffer=buffer,
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Failed to publish trigger snapshot after trust poll — "
+                                "keeping the panel listen loop."
+                            )
+                        alarm_state.payload = new_payload
                     _raise_if_stuck_trust_relogin(trust)
                 continue
             if trust is not None:
-                await trust.maybe_poll(panel)
+                previous = alarm_state.payload
+                new_payload = await trust.maybe_poll(panel, current_alarm_payload=previous)
+                if new_payload is not None:
+                    try:
+                        await maybe_publish_trigger_snapshot(
+                            mqtt,  # type: ignore[arg-type]
+                            previous_payload=previous,
+                            new_payload=new_payload,
+                            topic_prefix=topic_prefix,
+                            buffer=buffer,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Failed to publish trigger snapshot after trust poll — "
+                            "keeping the panel listen loop."
+                        )
+                    alarm_state.payload = new_payload
                 _raise_if_stuck_trust_relogin(trust)
             body = frame.body
             if not body:
@@ -484,12 +532,17 @@ async def _listen_panel_messages(
             if subtype == MSG_ZONE:
                 if len(body) >= 3:
                     buffer.record_zone(body[1], body[2])
-                await handle_zone_message(
-                    mqtt,  # type: ignore[arg-type]
-                    body,
-                    topic_prefix=topic_prefix,
-                    in_use_zones=in_use_zones,
-                )
+                try:
+                    await handle_zone_message(
+                        mqtt,  # type: ignore[arg-type]
+                        body,
+                        topic_prefix=topic_prefix,
+                        in_use_zones=in_use_zones,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to publish a zone MQTT update — keeping the panel listen loop."
+                    )
             elif subtype == MSG_LOG:
                 # Record type/group when present; LOG never publishes MQTT state.
                 if len(body) >= 3:
@@ -509,20 +562,32 @@ async def _listen_panel_messages(
                         body.hex(),
                     )
             elif subtype == MSG_AREA:
-                new_payload = await handle_area_message(
-                    mqtt,  # type: ignore[arg-type]
-                    body,
-                    settings=settings,
-                    topic_prefix=topic_prefix,
-                )
-                if new_payload is not None:
-                    await maybe_publish_trigger_snapshot(
+                try:
+                    new_payload = await handle_area_message(
                         mqtt,  # type: ignore[arg-type]
-                        previous_payload=alarm_state.payload,
-                        new_payload=new_payload,
+                        body,
+                        settings=settings,
                         topic_prefix=topic_prefix,
-                        buffer=buffer,
                     )
+                except Exception:
+                    logger.exception(
+                        "Failed to publish an area MQTT update — keeping the panel listen loop."
+                    )
+                    continue
+                if new_payload is not None:
+                    try:
+                        await maybe_publish_trigger_snapshot(
+                            mqtt,  # type: ignore[arg-type]
+                            previous_payload=alarm_state.payload,
+                            new_payload=new_payload,
+                            topic_prefix=topic_prefix,
+                            buffer=buffer,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Failed to publish trigger snapshot attributes — "
+                            "keeping the panel listen loop."
+                        )
                     alarm_state.payload = new_payload
             else:
                 # OUTPUT / USER / DEBUG / unknown — not decoded for MQTT yet.

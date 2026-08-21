@@ -6,7 +6,7 @@ import json
 import logging
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -68,11 +68,11 @@ class Settings:
 
     panel_host: str
     panel_port: int
-    udl_password: str
+    udl_password: str = field(repr=False)
     mqtt_host: str
     mqtt_port: int
     mqtt_username: str
-    mqtt_password: str
+    mqtt_password: str = field(repr=False)
     mqtt_topic_prefix: str
     part_arm_1: PartArmLabel
     part_arm_2: PartArmLabel
@@ -351,3 +351,18 @@ def _optional_float(
     if number < minimum:
         raise ConfigError(f"option {key} must be >= {minimum}")
     return number
+
+
+def warn_if_factory_udl(settings: Settings) -> None:
+    """Log once when the configured UDL is still the panel factory default.
+
+    Does not print the password. Leaving factory UDL means any LAN client that
+    can reach the ComIP port can Connect-login with the well-known default.
+    """
+    if settings.udl_password != DEFAULT_UDL_PASSWORD:
+        return
+    logger.info(
+        "Using factory-default UDL password — change it on the panel (and here) "
+        "if the LAN is not fully trusted; any Connect client on that port can use "
+        "the same well-known password."
+    )

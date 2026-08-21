@@ -380,6 +380,32 @@ async def test_forced_disconnect_peer_close(panel: FakePanel) -> None:
 
 
 @pytest.mark.asyncio
+async def test_connection_reset_maps_to_forced_disconnect(panel: FakePanel) -> None:
+    """TCP RST / OSError on read must become ForcedDisconnect (keep-trying reconnect)."""
+    client = await _logged_in_client(panel)
+    assert client._reader is not None
+
+    async def _rst(_n: int = 4096) -> bytes:
+        raise ConnectionResetError("Connection reset by peer")
+
+    client._reader.read = _rst  # type: ignore[method-assign]
+    with pytest.raises(ForcedDisconnect, match="reset|network|session"):
+        await client.recv_message(timeout=0.5)
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_send_command_after_session_teardown_is_forced_disconnect(
+    panel: FakePanel,
+) -> None:
+    """Mid-session close (had a transport) → ForcedDisconnect, not a generic ProtocolError."""
+    client = await _logged_in_client(panel)
+    await client.close()
+    with pytest.raises(ForcedDisconnect, match="Not connected|session|network"):
+        await client.send_command(CMD_GETDATETIME)
+
+
+@pytest.mark.asyncio
 async def test_set_area_arm_sends_cmd_6_with_mode_and_area() -> None:
     panel = FakePanel(udl_password="1234")
     await panel.start()
@@ -410,3 +436,36 @@ async def test_set_area_disarm_sends_cmd_8_with_01() -> None:
         await client.close()
     finally:
         await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_send_command_requires_authenticated_except_login(panel: FakePanel) -> None:
+    """Connected but not logged in must refuse non-LOGIN commands."""
+    client = PanelClient(
+        panel.host,
+        panel.port,
+        udl_password="1234",
+        login_delay=0.0,
+        response_timeout=0.5,
+    )
+    await client.connect()
+    assert client.authenticated is False
+    with pytest.raises(ProtocolError, match="not authenticated|login"):
+        await client.keepalive()
+    await client.login()
+    assert client.authenticated is True
+    await client.keepalive()
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_plusplusplus_message_does_not_claim_trigger_is_common(panel: FakePanel) -> None:
+    """ADR-014: ForcedDisconnect copy must not present trigger drops as the normal path."""
+    client = await _logged_in_client(panel)
+    panel.plusplusplus_on_next_command = True
+    with pytest.raises(ForcedDisconnect) as excinfo:
+        await client.keepalive()
+    msg = str(excinfo.value).lower()
+    assert "often happens around arm/disarm or a real alarm trigger" not in msg
+    assert "reconnect" in msg
+    await client.close()

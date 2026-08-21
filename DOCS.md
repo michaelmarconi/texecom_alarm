@@ -47,7 +47,7 @@ status can still work; disarm-during-alarm probably will not. More detail:
 |--------|------------|
 | **Panel host** | IP address or hostname of the **dedicated local network module** this add-on should use (typically a ComIP reserved for Home Assistant). Not the module used for the Texecom app or monitoring-station signalling. Both often answer on port 10001 — picking the signalling box is a common trap. See [Before you start](#before-you-start). **Required.** |
 | **Panel port** | Network port for the panel connection. Default: `10001`. |
-| **Panel UDL password** | Password used to log in to the panel (same idea as Wintex / Connect). Default is often `1234` — ask your installer if login fails. |
+| **Panel UDL password** | Password used to log in to the panel (same idea as Wintex / Connect). Default is often `1234` — ask your installer if login fails. Treat this as a LAN credential: anyone who can reach the panel’s network module on this port can Connect-login with the same password, so change the factory UDL on the panel (and match it here) if your LAN is not fully trusted. |
 
 ### MQTT
 

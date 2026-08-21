@@ -165,23 +165,196 @@ async def test_arm_nak_republishes_live_state_after_midflight_update() -> None:
 
 @pytest.mark.asyncio
 async def test_successful_arm_does_not_publish_optimistic_state() -> None:
-    """AC-2 / ADR: success path waits for AREA/snapshot — no optimistic armed_*."""
+    """Success must not invent armed_* without a panel read; stale disarmed flags are skipped."""
     panel = MagicMock()
     panel.set_area_arm = AsyncMock()
+    # Quiet flags after arm are lag — must not publish disarmed over a just-armed session.
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
 
-    await handle_alarm_command(
+    result = await handle_alarm_command(
         panel,
         _settings(),
         "ARM_HOME",
         mqtt=mqtt,
         topic_prefix="texecom",
         get_current_alarm_state=lambda: "disarmed",
+        zone_count=12,
     )
 
     panel.set_area_arm.assert_awaited_once_with(2)
+    panel.get_area_flags.assert_awaited()
     assert mqtt.payloads_for("texecom/alarm/state") == []
+    assert result is None
+    assert "armed_home" not in mqtt.payloads_for("texecom/alarm/state")
+
+
+@pytest.mark.asyncio
+async def test_successful_arm_skips_refresh_when_live_is_arming() -> None:
+    """AREA exit/entry wins over a lagging GetAreaFlags settled decode."""
+    from texecom_alarm.area_state import AREA_FLAGS_COUNT, FLAG_PART_ARM_2, FLAG_PART_ARMED
+
+    flags = bytearray(AREA_FLAGS_COUNT)
+    flags[FLAG_PART_ARMED] = 0x01
+    flags[FLAG_PART_ARM_2] = 0x01
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(flags))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/alarm/state", "arming", retain=True)
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_HOME",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "arming",
+        zone_count=12,
+    )
+
+    assert result is None
+    assert mqtt.payloads_for("texecom/alarm/state") == ["arming"]
+
+
+@pytest.mark.asyncio
+async def test_snapshot_forced_disconnect_records_trust() -> None:
+    """ForcedDisconnect during post-command flags refresh must degrade Connection."""
+    from texecom_alarm.panel_trust import PanelTrust
+    from texecom_alarm.protocol.client import ForcedDisconnect
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.get_area_flags = AsyncMock(side_effect=ForcedDisconnect("gone"))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        zone_count=12,
+        trust=trust,
+    )
+
+    assert result is None
+    assert trust.live is False
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+
+
+@pytest.mark.asyncio
+async def test_successful_disarm_publishes_area_flags_snapshot() -> None:
+    """After ACK, refresh HA from GetAreaFlags (Home disarm often omits AREA push)."""
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        zone_count=12,
+    )
+
+    panel.set_area_disarm.assert_awaited_once_with()
+    panel.get_area_flags.assert_awaited()
+    assert mqtt.payloads_for("texecom/alarm/state") == ["disarmed"]
+    assert result == "disarmed"
+
+
+@pytest.mark.asyncio
+async def test_disarm_refresh_rereads_live_state_after_ack() -> None:
+    """Guard must see post-ACK MQTT (e.g. arming), not the pre-command snapshot."""
+    live_state = {"payload": "disarmed"}
+
+    async def disarm_then_arming() -> None:
+        live_state["payload"] = "arming"
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock(side_effect=disarm_then_arming)
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/alarm/state", "disarmed", retain=True)
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        zone_count=12,
+        get_current_alarm_state=lambda: live_state["payload"],
+    )
+
+    assert result == "disarmed"
+    assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+
+
+@pytest.mark.asyncio
+async def test_successful_arm_home_publishes_part_arm_snapshot() -> None:
+    """Successful ARM_HOME snapshot uses the same Part-Arm decode as ADR-009."""
+    from texecom_alarm.area_state import AREA_FLAGS_COUNT, FLAG_PART_ARM_2, FLAG_PART_ARMED
+
+    flags = bytearray(AREA_FLAGS_COUNT)
+    flags[FLAG_PART_ARMED] = 0x01
+    flags[FLAG_PART_ARM_2] = 0x01
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(flags))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_HOME",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        zone_count=12,
+    )
+
+    assert mqtt.payloads_for("texecom/alarm/state") == ["armed_home"]
+    assert result == "armed_home"
+
+
+@pytest.mark.asyncio
+async def test_snapshot_nak_after_disarm_records_trust_without_retry() -> None:
+    """Snapshot failure after ACK degrades trust; must not re-issue disarm."""
+    from texecom_alarm.panel_trust import PanelTrust
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.get_area_flags = AsyncMock(side_effect=ProtocolError("GetAreaFlags NAK"))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        zone_count=12,
+        trust=trust,
+    )
+
+    panel.set_area_disarm.assert_awaited_once_with()
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    assert trust.live is False
+    assert result is None
 
 
 @pytest.mark.asyncio
@@ -235,3 +408,62 @@ async def test_disarm_nak_records_trust_failure() -> None:
 
     assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
     assert trust.live is False
+
+
+@pytest.mark.asyncio
+async def test_arm_forced_disconnect_records_trust_without_reraise() -> None:
+    """Session kill mid-arm must degrade Connection and not propagate."""
+    from texecom_alarm.panel_trust import PanelTrust
+    from texecom_alarm.protocol.client import ForcedDisconnect
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock(side_effect=ForcedDisconnect("panel +++"))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    await mqtt.publish("texecom/alarm/state", "disarmed", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_AWAY",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "disarmed",
+        trust=trust,
+    )
+
+    panel.set_area_arm.assert_awaited_once()
+    assert result is None
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+    assert trust.live is False
+
+
+@pytest.mark.asyncio
+async def test_disarm_forced_disconnect_records_trust_without_reraise() -> None:
+    from texecom_alarm.panel_trust import PanelTrust
+    from texecom_alarm.protocol.client import ForcedDisconnect
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock(side_effect=ForcedDisconnect("panel +++"))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        trust=trust,
+    )
+
+    panel.set_area_disarm.assert_awaited_once()
+    assert result is None
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    assert trust.live is False
+    assert mqtt.payloads_for("texecom/alarm/state") == []

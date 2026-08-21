@@ -21,7 +21,7 @@ from texecom_alarm.config import Settings
 from texecom_alarm.mqtt.discovery import AVAILABILITY_OFFLINE, AVAILABILITY_ONLINE
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
 from texecom_alarm.protocol.client import PanelClient
-from texecom_alarm.protocol.frame import CMD_SET_AREA_ARM, CMD_SET_AREA_DISARM
+from texecom_alarm.protocol.frame import CMD_GET_AREA_FLAGS
 
 _MOSQUITTO_IMAGE = "eclipse-mosquitto:2"
 
@@ -676,15 +676,29 @@ async def test_e2e_mqtt_arm_disarm_commands() -> None:
                 await asyncio.sleep(0.02)
             raise AssertionError(f"expected arm mode {mode}, got {panel.last_arm_mode!r}")
 
+        async def _wait_snapshot_after_command() -> None:
+            """Successful arm/disarm now refreshes via GetAreaFlags (ADR-009)."""
+            for _ in range(100):
+                if panel.commands_seen and panel.commands_seen[-1] == CMD_GET_AREA_FLAGS:
+                    return
+                if task.done():
+                    exc = task.exception()
+                    if exc is not None:
+                        raise exc
+                await asyncio.sleep(0.02)
+            raise AssertionError("expected GetAreaFlags snapshot after arm/disarm")
+
         await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
         await _wait_arm(0)
-        assert panel.last_command == CMD_SET_AREA_ARM
+        await _wait_snapshot_after_command()
 
         await mqtt.push_inbound("texecom/alarm/command", "ARM_NIGHT")
         await _wait_arm(1)
+        await _wait_snapshot_after_command()
 
         await mqtt.push_inbound("texecom/alarm/command", "ARM_HOME")
         await _wait_arm(2)
+        await _wait_snapshot_after_command()
 
         before_cmds = list(panel.commands_seen)
         await mqtt.push_inbound("texecom/alarm/command", "NOT_A_COMMAND")
@@ -697,9 +711,10 @@ async def test_e2e_mqtt_arm_disarm_commands() -> None:
             if panel.disarm_calls > disarm_before:
                 break
             await asyncio.sleep(0.02)
+        await _wait_snapshot_after_command()
         assert panel.disarm_calls == disarm_before + 1
         assert panel.last_disarm_body == bytes([0x01])
-        assert panel.last_command == CMD_SET_AREA_DISARM
+        assert panel.last_command == CMD_GET_AREA_FLAGS
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)
@@ -1015,7 +1030,6 @@ async def test_e2e_arm_nak_degrades_panel_link_keepalive_still_ok() -> None:
 async def test_e2e_health_check_death_heals_without_restart() -> None:
     """ADR-011 / session-heal AC1: unanswered keepalive → reconnect heal + re-sync."""
     from texecom_alarm.protocol.frame import (
-        CMD_GET_AREA_FLAGS,
         CMD_GET_ZONE_STATE,
         CMD_LOGIN,
         CMD_SETEVENTMESSAGES,
@@ -1125,7 +1139,6 @@ async def test_e2e_health_check_death_heals_without_restart() -> None:
 async def test_e2e_stuck_trust_fail_window_relogins_without_arm_retry() -> None:
     """ADR-011 AC2/AC3: stuck trust past fail window → re-login; no arm auto-retry."""
     from texecom_alarm.protocol.frame import (
-        CMD_GET_AREA_FLAGS,
         CMD_GET_ZONE_STATE,
         CMD_LOGIN,
         CMD_SET_AREA_ARM,
