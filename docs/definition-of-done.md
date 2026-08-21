@@ -36,7 +36,8 @@ options fully described), `CHANGELOG.md` for user-visible releases, and
 Do not bump `config.yaml` `version` mid-task or to reload local Configuration —
 follow [addon-versioning.md](addon-versioning.md). Local schema/translation
 refresh uses Rebuild (see [run.md](run.md#reload-local-add-on-without-a-version-bump)).
-CI sync-check + bump-on-main own SemVer; see [addon-versioning.md](addon-versioning.md).
+CI sync-check keeps the four version locations in lockstep; SemVer rises
+only for a Supervisor release — see [addon-versioning.md](addon-versioning.md).
 
 ## Ops tracing
 Every panel session lifecycle step (connect, login, enumerate, subscribe,

@@ -1,7 +1,7 @@
 name: Tag version
 
-# main already carries the release number. This job only creates vX.Y.Z when
-# that tag is missing — it never edits version files.
+# If config.yaml on main has a SemVer with no matching tag, create vX.Y.Z.
+# Chore merges that leave the version unchanged are a no-op. Never edits files.
 on:
   push:
     branches: ["main"]

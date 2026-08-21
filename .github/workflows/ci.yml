@@ -15,19 +15,10 @@ jobs:
         working-directory: texecom_alarm/texecom-alarm-app/
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - name: Version sync check
         working-directory: .
         run: ./scripts/sync-version.sh check
-
-      - name: Version must differ from main
-        if: github.event_name == 'pull_request'
-        working-directory: .
-        run: |
-          git fetch --no-tags origin main
-          ./scripts/sync-version.sh require-bump origin/main
 
       - uses: actions/setup-python@v7
         with:

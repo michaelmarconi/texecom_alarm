@@ -5,23 +5,17 @@ All notable changes to this Add-on are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.3] - 2026-08-21
-
-### Changed
-
-- Require SemVer in the PR; stop post-merge robot bumps; main is PR-only
+## [Unreleased]
 
 ## [0.1.2] - 2026-08-21
 
-### Changed
-
-- build(deps-dev): bump ruff (#5)
+Internal: Ruff pin so CI format matches pre-commit. Shipped under an earlier
+every-merge-is-a-release policy; not a product change.
 
 ## [0.1.1] - 2026-08-21
 
-### Changed
-
-- fix: bump SemVer via PR under branch protection
+Internal: version files land via pull request under branch protection. Not a
+product change.
 
 ## [0.1.0] - 2026-08-21
 
