@@ -68,6 +68,11 @@ and tries more times (panels often block the network briefly while sirens run).
 
 You can leave the defaults unless you have a reason to change them.
 
+If Home Assistant is locked out **only during a real alarm** (Disarm does
+nothing; the Texecom app and keypad still work), you may be talking to the
+wrong network module — see
+[Home Assistant loses your Texecom panel the moment the alarm goes off](docs/ha-loses-panel-during-alarm.md).
+
 | Option | Default | Meaning |
 |--------|---------|---------|
 | Reconnect attempts (normal) | `4` | How many quick retries after an ordinary drop |
@@ -121,6 +126,8 @@ Assistant setup — not inside this add-on.
 ## Support
 
 - Overview: [README](README.md)
+- HA locked out only while the alarm is sounding:
+  [wrong network module / COM-port signalling](docs/ha-loses-panel-during-alarm.md)
 - Issues: use the GitHub repository linked from the add-on store listing
 
 ## Credits
