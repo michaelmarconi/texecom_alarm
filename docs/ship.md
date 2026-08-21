@@ -26,7 +26,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | Official HA Apps store | n/a | Will not take this; community GitHub repository is the intended path (`TODO.md`) |
 | Store-shaped repository | fail | Root `config.yaml` = local-app layout (`local_texecom_alarm`). Supervisor custom repositories need root `repository.yaml` + the App in a **subdirectory**. Adding `https://github.com/michaelmarconi/texecom_alarm` in App Store will not install today. |
 | Pre-built images (GHCR) | fail | No `image:` in `config.yaml`; no builder workflow. Even after catalogue layout, Supervisor would local-build from git (acceptable early, worse UX). |
-| RISK-017 fingerprint | pass | Working-tree Critical/High (+ cheap Medium) cleansed 2026-08-21: usage-spec deleted; brief/acceptance/spikes/ADRs/tests/cold-start/experiment defaults redacted; TEST-NET / env-required placeholders. **History Track 3 still pending** (prior commits may retain fingerprint until an explicit rewrite decision). |
+| RISK-017 fingerprint | pass | Working tree + history rewrite complete; Critical/High LAN/name/UDL fingerprint purged from `main` |
 | CHANGELOG vs product | pass | `CHANGELOG.md` `[0.1.0]` describes the real App; `[0.0.1]` retained as historical scaffold only |
 | Licence label consistency | pass | `Dockerfile` OCI label is MIT (matches `LICENSE`) |
 | Version bump policy | pass | Single SemVer `0.1.0` (canonical `config.yaml`); CI `sync-version.sh check`; bump-on-main + tag workflow; see `docs/addon-versioning.md` |

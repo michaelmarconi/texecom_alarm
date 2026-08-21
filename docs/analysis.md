@@ -239,14 +239,15 @@ contention corroboration remains live-only / accept-walk.
 | Field | Value |
 |---|---|
 | Category | Security surface |
-| Severity | Medium |
-| Severity rationale | Public Add-on intent made in-repo zone map, LAN IPs/MACs, personal names, and this-install UDL confirmation a real publish exposure. Working-tree Critical/High inventory is closed (2026-08-21 cleanse); residual risk is **git history** (Track 3) until an explicit history rewrite decision. |
+| Severity | Low |
+| Severity rationale | Working-tree Critical/High inventory closed (2026-08-21) and `main` history rewritten the same day (`git filter-repo` + force-push). Residual risk is copies of the old history on other clones/forks — re-clone after the rewrite. |
 | Spike required | No |
 
-**Working tree (Track 1/2):** Critical/High items redacted or removed — household usage
-spec deleted; brief/acceptance/spikes/ADRs/tests/cold-start/experiment defaults cleansed;
-captures remain gitignored. **History (Track 3):** prior commits may still contain
-fingerprint material; rewrite is a separate execute-time decision, not claimed closed here.
+**Closed 2026-08-21:** Critical/High items redacted or removed from the tree; household
+usage spec deleted; brief/acceptance/spikes/ADRs/tests/cold-start/experiment defaults
+cleansed; captures remain gitignored. History rewrite purged LAN IPs, personal notify
+targets, and related fingerprint strings from reachable `main` commits; `docs/ha-alarm-usage-spec.md`
+removed from history.
 
 ### RISK-018: Post-alarm disarm may require a dedicated ResetArea command (cmd 9)
 
