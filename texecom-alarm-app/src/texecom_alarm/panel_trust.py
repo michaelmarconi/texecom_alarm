@@ -7,7 +7,14 @@ import time
 from collections.abc import Callable
 from typing import Protocol
 
-from texecom_alarm.area_state import area_size_for_zones
+from texecom_alarm.alarm_flags_guard import flags_snapshot_may_replace_live
+from texecom_alarm.area_state import (
+    HOUSE_AREA_NUMBER,
+    area_size_for_zones,
+    decode_area_ha_state,
+    publish_alarm_state,
+)
+from texecom_alarm.config import Settings
 from texecom_alarm.mqtt.discovery import PANEL_LINK_OFF, PANEL_LINK_ON
 from texecom_alarm.protocol.client import PanelClient, ProtocolError
 from texecom_alarm.protocol.frame import AREA_FLAGS_COUNT
@@ -24,6 +31,8 @@ REASON_ARM_NAK = "arm_nak"
 REASON_DISARM_NAK = "disarm_nak"
 REASON_ARM_TIMEOUT = "arm_timeout"
 REASON_DISARM_TIMEOUT = "disarm_timeout"
+REASON_ARM_DISCONNECT = "arm_disconnect"
+REASON_DISARM_DISCONNECT = "disarm_disconnect"
 REASON_TRUST_POLL_NAK = "trust_poll_nak"
 REASON_TRUST_POLL_TIMEOUT = "trust_poll_timeout"
 REASON_TRUST_POLL_OK = "trust_poll_ok"
@@ -60,6 +69,7 @@ class PanelTrust:
         recover_window: float = RECOVER_WINDOW_SECONDS,
         fail_window: float = STUCK_TRUST_FAIL_WINDOW_SECONDS,
         clock: Callable[[], float] | None = None,
+        settings: Settings | None = None,
     ) -> None:
         self._mqtt = mqtt
         self._topic_prefix = topic_prefix
@@ -68,6 +78,7 @@ class PanelTrust:
         self._recover_window = recover_window
         self._fail_window = fail_window
         self._clock = clock if clock is not None else time.monotonic
+        self._settings = settings
         self._live = True
         self._last_keepalive_ok: bool | None = None
         self._last_command_fail_at: float | None = None
@@ -202,28 +213,60 @@ class PanelTrust:
             ),
         )
 
-    async def maybe_poll(self, panel: PanelClient) -> None:
+    async def maybe_poll(
+        self,
+        panel: PanelClient,
+        *,
+        current_alarm_payload: str | None = None,
+    ) -> str | None:
         """Run a get_area_flags trust poll when the interval has elapsed."""
         if not self.poll_due():
-            return
-        await self.poll(panel)
+            return None
+        return await self.poll(panel, current_alarm_payload=current_alarm_payload)
 
-    async def poll(self, panel: PanelClient) -> None:
-        """Ask the panel for area flags as a trust corroboration (not keepalive)."""
+    async def poll(
+        self,
+        panel: PanelClient,
+        *,
+        current_alarm_payload: str | None = None,
+    ) -> str | None:
+        """Ask the panel for area flags as a trust corroboration (not keepalive).
+
+        When ``settings`` is configured and the decoded HA payload differs from
+        ``current_alarm_payload``, publish the snapshot (covers omitted AREA pushes).
+        Returns the newly published payload, or None when unchanged / undecodable.
+        """
         now = self._clock()
         self._last_poll_attempt_at = now
         area_size = area_size_for_zones(self._zone_count)
         try:
-            await panel.get_area_flags(0, AREA_FLAGS_COUNT, area_size=area_size)
+            flags = await panel.get_area_flags(0, AREA_FLAGS_COUNT, area_size=area_size)
         except ProtocolError:
             await self._on_poll_failure(REASON_TRUST_POLL_NAK)
-            return
+            return None
         except TimeoutError:
             await self._on_poll_failure(REASON_TRUST_POLL_TIMEOUT)
-            return
+            return None
 
         self._last_successful_trust_poll_at = self._clock()
         await self._maybe_recover()
+
+        if self._settings is None or current_alarm_payload is None:
+            return None
+        decoded = decode_area_ha_state(
+            flags,
+            area_size=area_size,
+            area_number=HOUSE_AREA_NUMBER,
+            settings=self._settings,
+        )
+        if not flags_snapshot_may_replace_live(current_alarm_payload, decoded):
+            return None
+        await publish_alarm_state(
+            self._mqtt,
+            payload=decoded,
+            topic_prefix=self._topic_prefix,
+        )
+        return decoded
 
     async def _on_poll_failure(self, reason: str) -> None:
         self._mark_degraded()

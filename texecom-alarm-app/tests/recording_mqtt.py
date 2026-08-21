@@ -19,6 +19,7 @@ class PublishedMessage:
 class InboundMessage:
     topic: str
     payload: bytes
+    retain: bool = False
 
 
 @dataclass
@@ -70,10 +71,10 @@ class RecordingMqttPublisher:
         while True:
             yield await self._inbound.get()
 
-    async def push_inbound(self, topic: str, payload: str | bytes) -> None:
+    async def push_inbound(self, topic: str, payload: str | bytes, *, retain: bool = False) -> None:
         """Test helper: deliver an inbound MQTT message to subscribed listeners."""
         data = payload.encode("utf-8") if isinstance(payload, str) else payload
-        await self._inbound.put(InboundMessage(topic=topic, payload=data))
+        await self._inbound.put(InboundMessage(topic=topic, payload=data, retain=retain))
 
     async def disconnect(self) -> None:
         self.connected = False

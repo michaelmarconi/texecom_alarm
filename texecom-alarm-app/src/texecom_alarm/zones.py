@@ -7,11 +7,12 @@ import re
 from dataclasses import dataclass
 
 from texecom_alarm.protocol.client import PanelClient, ProtocolError
-from texecom_alarm.protocol.frame import CMD_GETPANELIDENTIFICATION, CMD_GETZONEDETAILS
+from texecom_alarm.protocol.frame import AREA_MAP, CMD_GETPANELIDENTIFICATION, CMD_GETZONEDETAILS
 
 logger = logging.getLogger(__name__)
 
 _ZONE_NAME_SLUG_RE = re.compile(r"[^a-z0-9]+")
+_MAX_ZONE_COUNT = max(AREA_MAP)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,21 +31,27 @@ def parse_zone_count(identification: bytes | str) -> int:
         if isinstance(identification, bytes)
         else identification
     )
+    display = text if len(text) <= 80 else f"{text[:80]}…"
     parts = text.split()
     if len(parts) < 2:
         raise ProtocolError(
-            f"Cannot read zone count from the panel identification string {text!r}. "
+            f"Cannot read zone count from the panel identification string {display!r}. "
             "The panel reply did not look like a Premier Elite identification."
         )
     try:
         count = int(parts[1])
     except ValueError as exc:
         raise ProtocolError(
-            f"Cannot read zone count from the panel identification string {text!r}."
+            f"Cannot read zone count from the panel identification string {display!r}."
         ) from exc
     if count <= 0:
         raise ProtocolError(
             f"Panel reported a non-positive zone count ({count}) — cannot enumerate zones."
+        )
+    if count > _MAX_ZONE_COUNT:
+        raise ProtocolError(
+            f"Panel reported unsupported zone count {count} "
+            f"(maximum {_MAX_ZONE_COUNT}). Identification: {display!r}."
         )
     return count
 

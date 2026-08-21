@@ -292,3 +292,89 @@ async def test_run_loads_settings_when_omitted(monkeypatch: pytest.MonkeyPatch) 
         assert mqtt.messages
     finally:
         await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_retained_alarm_command_is_ignored() -> None:
+    """Retained ARM_*/DISARM must not execute (restart replay hazard)."""
+    from texecom_alarm.app import _listen_alarm_commands
+    from texecom_alarm.mqtt.discovery import alarm_command_topic
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.set_area_arm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    settings = Settings(
+        panel_host="127.0.0.1",
+        panel_port=10001,
+        udl_password="1234",
+        mqtt_host="127.0.0.1",
+        mqtt_port=1883,
+        mqtt_username="",
+        mqtt_password="",
+        mqtt_topic_prefix="texecom",
+        part_arm_1="night",
+        part_arm_2="home",
+        part_arm_3="unused",
+    )
+    command_topic = alarm_command_topic("texecom")
+    alarm_state = _SharedAlarmState(payload="armed_home")
+    task = asyncio.create_task(
+        _listen_alarm_commands(
+            panel,
+            mqtt,
+            settings=settings,
+            command_topic=command_topic,
+            alarm_state=alarm_state,
+            zone_count=12,
+        )
+    )
+    await mqtt.push_inbound(command_topic, "DISARM", retain=True)
+    await asyncio.sleep(0.05)
+    panel.set_area_disarm.assert_not_awaited()
+
+    await mqtt.push_inbound(command_topic, "DISARM", retain=False)
+    for _ in range(50):
+        if panel.set_area_disarm.await_count:
+            break
+        await asyncio.sleep(0.02)
+    panel.set_area_disarm.assert_awaited_once()
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_run_clears_retained_command_topic_after_subscribe() -> None:
+    """After subscribe, publish empty retained payload to clear leftover commands."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR")],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        stop = asyncio.Event()
+        task = asyncio.create_task(
+            run(_settings(panel), mqtt=mqtt, idle=stop.wait, login_delay=0.0)
+        )
+        for _ in range(100):
+            if "texecom/alarm/command" in mqtt.subscribed:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+        clears = [
+            m
+            for m in mqtt.messages
+            if m.topic == "texecom/alarm/command" and m.retain and m.payload in ("", b"")
+        ]
+        assert clears, "expected empty retained clear on alarm command topic"
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()

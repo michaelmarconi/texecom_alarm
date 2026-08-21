@@ -84,16 +84,17 @@ def flag_bit(flags: bytes, flag_index: int, *, area_size: int, area_number: int)
     return bool(value & (1 << (area_number - 1)))
 
 
-def mqtt_payload_for_area_state(state: int, settings: Settings) -> str:
+def mqtt_payload_for_area_state(state: int, settings: Settings) -> str | None:
     """Map live AREA state byte → MQTT alarm_control_panel payload.
 
     Part-Arm settled states (6/7) use the same install-time slot → HA mapping
-    as the area-flags snapshot (ADR-005).
+    as the area-flags snapshot (ADR-005). Unknown bytes return None so callers
+    leave the last MQTT payload unchanged (do not guess disarmed).
     """
     slot = _LIVE_PART_ARM_STATE_TO_SLOT.get(state)
     if slot is not None:
         return _ha_state_for_part_arm_slot(slot, settings)
-    return _LIVE_AREA_STATE_MAP.get(state, "disarmed")
+    return _LIVE_AREA_STATE_MAP.get(state)
 
 
 def _ha_state_for_part_arm_slot(slot: int, settings: Settings) -> str:
@@ -205,5 +206,13 @@ async def handle_area_message(
         logger.debug("area_message_unused_ignored", extra={"area": area_number})
         return None
     payload = mqtt_payload_for_area_state(state, settings)
+    if payload is None:
+        logger.warning(
+            "Ignoring unknown live AREA state byte %s for area %s — "
+            "leaving last Home Assistant alarm state unchanged.",
+            state,
+            area_number,
+        )
+        return None
     await publish_alarm_state(mqtt, payload=payload, topic_prefix=topic_prefix)
     return payload

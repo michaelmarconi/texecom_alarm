@@ -620,3 +620,138 @@ async def test_non_recoverable_listen_failure_publishes_panel_link_off() -> None
     assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
     # Availability unchanged — only app LWT / clean shutdown may flip it (ADR-004).
     assert mqtt.payloads_for(availability_topic("texecom")) == [AVAILABILITY_ONLINE]
+
+
+@pytest.mark.asyncio
+async def test_connection_reset_enters_reconnect_path() -> None:
+    """TCP RST during listen must keep-trying reconnect (not abort forever)."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(
+            run(
+                settings,
+                panel=client,
+                mqtt=mqtt,
+                idle=stop.wait,
+                idle_timeout=0.05,
+                trust_poll_interval=60.0,
+            )
+        )
+        for _ in range(150):
+            if mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["ON"]:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        setevent_before = panel.seteventmessages_calls
+        assert client._reader is not None
+
+        async def _rst(_n: int = 4096) -> bytes:
+            raise ConnectionResetError("Connection reset by peer")
+
+        client._reader.read = _rst  # type: ignore[method-assign]
+
+        for _ in range(300):
+            link = mqtt.payloads_for("texecom/panel_connection/state")
+            resumed = (
+                link.count("OFF") >= 1
+                and link[-1] == "ON"
+                and panel.seteventmessages_calls > setevent_before
+            )
+            if resumed:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        link = mqtt.payloads_for("texecom/panel_connection/state")
+        assert "OFF" in link
+        assert link[-1] == "ON"
+        assert task.done() is False
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_mqtt_publish_error_does_not_abort_listen() -> None:
+    """A single MQTT publish failure must not kill the panel listen cycle."""
+    from texecom_alarm.app import _listen_panel_messages
+    from texecom_alarm.protocol.frame import MSG_ZONE
+
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+
+    panel = AsyncMock()
+    zone_body = bytes([MSG_ZONE, 1, 0x01])
+
+    class _Frame:
+        body = zone_body
+
+    publish_calls = {"n": 0}
+    original_publish = mqtt.publish
+
+    async def _flaky_publish(*args: object, **kwargs: object) -> None:
+        publish_calls["n"] += 1
+        if publish_calls["n"] == 1:
+            raise RuntimeError("broker hiccup")
+        await original_publish(*args, **kwargs)
+
+    mqtt.publish = _flaky_publish  # type: ignore[method-assign]
+
+    recv_n = {"n": 0}
+
+    async def _recv(*, timeout: float = 1.0) -> object:
+        recv_n["n"] += 1
+        if recv_n["n"] == 1:
+            return _Frame()
+        await asyncio.sleep(timeout)
+        raise TimeoutError("idle")
+
+    panel.recv_message = _recv
+    panel.keepalive = AsyncMock()
+
+    settings = _static_settings()
+    task = asyncio.create_task(
+        _listen_panel_messages(
+            panel,
+            mqtt,
+            settings=settings,
+            topic_prefix="texecom",
+            in_use_zones={1},
+            alarm_state=_SharedAlarmState(payload="disarmed"),
+            idle_timeout=0.05,
+        )
+    )
+    await asyncio.sleep(0.15)
+    assert task.done() is False, "listen must survive MQTT publish errors"
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"

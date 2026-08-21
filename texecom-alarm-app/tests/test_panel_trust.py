@@ -227,6 +227,133 @@ async def test_quiet_house_stays_live_without_zone_pushes() -> None:
 
 
 @pytest.mark.asyncio
+async def test_trust_poll_publishes_when_area_flags_differ() -> None:
+    """Successful poll updates alarm MQTT when decoded flags disagree with last HA state."""
+    from texecom_alarm.area_state import AREA_FLAGS_COUNT, FLAG_PART_ARM_2, FLAG_PART_ARMED
+
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/alarm/state", "armed_home", retain=True)
+
+    clock = {"t": 0.0}
+    settings = _settings()
+    trust = PanelTrust(
+        mqtt,
+        topic_prefix="texecom",
+        zone_count=12,
+        poll_interval=0.0,
+        clock=lambda: clock["t"],
+        settings=settings,
+    )
+    panel = MagicMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(AREA_FLAGS_COUNT))  # quiet → disarmed
+
+    new_payload = await trust.poll(panel, current_alarm_payload="armed_home")
+    assert new_payload == "disarmed"
+    assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+
+    # Identical flags → no extra publish.
+    before = len(mqtt.payloads_for("texecom/alarm/state"))
+    again = await trust.poll(panel, current_alarm_payload="disarmed")
+    assert again is None
+    assert len(mqtt.payloads_for("texecom/alarm/state")) == before
+
+    # Part-arm home flags while HA thinks disarmed → publish armed_home.
+    flags = bytearray(AREA_FLAGS_COUNT)
+    flags[FLAG_PART_ARMED] = 0x01
+    flags[FLAG_PART_ARM_2] = 0x01
+    panel.get_area_flags = AsyncMock(return_value=bytes(flags))
+    home = await trust.poll(panel, current_alarm_payload="disarmed")
+    assert home == "armed_home"
+    assert mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_home"
+
+
+@pytest.mark.asyncio
+async def test_trust_poll_does_not_clobber_arming_or_pending() -> None:
+    """During exit, lagging disarmed/armed flags must not overwrite arming/pending."""
+    from texecom_alarm.area_state import AREA_FLAGS_COUNT, FLAG_ARMED, FLAG_FULL_ARMED
+
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/alarm/state", "arming", retain=True)
+    trust = PanelTrust(
+        mqtt,
+        topic_prefix="texecom",
+        zone_count=12,
+        poll_interval=0.0,
+        settings=_settings(),
+    )
+    panel = MagicMock()
+    # Quiet / disarmed flags during exit — must not clear arming.
+    panel.get_area_flags = AsyncMock(return_value=bytes(AREA_FLAGS_COUNT))
+    assert await trust.poll(panel, current_alarm_payload="arming") is None
+    assert await trust.poll(panel, current_alarm_payload="pending") is None
+
+    flags = bytearray(AREA_FLAGS_COUNT)
+    flags[FLAG_ARMED] = 0x01
+    flags[FLAG_FULL_ARMED] = 0x01
+    panel.get_area_flags = AsyncMock(return_value=bytes(flags))
+    assert await trust.poll(panel, current_alarm_payload="arming") is None
+    assert mqtt.payloads_for("texecom/alarm/state") == ["arming"]
+
+
+@pytest.mark.asyncio
+async def test_disarm_during_arming_publishes_disarmed_snapshot() -> None:
+    """Cancel-during-exit: disarm ACK + flags must clear stuck arming MQTT."""
+    from texecom_alarm.arm_commands import handle_alarm_command
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/alarm/state", "arming", retain=True)
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "arming",
+        zone_count=12,
+    )
+
+    assert result == "disarmed"
+    assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+
+
+@pytest.mark.asyncio
+async def test_disarm_during_arming_coerces_lagging_armed_flags() -> None:
+    """Post-disarm GetAreaFlags still armed_* → publish disarmed (ACK wins)."""
+    from texecom_alarm.area_state import AREA_FLAGS_COUNT, FLAG_ARMED, FLAG_FULL_ARMED
+    from texecom_alarm.arm_commands import handle_alarm_command
+
+    flags = bytearray(AREA_FLAGS_COUNT)
+    flags[FLAG_ARMED] = 0x01
+    flags[FLAG_FULL_ARMED] = 0x01
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(flags))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/alarm/state", "arming", retain=True)
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "arming",
+        zone_count=12,
+    )
+
+    assert result == "disarmed"
+    assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+
+
+@pytest.mark.asyncio
 async def test_trust_poll_nak_publishes_off_with_timing_context() -> None:
     """AC2: failed trust poll → OFF with trust_poll_nak + timing fields."""
     mqtt = RecordingMqttPublisher()

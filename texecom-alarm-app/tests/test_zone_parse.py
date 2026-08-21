@@ -22,6 +22,18 @@ def test_parse_zone_count_rejects_short_and_bad() -> None:
         parse_zone_count("Elite 0 ENG")
 
 
+def test_parse_zone_count_rejects_unknown_panel_sizes() -> None:
+    """Zone count must be positive and bounded (DoS / stall guard)."""
+    with pytest.raises(ProtocolError, match="unsupported|too large|zone count"):
+        parse_zone_count("Elite 999 ENG")
+    with pytest.raises(ProtocolError, match="unsupported|too large|zone count"):
+        parse_zone_count("Elite 641 ENG")
+    assert parse_zone_count("Elite 88 ENG") == 88
+    assert parse_zone_count("Elite 12 ENG") == 12
+    # Small FakePanel counts remain valid for tests; AREA_MAP lookup is separate.
+    assert parse_zone_count("Elite 3 ENG") == 3
+
+
 def test_parse_zone_details_length_variants() -> None:
     name = b"FRONT DOOR".ljust(32, b"\x00")
     z34 = parse_zone_details(bytes([1, 0x01]) + name, zone_number=1)
