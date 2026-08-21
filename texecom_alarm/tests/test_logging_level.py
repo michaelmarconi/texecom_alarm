@@ -35,7 +35,7 @@ def restore_root_logging() -> None:
 
 def test_addon_config_schema_log_level_tokens() -> None:
     """Supervisor list(...) tokens are the Configuration radio labels (AC1)."""
-    config_path = Path(__file__).resolve().parents[2] / "config.yaml"
+    config_path = Path(__file__).resolve().parents[1] / "config.yaml"
     text = config_path.read_text(encoding="utf-8")
     assert "log_level: list(WARNING|INFO|DEBUG|TRACE)" in text
     assert "log_level: INFO" in text
