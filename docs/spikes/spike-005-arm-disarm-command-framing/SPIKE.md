@@ -27,7 +27,7 @@ targets the same ComIP endpoint this project's own client already uses.** The ma
 *Premier Elite ComIP Installation Manual* (`INS273-7`, `§6.1 Local Connection`) describes
 configuring the app with the ComIP's LAN IP address and port (default `10001`) directly — no cloud
 relay involved. This is the *same* IP:port this project's own experiments have already connected
-to and successfully decoded Connect-protocol framing against (`192.0.2.10:10001`,
+to and successfully decoded Connect-protocol framing against (the live panel under test,
 `docs/brief.md`, SPIKE-001/SPIKE-002). This directly de-risks the open half of the Hypothesis: the
 question is no longer "does the app ever talk locally," but "can that local traffic be observed."
 
@@ -78,7 +78,7 @@ app-side setting, which is outside this project's control.
 **the prior MQTT bridge is a better capture target than the phone for this exact reason.** Per
 `docs/protocol-reference.md`, the prior MQTT bridge is "the only known implementation that issues real
 arm/disarm over Connect protocol" against this same panel, and it demonstrably does so today over
-the same local `192.0.2.10:10001` ComIP connection this project's own experiments already use
+the same local ComIP connection (`TEXECOM_HOST`/`TEXECOM_PORT`) this project's own experiments already use
 (confirmed by the single-TCP-client contention already observed in SPIKE-001/002). There is no
 cloud-relay ambiguity to resolve first — its traffic is known, today, to be genuine local
 Connect-protocol frames. Its one limitation: per the project brief, the prior MQTT bridge never
@@ -99,7 +99,7 @@ primary route turns out to be unworkable.
 1. Start the prior MQTT bridge (currently stopped) so it holds the panel's single ComIP TCP slot and its
    Home Assistant `alarm_control_panel` entity is live and controllable from the HA dashboard.
 2. Set up a passive capture of the traffic between wherever the prior MQTT bridge runs (the HA host,
-   `192.0.2.12`) and `192.0.2.10:10001`. The UniFi gateway's built-in packet capture tool
+   `192.0.2.20`) and `192.0.2.10:10001`. The UniFi gateway's built-in packet capture tool
    (used for the empirical findings above) only offers a whole-network/VLAN capture, not a
    per-client or BPF filter, in the dialog exercised so far — check whether the individual client's
    detail page in the UniFi Network app exposes a client-scoped capture option instead (this has

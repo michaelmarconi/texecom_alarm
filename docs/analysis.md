@@ -135,13 +135,13 @@ reasoning; do not copy Texecom's NDA-covered protocol documentation into the pub
 repo. Public stance: [legal-stance.md](legal-stance.md). No CI stand-in applies to
 this IP/compliance claim; judgment is live-only / author accept-walk at publish.
 
-### RISK-009: Panel/ComIP authentication uses the factory-default password
+### RISK-009: Panel/ComIP authentication often still uses the factory-default password
 
 | Field | Value |
 |---|---|
 | Category | Security surface |
 | Severity | Low |
-| Severity rationale | SPIKE-001 showed the panel requires the factory-default UDL password `1234`, not an empty credential as the brief originally stated; LAN-only reachability keeps real-world exposure limited, but a known default on an alarm control plane remains worth recording. |
+| Severity rationale | SPIKE-001 showed LOGIN rejects an empty UDL and accepts a configured password; panels often still use the common factory default `1234` on unaltered installs. LAN-only reachability keeps real-world exposure limited, but a known default on an alarm control plane remains worth recording (consumer docs already note this generically). |
 | Spike required | No |
 
 Neither capability spec proposes changing panel authentication. Real panel credential
@@ -239,15 +239,14 @@ contention corroboration remains live-only / accept-walk.
 | Field | Value |
 |---|---|
 | Category | Security surface |
-| Severity | High |
-| Severity rationale | Public Add-on intent plus in-repo zone map, LAN IPs/MACs in packet captures, personal names, and confirmed factory UDL on this panel is a real publish exposure — not theoretical. |
+| Severity | Medium |
+| Severity rationale | Public Add-on intent made in-repo zone map, LAN IPs/MACs, personal names, and this-install UDL confirmation a real publish exposure. Working-tree Critical/High inventory is closed (2026-08-21 cleanse); residual risk is **git history** (Track 3) until an explicit history rewrite decision. |
 | Spike required | No |
 
-Docs, spikes, captures, and some dev defaults encode this household's alarm layout and
-network path. Tracked by backlog draft DRAFT-2 ("Redact household security fingerprint
-before public release"). Clear Critical/High inventory items before public release;
-git history rewrite after a working-tree cleanse is a separate execute-time decision.
-No spike — inventory already done; ordinary redact/delete work.
+**Working tree (Track 1/2):** Critical/High items redacted or removed — household usage
+spec deleted; brief/acceptance/spikes/ADRs/tests/cold-start/experiment defaults cleansed;
+captures remain gitignored. **History (Track 3):** prior commits may still contain
+fingerprint material; rewrite is a separate execute-time decision, not claimed closed here.
 
 ### RISK-018: Post-alarm disarm may require a dedicated ResetArea command (cmd 9)
 
@@ -262,10 +261,10 @@ No spike — inventory already done; ordinary redact/delete work.
 Candidate (not live-confirmed): Connect command byte `9` with the same area-select body
 family as disarm (`01` for area 1), issued when the area is in alarm, then disarm (cmd 8).
 Recorded as a provisional row in [protocol-reference.md](protocol-reference.md). Do **not**
-wire into production arm_commands until SPIKE-009 validates ACK/effect on this Elite 88.
+wire into production arm_commands until SPIKE-009 validates ACK/effect on a Premier Elite.
 Distinct from implementing an HA “alarm reset” entity/signal (AGENTS.md ADR-002 stop —
 ask a human before that product path). Validation remains **live-only** (SPIKE-009 /
-accept-walk on the Elite 88); once wire shapes are known, FakePanel should stand in for
+accept-walk on a Premier Elite); once wire shapes are known, FakePanel should stand in for
 cmd-9 ACK/effect in CI.
 
 ### RISK-019: Mid-run session heal / re-login policy not yet in an ADR
@@ -337,9 +336,9 @@ Active research spike remains SPIKE-009 only. SPIKE-008 is complete (below).
 |---|---|
 | Resolves | RISK-018 |
 | Depends on | SPIKE-005 (disarm framing known); preferably after a controlled trigger or known in-alarm state (SPIKE-002 trigger path) |
-| Sequencing rationale | Small wire unknown with direct disarm-after-trigger product impact; can run independently of SPIKE-008. Does **not** by itself decide ADR-002’s open “alarm reset” *signal* question — only whether cmd 9 is real and useful on this panel. |
+| Sequencing rationale | Small wire unknown with direct disarm-after-trigger product impact; can run independently of SPIKE-008. Does **not** by itself decide ADR-002’s open “alarm reset” *signal* question — only whether cmd 9 is real and useful on the panel under test. |
 
-Against the live Elite 88: after the panel is in alarm (or an equivalent safe test state),
+Against a live Premier Elite: after the panel is in alarm (or an equivalent safe test state),
 compare disarm-only (cmd 8) vs ResetArea (cmd 9) then disarm (cmd 8). Record ACK/NAK,
 AREA/LOG follow-on, and whether sirens/alarm clear. Output: whether production disarm
 when `triggered` must send cmd 9 first; update protocol-reference; leave product “reset

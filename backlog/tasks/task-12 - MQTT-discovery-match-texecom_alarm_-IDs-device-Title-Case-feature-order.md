@@ -62,7 +62,7 @@ Test strategy: how we'll know = unit tests on discovery payloads (object_id, dev
 ## Attention
 Category: 2 ambiguity
 Attempted: Required code review of TASK-12 (discovery IDs, device, Title Case, feature order, naming open questions answered as match-today's-IDs). Bugbot clean.
-Failed: Docs/AC claim “match today’s texecom_alarm_* IDs / no migration” while zone object_ids remain texecom_alarm_{slug}_{zone_number} (e.g. texecom_alarm_front_door_1). Household inventory in docs/ha-alarm-usage-spec.md is texecom_alarm_{slug} with no number (e.g. binary_sensor.texecom_alarm_front_door). Exact match vs intentional _N divergence (collision trade-off) is unresolved.
+Failed: Docs/AC claim “match today’s texecom_alarm_* IDs / no migration” while zone object_ids remain texecom_alarm_{slug}_{zone_number} (e.g. texecom_alarm_front_door_1). Household inventory in the product brief / zone-monitoring spec is texecom_alarm_{slug} with no number (e.g. binary_sensor.texecom_alarm_front_door). Exact match vs intentional _N divergence (collision trade-off) is unresolved.
 Decision needed: (A) Drop _{zone_number} so HA entity_ids exactly match today’s texecom_alarm_<slug> inventory (accept duplicate-name collision risk), or (B) Keep _{zone_number} and amend the “match / no migration” wording to “texecom_alarm_* scheme with unique _N suffix” (documented divergence, not bit-identical IDs).
 <!-- SECTION:NOTES:END -->
 

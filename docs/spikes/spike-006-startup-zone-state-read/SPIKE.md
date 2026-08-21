@@ -29,7 +29,7 @@ We believe the panel will return each zone’s current open/closed state via a d
 - **Open prior art** (`davidMbrooke/texecom-connect`) implements the same command set we already know and has **no** zone-state poll. Its `Zone.active` defaults false until a `MSG_ZONEEVENT` arrives — so that library does not solve the restart edge case.
 - **Community / the prior MQTT bridge behaviour:** HA thread reports that restarting the add-on re-reads current zone state. Add-on logs (public GitHub issue #103) show an explicit step `Updating all zone states...` after `Fetched Zone N...` and before `Application ready`.
 - **Published add-on image inspection (research only, not the experiment):** a published MQTT-bridge Docker image embeds JS that names `GetZoneState = 2`, builds request body `[startZone][zoneCount]` (1-byte zone numbers when panel zone count ≤ 256; 2-byte LE start when > 256), batches up to 168 zones per request, and parses each response byte with the same low-2-bit Secure/Active/Tamper/Short map used for ZONE push events (`parseZoneBitmap`). Adjacent enum values include write/omit commands (4/5/6/8/9) — the experiment must send **only** cmd 2.
-- **Panel under test:** Elite 88 at `192.0.2.10:10001`, UDL `1234` (SPIKE-001); practitioner reports the prior MQTT bridge stopped so the single ComIP slot is free.
+- **Panel under test:** a Premier Elite 88 (`TEXECOM_HOST`/`TEXECOM_PORT`, UDL from env; SPIKE-001); practitioner reports the prior MQTT bridge stopped so the single ComIP slot is free.
 
 Research frames the candidate; live ACK + decodable payload against this panel is still required.
 
@@ -37,7 +37,7 @@ Research frames the candidate; live ACK + decodable payload against this panel i
 
 Throwaway `experiment.py` in this spike folder (same Connect framing style as SPIKE-001) was run as designed:
 
-1. Connect to `TEXECOM_HOST`/`TEXECOM_PORT` (defaults `192.0.2.10:10001`), wait ≥500ms, `LOGIN` with `TEXECOM_UDL_PASSWORD` (default `1234`).
+1. Connect to `TEXECOM_HOST`/`TEXECOM_PORT` (required env; no hardcoded host default), wait ≥500ms, `LOGIN` with `TEXECOM_UDL_PASSWORD` (required; no hardcoded default).
 2. `GETPANELIDENTIFICATION` → parse zone count (expect 88).
 3. Send **`GetZoneState` (cmd = 2)** with body `startZone=1`, `zoneCount=min(zone_count, 168)` using 1-byte zone numbering (Elite 88 ≤ 256). Print raw request/response hex, length, and ACK/NAK.
 4. Decode each response byte’s low 2 bits as Secure/Active/Tamper/Short; print non-secure zones.
@@ -57,11 +57,11 @@ Throwaway `experiment.py` in this spike folder (same Connect framing style as SP
 
 ## Results
 
-Raw output of `experiment.py` against `192.0.2.10:10001` (UDL default `1234`), 2026-08-04 15:15:13–15 UTC-adjacent local time:
+Raw output of `experiment.py` against the configured panel (`TEXECOM_HOST`/`TEXECOM_UDL_PASSWORD`), 2026-08-04 15:15:13–15 UTC-adjacent local time:
 
 ```
 [2026-08-04 15:15:13] SPIKE-006 GetZoneState probe
-[2026-08-04 15:15:13] Target: 192.0.2.10:10001
+[2026-08-04 15:15:13] Target: <redacted>:10001
 [2026-08-04 15:15:14] TCP connected; waiting done; sending LOGIN
 [2026-08-04 15:15:14] TX cmd=1 seq=0 attempt=0 body=31323334
 [2026-08-04 15:15:14] LOGIN ACK

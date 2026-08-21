@@ -16,7 +16,7 @@
 | Reference | `DOCS.md`; `docs/reference/mqtt.md`; `docs/protocol-reference.md` | Required | ready | Supervisor options, MQTT topics, observational protocol lookup |
 | Licence | `LICENSE` | Required | ready | MIT; copyright notice kept (author identity, not a layout/credential leak) |
 
-Consumer-facing pages above were written or sanitised for public Home Assistant distribution: no LAN IPs, no personal zone names, no “this install still uses factory UDL”. Generic note that UDL is *often* `1234` remains. Pipeline artefacts (spikes, brief, acceptance, analysis) still carry household fingerprint — RISK-017 / `TODO.md` redact gate for `/ship`, not claimed closed here.
+Consumer-facing pages above were written or sanitised for public Home Assistant distribution: no LAN IPs, no personal zone names, no “this install still uses factory UDL”. Generic note that UDL is *often* `1234` remains. Working-tree Critical/High fingerprint inventory closed (RISK-017); git history remains Track 3 pending. See `TODO.md` / `docs/ship.md`.
 
 Community extras (`CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`) sit beside the Diátaxis set; they are not a fifth documentation type.
 

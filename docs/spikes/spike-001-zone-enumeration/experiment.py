@@ -21,7 +21,7 @@ import os
 import socket
 import time
 
-HOST = os.environ.get("TEXECOM_HOST", "192.0.2.10")
+HOST = os.environ.get("TEXECOM_HOST", "").strip()
 PORT = int(os.environ.get("TEXECOM_PORT", "10001"))
 UDL_PASSWORD = os.environ.get("TEXECOM_UDL_PASSWORD", "")
 
@@ -194,6 +194,11 @@ class TexecomProbe:
 
 
 def main():
+    if not HOST:
+        raise SystemExit(
+            "Set TEXECOM_HOST to the panel address (no default). "
+            "Optional: TEXECOM_PORT (default 10001), TEXECOM_UDL_PASSWORD."
+        )
     print("=== SPIKE-001 experiment: zone enumeration feasibility ===")
     print("Target: {}:{}".format(HOST, PORT))
     probe = TexecomProbe(HOST, PORT)

@@ -43,8 +43,8 @@ Non-goals for what that does *not* include).
 
 - Full feature-parity replacement for the prior MQTT bridge: reproduce all ~35 zone
   entities and the alarm control panel entity, without regressing anything in the
-  existing HA automation/dashboard/HomeKit layer (full checklist in
-  `docs/ha-alarm-usage-spec.md`).
+  existing HA automation/dashboard/HomeKit layer (full checklist in the
+  capability specs under `docs/specs/`).
 - A working, non-crashing Home arm mode — the one capability the prior MQTT bridge has
   never supported. (This household's panel maps Home to Part-Arm slot 2, but
   that mapping is engineer-configured per installation, not a protocol constant
@@ -96,7 +96,7 @@ out how to determine zone lists, activity, and arming/disarming programmatically
 **Phase 2 — ordered development.** Gated on phase 1 having decoded the core
 protocol, build the app itself: an HA-compatible alarm_control_panel entity and the
 full set of zone binary_sensor entities (via MQTT discovery or a native
-integration), matching the functional spec in `docs/ha-alarm-usage-spec.md`.
+integration), matching the functional contracts in the capability specs.
 Installation-specific facts the panel doesn't self-report in a form this app can
 already act on (e.g. which Part-Arm slot maps to which HA arm mode) are exposed as
 documented add-on configuration, not hardcoded to this household's own panel.
@@ -128,9 +128,9 @@ documented add-on configuration, not hardcoded to this household's own panel.
 - **Phase 1 complete** / not started / captures reliably decode zone state,
   arm/disarm, and trigger events for all three arm modes (including Home) / manual
   review of decoded captures against live-triggered ground truth in the house.
-- **Feature parity** / 0% (nothing built yet) / 100% of entities and automations in
-  `docs/ha-alarm-usage-spec.md` reproduced without regression / checklist
-  walkthrough against that spec once the app is built.
+- **Feature parity** / 0% (nothing built yet) / 100% of entities and behaviours in
+  the capability specs reproduced without regression / checklist walkthrough
+  against those specs once the app is built.
 - **Reliability** / unknown, unquantified today (occasional crashes/restarts) /
   zero unplanned crashes or restarts over a month of normal use, including
   successful Home-mode arm/disarm cycles / HA/app log monitoring post-deployment.
@@ -160,18 +160,17 @@ publicly, so this doesn't start from zero):
 - Home Assistant community reports of Premier Elite MQTT bridges (crash and
   framing discussions).
 
-Current setup, at time of writing: HA OS host on `eth0` (`192.0.2.12`);
-an MQTT bridge add-on v1.3.1 on the internal `hassio`
-Docker bridge (container `198.51.100.2`, NAT'd out through `eth0`); panel at
-`192.0.2.10`, default port 10001, no `udl_password` set; `cache: false`,
-`log: info`.
+Current setup (genericised for publish hygiene): Home Assistant OS on the
+household LAN; a prior MQTT bridge add-on historically shared the path; the
+panel is reached via a local network module on TCP port 10001 with a UDL
+password configured in add-on options (UDL is often still the factory default
+`1234` on unaltered installs — change it if the LAN is not fully trusted).
 
 ## Related docs
 
-- `docs/ha-alarm-usage-spec.md` — full functional spec of everything today's
-  MQTT bridge + HA config layer does with the alarm: entity architecture, the
-  full ~35-zone inventory, every dependent automation/script, and the arm-mode
-  mapping. This is the phase 2 "must not regress" checklist.
+- Capability specs under `docs/specs/` — zone monitoring, alarm control, and
+  related contracts are the phase 2 "must not regress" checklist (household-
+  specific automation inventory is not kept in-repo).
 
 ## Review
 

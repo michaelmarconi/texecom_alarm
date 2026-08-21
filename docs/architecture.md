@@ -220,8 +220,8 @@ Key behaviours:
   previously healthy session. FakePanel must exercise fail-then-succeed and
   capped-wait shapes for CI.
 - **Startup / zone discovery** (ADR-001): after the first successful connect/login
-  (including the ≥500ms post-connect wait and UDL password login — factory default
-  `1234`, confirmed in SPIKE-001 — not blank), sends `GETPANELIDENTIFICATION` for
+  (including the ≥500ms post-connect wait and UDL password login — panels often
+  still use factory default `1234` on unaltered installs; empty UDL is rejected), sends `GETPANELIDENTIFICATION` for
   the zone count, then loops `GETZONEDETAILS` across every zone number and discards
   any slot the panel reports as `zoneType=0` (unused) rather than creating an entity
   for it.
@@ -235,7 +235,7 @@ Key behaviours:
   FakePanel (or equivalent) must speak the same read for CI.
 - **Startup / reconnect area-flags snapshot** (ADR-009): after LOGIN (and again after
   a reconnect re-LOGIN), sends `GetAreaFlags` (cmd `11`) with body `[start][count]`
-  (this Elite 88: `start=0`, `count=72`, `area_size=1` derived from zone count 88) and
+  (one household's Elite 88 evidence: `start=0`, `count=72`, `area_size=1` derived from zone count 88) and
   receives `count * area_size` flag bytes. Per-area bits decode with priority
   Alarm(0) → InAlarm; else Armed(21)/FullArmed(22)/PartArmed(23)/ForceArmed(26) →
   Armed or PartArmed (+ PartArm1/2/3 slot); else Disarmed — the same meaning used
@@ -509,11 +509,12 @@ validation of live behaviour belongs at `/accept` (optional go-live smoke at `/s
 
 ## Security, operations, scope, and open questions
 
-**Security:** The panel is protected only by its factory-default UDL password (`1234`,
-confirmed live in SPIKE-001), reachable solely over the household LAN — an inherited,
-pre-existing condition (RISK-009), not something this app changes. MQTT broker
-credentials are supplied via the same HA Supervisor config mechanism as the panel's;
-no new external network exposure is introduced.
+**Security:** Panel login uses the installer's UDL password (panels often still use
+the factory default `1234` on unaltered installs — RISK-009; SPIKE-001 confirmed
+LOGIN requires a non-empty UDL). The panel is reachable solely over the household
+LAN — an inherited, pre-existing condition, not something this app changes. MQTT
+broker credentials are supplied via the same HA Supervisor config mechanism as the
+panel's; no new external network exposure is introduced.
 
 **Logging and monitoring:** Standard `bashio::log` output via the s6-supervised
 process, plus a dedicated connectivity/freshness `binary_sensor` (**Alarm Panel

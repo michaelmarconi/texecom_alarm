@@ -31,7 +31,7 @@ the household's existing automations, dashboard, or HomeKit setup needs to chang
 The project began life scaffolded as a Home Assistant App (add-on) — `config.yaml`, `Dockerfile`,
 and `rootfs/etc/services.d/` already follow the `home-assistant/apps-example` template, not a
 `custom_components` integration layout. Separately, `docs/brief.md` and
-`docs/ha-alarm-usage-spec.md` still phrase entity production as "via MQTT discovery or a native
+the product brief and capability specs still phrase entity production as "via MQTT discovery or a native
 integration," leaving the choice looking open on paper. `docs/analysis.md`'s RISK-002 originally
 framed a related but distinct question — whether to collapse the household's own
 `house_alarm_panel` template wrapper into a more natively-modeled entity — as requiring a spike

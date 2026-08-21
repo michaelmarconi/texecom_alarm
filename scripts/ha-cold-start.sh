@@ -20,10 +20,12 @@ READY_TIMEOUT_SEC="${HA_COLD_START_TIMEOUT:-900}"
 DISK_MIN_GIB=2
 CORE_PORT=8123
 
-# Sim defaults (override via env). Part-Arm labels match config.yaml schema tokens.
-PANEL_HOST="${TEXECOM_PANEL_HOST:-192.0.2.10}"
+# Panel/UDL: no live household defaults. Empty PANEL_HOST skips filling options
+# when unset (leaves Configuration alone). Set TEXECOM_PANEL_HOST (and optionally
+# TEXECOM_UDL_PASSWORD) to seed empty options — use TEST-NET 192.0.2.10 for sims.
+PANEL_HOST="${TEXECOM_PANEL_HOST:-}"
 PANEL_PORT="${TEXECOM_PANEL_PORT:-10001}"
-UDL_PASSWORD="${TEXECOM_UDL_PASSWORD:-1234}"
+UDL_PASSWORD="${TEXECOM_UDL_PASSWORD:-}"
 MQTT_USER="${TEXECOM_MQTT_USERNAME:-texecom}"
 MQTT_PASS="${TEXECOM_MQTT_PASSWORD:-texecom-accept}"
 MQTT_HOST="${TEXECOM_MQTT_HOST:-core-mosquitto}"
@@ -239,36 +241,40 @@ ensure_texecom() {
   local current_host
   current_host="$(ha apps info local_texecom_alarm --raw-json | jq -r '.data.options.panel_host // empty')"
   if [[ -z "$current_host" ]]; then
-    log "Applying Texecom sim options (panel=${PANEL_HOST}:${PANEL_PORT}, mqtt=${MQTT_HOST})"
-    local opts
-    opts="$(jq -nc \
-      --arg host "$PANEL_HOST" \
-      --argjson port "$PANEL_PORT" \
-      --arg udl "$UDL_PASSWORD" \
-      --arg mqtt_host "$MQTT_HOST" \
-      --arg mqtt_user "$MQTT_USER" \
-      --arg mqtt_pass "$MQTT_PASS" \
-      --arg pa1 "$PART_ARM_1" \
-      --arg pa2 "$PART_ARM_2" \
-      --arg pa3 "$PART_ARM_3" \
-      '{
-        panel_host: $host,
-        panel_port: $port,
-        udl_password: $udl,
-        mqtt_host: $mqtt_host,
-        mqtt_port: 1883,
-        mqtt_username: $mqtt_user,
-        mqtt_password: $mqtt_pass,
-        mqtt_topic_prefix: "texecom",
-        part_arm_1: $pa1,
-        part_arm_2: $pa2,
-        part_arm_3: $pa3,
-        reconnect_normal_attempts: 4,
-        reconnect_normal_interval_seconds: 2.5,
-        reconnect_trigger_attempts: 18,
-        reconnect_trigger_interval_seconds: 5
-      }')"
-    supervisor_set_options local_texecom_alarm "$opts" >/dev/null
+    if [[ -z "$PANEL_HOST" ]]; then
+      log "Texecom panel_host empty and TEXECOM_PANEL_HOST unset — leaving Configuration alone (set TEXECOM_PANEL_HOST to seed options)"
+    else
+      log "Applying Texecom options (panel=${PANEL_HOST}:${PANEL_PORT}, mqtt=${MQTT_HOST})"
+      local opts
+      opts="$(jq -nc \
+        --arg host "$PANEL_HOST" \
+        --argjson port "$PANEL_PORT" \
+        --arg udl "$UDL_PASSWORD" \
+        --arg mqtt_host "$MQTT_HOST" \
+        --arg mqtt_user "$MQTT_USER" \
+        --arg mqtt_pass "$MQTT_PASS" \
+        --arg pa1 "$PART_ARM_1" \
+        --arg pa2 "$PART_ARM_2" \
+        --arg pa3 "$PART_ARM_3" \
+        '{
+          panel_host: $host,
+          panel_port: $port,
+          udl_password: $udl,
+          mqtt_host: $mqtt_host,
+          mqtt_port: 1883,
+          mqtt_username: $mqtt_user,
+          mqtt_password: $mqtt_pass,
+          mqtt_topic_prefix: "texecom",
+          part_arm_1: $pa1,
+          part_arm_2: $pa2,
+          part_arm_3: $pa3,
+          reconnect_normal_attempts: 4,
+          reconnect_normal_interval_seconds: 2.5,
+          reconnect_trigger_attempts: 18,
+          reconnect_trigger_interval_seconds: 5
+        }')"
+      supervisor_set_options local_texecom_alarm "$opts" >/dev/null
+    fi
   else
     log "Texecom options already set (panel_host=$current_host) — leaving Configuration as-is"
   fi

@@ -25,7 +25,7 @@ We believe the ComIP session will stay up through Arm Home → Disarm and throug
 
 ## Research
 
-Earlier live work treated “junk on the wire around Home arm/disarm” and “TCP drop at a real alarm” as normal Connect behaviour on this Elite 88 (SPIKE-002, ADR-002, SPIKE-009). Those sessions used `192.0.2.10:10001`. In 2026-08-21 that address was identified as the **installer SmartCom**, not the homeowner **ComIP**. Alarm reporting is supposed to seize the SmartCom; HA on that IP gets kicked off. the prior MQTT bridge historically crashed on Home arm/disarm (CRC / unexpected start byte) on the same kind of shared path.
+Earlier live work treated “junk on the wire around Home arm/disarm” and “TCP drop at a real alarm” as normal Connect behaviour on one household's Elite 88 (SPIKE-002, ADR-002, SPIKE-009). Those sessions used the installer signalling module address. In 2026-08-21 that address was identified as the **installer SmartCom**, not the homeowner **ComIP**. Alarm reporting is supposed to seize the SmartCom; HA on that IP gets kicked off. the prior MQTT bridge historically crashed on Home arm/disarm (CRC / unexpected start byte) on the same kind of shared path.
 
 The ComIP is a second Ethernet module. Two clients can be live at once if they use **different** IPs. A quiet Connection-ON stretch is **not** evidence; the bar is the two sequences that used to fail: **Arm Home → Disarm**, and **Arm → alarm → Disarm from HA**, with the link remaining ON.
 
@@ -50,7 +50,7 @@ Do not treat idle time as a pass. Fill Actuals from the MQTT log, add-on TRACE i
 | Walk A: Home arm then Disarm, link stays up | Alarm Panel Connection stays ON for the whole Home arm → settle → Disarm; no connection OFF in that window | **Met.** MQTT (2026-08-21): `arming` → `armed_home` → `disarmed` at 17:07:13–28, and again 17:07:59–17:08:13. After initial retained `panel_connection/state ON`, that topic never published `OFF`. |
 | Walk B: Arm then alarm then HA Disarm, link stays up | Connection stays ON from arm through triggered through HA Disarm | **Met.** Same log: `arming` → `armed_away` (17:08:53–17:09:03) → `triggered` (17:09:47) → `disarmed` (17:09:54). No `panel_connection/state OFF`. |
 | Walk B: HA Disarm actually works | Practitioner: sirens/alarm stop from HA Disarm (not only the keypad) | **Met.** Practitioner: both walks worked; HA Disarm after trigger succeeded (contrast SPIKE-009 on SmartCom, where HA Disarm did nothing). |
-| Host under test is the ComIP | Add-on `panel_host` is the dedicated ComIP, not the SmartCom IP used in SPIKE-002/009 | **Met as practitioner config.** Logger does not print `panel_host`. Walks were run after repointing the add-on off `192.0.2.10` (SmartCom) onto the dedicated ComIP. |
+| Host under test is the ComIP | Add-on `panel_host` is the dedicated ComIP, not the SmartCom IP used in SPIKE-002/009 | **Met as practitioner config.** Logger does not print `panel_host`. Walks were run after repointing the add-on off the SmartCom onto the dedicated ComIP. |
 
 *Actuals are populated from experiment output only — not from documentation, vendor claims, or community reports.*
 

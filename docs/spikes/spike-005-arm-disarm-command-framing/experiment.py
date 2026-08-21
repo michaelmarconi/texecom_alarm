@@ -26,7 +26,7 @@ If your capture is pcapng (Wireshark's default), convert it first, e.g.:
     # or: editcap -F pcap capture.pcapng capture.pcap
 
 Usage:
-    TEXECOM_HOST=192.0.2.10 TEXECOM_PORT=10001 \
+    TEXECOM_HOST=<panel-ip> TEXECOM_PORT=10001 \
         python3 experiment.py capture.pcap
 """
 
@@ -35,7 +35,7 @@ import struct
 import sys
 import time
 
-HOST = os.environ.get("TEXECOM_HOST", "192.0.2.10")
+HOST = os.environ.get("TEXECOM_HOST", "").strip()
 PORT = int(os.environ.get("TEXECOM_PORT", "10001"))
 
 HEADER_START = ord("t")
@@ -444,6 +444,11 @@ def run_analysis(pcap_path):
 
 
 if __name__ == "__main__":
+    if not HOST:
+        raise SystemExit(
+            "Set TEXECOM_HOST to the panel address (no default). "
+            "Optional: TEXECOM_PORT (default 10001), TEXECOM_UDL_PASSWORD."
+        )
     if len(sys.argv) != 2:
         print(f"Usage: {sys.argv[0]} <capture.pcap>", file=sys.stderr)
         sys.exit(2)

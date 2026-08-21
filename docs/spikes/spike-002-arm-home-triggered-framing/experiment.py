@@ -33,7 +33,7 @@ This is deliberately conservative (one byte at a time) so it can never skip
 past the start of a genuinely valid frame.
 
 Usage:
-    TEXECOM_HOST=192.0.2.10 TEXECOM_PORT=10001 TEXECOM_UDL_PASSWORD=1234 \
+    TEXECOM_HOST=<panel-ip> TEXECOM_PORT=10001 TEXECOM_UDL_PASSWORD=<udl> \
         TEXECOM_OBSERVE_SECONDS=600 TEXECOM_IDLE_INTERVAL_SECONDS=3 \
         python3 experiment.py
 """
@@ -44,9 +44,9 @@ import sys
 import time
 import traceback
 
-HOST = os.environ.get("TEXECOM_HOST", "192.0.2.10")
+HOST = os.environ.get("TEXECOM_HOST", "").strip()
 PORT = int(os.environ.get("TEXECOM_PORT", "10001"))
-UDL_PASSWORD = os.environ.get("TEXECOM_UDL_PASSWORD", "1234")
+UDL_PASSWORD = os.environ.get("TEXECOM_UDL_PASSWORD", "")
 OBSERVE_SECONDS = float(os.environ.get("TEXECOM_OBSERVE_SECONDS", "600"))
 IDLE_INTERVAL_SECONDS = float(os.environ.get("TEXECOM_IDLE_INTERVAL_SECONDS", "3"))
 CMD_TIMEOUT = 2.0
@@ -490,6 +490,11 @@ def _print_summary(stats: Stats):
 
 
 if __name__ == "__main__":
+    if not HOST:
+        raise SystemExit(
+            "Set TEXECOM_HOST to the panel address (no default). "
+            "Optional: TEXECOM_PORT (default 10001), TEXECOM_UDL_PASSWORD."
+        )
     try:
         run_experiment()
     except Exception as exc:  # noqa: BLE001 - top-level: report, don't hide

@@ -32,7 +32,7 @@ earlier “Disarm during alarm failed” spike as installer-module-only.
 
 ## Context
 
-Live work on this Elite 88 saw junk around Home arm/disarm and a TCP drop at a
+Live work on one household's Elite 88 saw junk around Home arm/disarm and a TCP drop at a
 real alarm, then HA Disarm doing nothing while sirens ran. Those sessions used
 the installer SmartCom address. In 2026-08-21 that was distinguished from the
 homeowner ComIP. SPIKE-010 ran the two sequences that used to fail — Arm Home →

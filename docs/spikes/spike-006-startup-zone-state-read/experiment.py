@@ -14,9 +14,9 @@ Sends only LOGIN, GETPANELIDENTIFICATION, and GetZoneState (cmd 2). Never sends
 arm/disarm/omit/reset (cmds 4/5/6/8/9).
 
 Env:
-  TEXECOM_HOST            default 192.0.2.10
+  TEXECOM_HOST            required (no default)
   TEXECOM_PORT            default 10001
-  TEXECOM_UDL_PASSWORD    default 1234
+  TEXECOM_UDL_PASSWORD    required (no default)
   TEXECOM_FLIP_ZONE       optional zone number; if set, pause for open then
                           close and re-query that zone for Active/Secure flip
 """
@@ -28,9 +28,9 @@ import socket
 import sys
 import time
 
-HOST = os.environ.get("TEXECOM_HOST", "192.0.2.10")
+HOST = os.environ.get("TEXECOM_HOST", "").strip()
 PORT = int(os.environ.get("TEXECOM_PORT", "10001"))
-UDL_PASSWORD = os.environ.get("TEXECOM_UDL_PASSWORD", "1234")
+UDL_PASSWORD = os.environ.get("TEXECOM_UDL_PASSWORD", "")
 FLIP_ZONE = os.environ.get("TEXECOM_FLIP_ZONE")
 
 HEADER_START = ord("t")
@@ -231,6 +231,11 @@ def summarise(payload: bytes, start: int) -> None:
 
 
 def main() -> int:
+    if not HOST:
+        raise SystemExit(
+            "Set TEXECOM_HOST to the panel address (no default). "
+            "Optional: TEXECOM_PORT (default 10001), TEXECOM_UDL_PASSWORD."
+        )
     log(f"SPIKE-006 GetZoneState probe")
     log(f"Target: {HOST}:{PORT}")
     flip = int(FLIP_ZONE) if FLIP_ZONE else None
