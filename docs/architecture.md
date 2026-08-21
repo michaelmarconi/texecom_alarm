@@ -1,13 +1,10 @@
 # Architecture
 
-<!-- Synthesised by /architecture on 2026-08-10 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-002-use-frame-resync-and-asymmetric-reconnect-for-panel-protocol-collisions.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md, adr-010-use-command-reject-events-and-periodic-house-state-polling-for-silent-panel-path-death-detection.md, adr-011-use-automatic-session-recovery-for-mid-run-panel-path-failures.md, adr-012-use-python-3-for-the-texecom-alarm-app.md -->
+<!-- Synthesised by /architecture on 2026-08-21 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md, adr-010-use-command-reject-events-and-periodic-house-state-polling-for-silent-panel-path-death-detection.md, adr-011-use-automatic-session-recovery-for-mid-run-panel-path-failures.md, adr-012-use-python-3-for-the-texecom-alarm-app.md, adr-013-use-dedicated-local-network-module-for-home-assistant-panel-access.md, adr-014-use-host-scoped-trigger-disconnect-assumptions-for-panel-reconnect-design.md -->
 
-**Date:** 2026-08-10
+**Date:** 2026-08-21
 **State:** Accepted ✅
-<!-- Update 2026-08-21: ADR-013 / ADR-014 — modem/AT noise and trigger force-drop
-     are SmartCom / wrong-host, not dedicated-ComIP behaviour. -->
-<!-- Update 2026-08-10: cited ADR-012 for Python 3 (clears review-12 technology gap); prior same-day fold of ADR-011 + session-heal. -->
-<!-- Prior: 2026-08-09 folded Accepted spec-startup-login-backoff (progressive first-login waits). -->
+<!-- Update 2026-08-21: /architecture Update — fold ADR-013 (dedicated local module) and ADR-014 (host-scoped trigger-disconnect). Synthesis comment lists current Accepted ADRs only (ADR-002 superseded). -->
 
 ## Overview
 
@@ -21,27 +18,34 @@ intended for other Premier Elite households, published as a public Home Assistan
 Add-on with install-time options for facts that differ per panel.
 
 The Texecom Alarm App takes over that role: a self-built Home Assistant App (add-on)
-that lives on the same Home Assistant OS host, takes over the alarm panel's single
-ComIP connection once `the prior MQTT bridge` is stopped, and republishes everything Home
-Assistant already consumes — zone state and alarm state — over the same MQTT discovery
-mechanism `the prior MQTT bridge` uses today. Nothing on the consuming side (the
-`house_alarm_panel` template wrapper, its automations, the Security dashboard, the
-HomeKit bridges) needs to change to keep working.
+that lives on the same Home Assistant OS host, talks to a **dedicated local network
+module** on the panel (not the installer module used for the vendor app and
+monitoring station), takes over that module’s Connect login once `the prior MQTT bridge` is
+stopped on the same address, and republishes everything Home Assistant already
+consumes — zone state and alarm state — over the same MQTT discovery mechanism
+`the prior MQTT bridge` uses today. Nothing on the consuming side (the `house_alarm_panel`
+template wrapper, its automations, the Security dashboard, the HomeKit bridges)
+needs to change to keep working.
 
 The hard part here isn't scale — this is a handful of TCP messages a second against 40
-in-use zones. It's two coordination problems the live panel itself forces: Home
-Assistant must use the dedicated local network module (ComIP), not the installer
-signalling module (SmartCom) — on the SmartCom, alarm reporting seizes the port,
-kicks off the Connect login, and the same TCP session can show Hayes modem
-commands (`ATH0` / `ATZ`) from the dialer (SPIKE-002, later identified as the
-wrong host; ADR-013 / ADR-014). Any client that treats unexpected bytes as fatal
-still has to skip them, because mis-pointed installs and ordinary frame noise
-exist; and each network module only accepts one TCP Connect client at a time, so
-the handoff between `the prior MQTT bridge` and this app has to be sequenced deliberately,
-not just installed alongside it.
+in-use zones. It's two coordination problems. First, Home Assistant must use a
+dedicated local module: the installer’s signalling module seizes its port to report
+an alarm, kicks off whoever was logged in, and can put dialer noise on that same
+session. Pointing this app at that module looks like “the panel always drops us
+when sirens start”; pointing it at a ComIP reserved for local control does not
+(ADR-013, ADR-014). Clients must still skip unexpected bytes and reconnect if the
+socket dies — mis-pointed installs and ordinary frame noise exist — but the long
+wait after a trigger is a safety net, not the expected path on a correctly chosen
+module. Second, each network module only accepts one Connect login at a time, so
+the handoff from `the prior MQTT bridge` on *that* address has to be sequenced; a second
+module can hold its own login at the same time.
 
 Building this commits the project to:
 
+- Pointing the add-on’s panel address at a dedicated local network module, not
+  the module used for the vendor app and monitoring-station signalling (ADR-013).
+  Not every Premier Elite has two modules; operators must identify which IP is
+  which. Disarm during a live alarm is expected on that dedicated module.
 - Discovering the zone list from the panel itself at every startup, rather than
   hand-maintaining one in configuration.
 - After login (and again after a reconnect re-login), reading a full current-state
@@ -87,7 +91,7 @@ flowchart TB
     Household[Household members]:::external
     HA["Home Assistant<br/>+ existing config layer<br/>(dashboard, automations, HomeKit)"]:::external
     Broker[MQTT Broker]:::external
-    Panel["Texecom Premier Elite panel<br/>via ComIP module"]:::external
+    Panel["Texecom Premier Elite panel<br/>via dedicated local module"]:::external
     App[Texecom Alarm App]:::owned
 
     Household -->|arm/disarm, view dashboard| HA
@@ -113,11 +117,11 @@ broker) and its internal shape are detailed under `## Components` below.
   connect/login with progressive waits (5 s → 10 s → 20 s → 30 s, then 30 s
   until success), logging each next wait so operators can tell patience from a
   hang (`spec-startup-login-backoff`). This schedule does not redefine mid-run
-  reconnect patience after a session was already healthy (ADR-014 / former ADR-002).
+  reconnect patience after a session was already healthy (ADR-014).
 - **Unexpected byte on the wire** — the app scans forward for the next valid frame
-  header instead of tearing down the connection. Hayes `ATH0`/`ATZ` on this
-  household’s wire came from the installer SmartCom (wrong `panel_host`), not from
-  the dedicated ComIP (ADR-014).
+  header instead of tearing down the connection. Dialer/modem text on this
+  household’s session came from the installer signalling module (wrong panel
+  address), not from the dedicated local module (ADR-014).
 - **Connection dropped** — the app reconnects and flips **Alarm Panel Connection**
   off for the duration. A longer retry budget still exists after a trigger-adjacent
   drop as a fallback if Home Assistant shares a signalling module; a correctly
@@ -189,16 +193,17 @@ entity-registry presence beyond what HA's own MQTT integration creates from thes
 discovery payloads (ADR-003). Clean rename of that connectivity entity’s
 `unique_id` / Entity ID is in scope (no backwards-compat soft path).
 **Consumes:**
-- Texecom Connect protocol over TCP to the panel's ComIP module (ADR-001, ADR-002,
-  ADR-006, ADR-008, ADR-009, ADR-010, ADR-011).
+- Texecom Connect protocol over TCP to the panel's **dedicated local network
+  module** (ADR-001, ADR-013, ADR-014, ADR-006, ADR-008, ADR-009, ADR-010,
+  ADR-011) — not the installer signalling module.
 - The household's MQTT broker, as a standing runtime dependency (ADR-003) — the same
   broker `the prior MQTT bridge` already uses today.
 - App configuration (panel host/port, UDL password, MQTT broker settings, and the
   Home/Night→Part-Arm slot mapping) via the HA Supervisor's
   `config.yaml`/`options.json`/`bashio::config` mechanism, already scaffolded in this
-  repo (ADR-008 requires Home/Night→slot to be install-time configuration with Away
-  excluded from Part-Arm options; the exact option shape is still open — see Open
-  questions).
+  repo (ADR-013 requires panel host to be the dedicated local module; ADR-008
+  requires Home/Night→slot to be install-time configuration with Away excluded from
+  Part-Arm options; the exact option shape is still open — see Open questions).
 **Delivery:** Home Assistant App image with s6-supervised Python 3 process (ADR-012
 language; ADR-003 App shape).
 
@@ -211,8 +216,8 @@ Key behaviours:
   `min(5 × 2^(k-1), 30)` seconds before the next try — **5 s → 10 s → 20 s →
   30 s**, then **30 s** forever until success. Cap is **30 seconds**; never wait
   longer; never give up. Recovery logs must name the wait that will be used
-  before the next try. Distinct from ADR-002 asymmetric reconnect after a
-  previously healthy session drops. FakePanel must exercise fail-then-succeed and
+  before the next try. Distinct from ADR-014 reconnect-after-drop after a
+  previously healthy session. FakePanel must exercise fail-then-succeed and
   capped-wait shapes for CI.
 - **Startup / zone discovery** (ADR-001): after the first successful connect/login
   (including the ≥500ms post-connect wait and UDL password login — factory default
@@ -251,7 +256,7 @@ Key behaviours:
 - **Idle keepalive and ordinary collision recovery**: sends a safe read-only command
   (e.g. `GETDATETIME`) periodically; on a 2–3s timeout, resends with the same sequence
   number, matching the panel's own documented and empirically-confirmed recovery
-  behaviour (ADR-002). This keepalive is session keep-alive only — not proof the path
+  behaviour (ADR-014). This keepalive is session keep-alive only — not proof the path
   is trustworthy for commands (ADR-010).
 - **Silent panel-path death / command-path zombie detection** (ADR-010): arm/disarm
   NAK or command timeout immediately marks **Alarm Panel Connection** off even when
@@ -271,12 +276,18 @@ Key behaviours:
   auto-retry the failed arm/disarm command. FakePanel must cover health-check →
   reconnect-heal, trust-fail → corroboration recover, and trust-fail → bounded
   re-login.
-- **Frame resync** (ADR-002, host-scoped by ADR-014): treats a byte that doesn't match
-  the expected frame header as recoverable — scans forward for the next valid header
-  instead of raising. Skip unconditionally: truncated frames and mis-pointed hosts
-  still happen. Literal Hayes modem commands (`ATH0`, `ATZ`) on this install were
-  the installer **SmartCom** multiplexing dialer/reporting traffic onto the Connect
-  session (SPIKE-002); they are not established dedicated-ComIP behaviour (SPIKE-010).
+- **Dedicated local module** (ADR-013): panel host is the dedicated LAN module
+  (typically a ComIP reserved for this app), not the installer module used for
+  the vendor app and monitoring. Frame skip and reconnect-on-drop are not a licence
+  to target the signalling module on purpose. Disarm while triggered is expected
+  on the dedicated module. FakePanel must not claim a live alarm always drops the
+  login or that Disarm-from-triggered fails.
+- **Frame resync** (ADR-014): treats a byte that doesn't match the expected frame
+  header as recoverable — scans forward for the next valid header instead of raising.
+  Skip unconditionally: truncated frames and mis-pointed hosts still happen. Literal
+  Hayes modem commands (`ATH0`, `ATZ`) on this install were the installer signalling
+  module multiplexing dialer/reporting traffic onto the Connect session; they are
+  not established dedicated-ComIP behaviour.
 - **Asymmetric reconnect** (ADR-014): on a dropped connection — and, per ADR-011, on
   an unanswered mid-run health-check — reconnects and flips **Alarm Panel Connection**
   off throughout — never the `alarm_control_panel`/zone entities themselves (ADR-004).
@@ -291,9 +302,10 @@ Key behaviours:
   and publishes a "last trigger" snapshot (initiating zone, timestamp) the instant it
   decodes a transition into `in alarm`, so the household retains immediate context
   even if the ensuing reconnect takes the full observed window to complete.
-- **Cutover dependency** (ADR-001): because the panel's ComIP module accepts only one
-  TCP client at a time, `the prior MQTT bridge` must be fully stopped — not merely idle —
-  before this app's first connection attempt.
+- **Cutover dependency** (ADR-001, ADR-013): each network module accepts only one
+  Connect login at a time, so `the prior MQTT bridge` must be fully stopped on the **same**
+  address before this app's first connection attempt. A second module (vendor app /
+  monitoring) may keep its own login.
 - **Arm/disarm command handling** (ADR-008): accepts `arm_away` / `arm_night` /
   `arm_home` / `disarm` on the `alarm_control_panel` MQTT command topic and issues the
   confirmed shared Connect-protocol commands — `cmd=6` with a mode byte for arm, and
@@ -419,16 +431,16 @@ existing mid-run reconnect budgets stay plan-time / live-tunable (ADR-011).
 ### Protocol collision recovery
 
 Skip unexpected bytes always. On this household, the crash mechanism that looked like
-“the panel always multiplexes modem traffic at arm/trigger” was the installer
-**SmartCom** (SPIKE-002), not the dedicated ComIP. A correctly pointed ComIP stayed
-up through a live alarm (SPIKE-010). The long post-trigger reconnect branch is a
-fallback if `panel_host` is still the signalling module.
+“the panel always multiplexes dialer noise at arm/trigger” was the installer
+signalling module, not the dedicated local module. A correctly pointed ComIP stayed
+up through a live alarm. The long post-trigger reconnect branch is a fallback if
+Home Assistant is still on the signalling module.
 
 ```mermaid
 flowchart LR
     Trigger["Panel decodes<br/>in alarm event"]:::external
     Snap["Publish trigger<br/>snapshot"]:::owned
-    Junk["Unexpected bytes?<br/>(SmartCom: AT modem)"]:::external
+    Junk["Unexpected bytes?<br/>(signalling module)"]:::external
     Resync["App resyncs to<br/>next frame header"]:::owned
     Drop{"TCP disconnect?"}:::owned
     Stay["Session stays up<br/>HA Disarm works"]:::owned
@@ -449,14 +461,13 @@ flowchart LR
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
 ```
 
-On the dedicated ComIP, most alarms never reach a forced-disconnect branch at all
-(SPIKE-010). SPIKE-002’s “real trigger always force-disconnects” finding was the
-SmartCom path (ADR-014). If a disconnect does happen, Resume re-runs LOGIN, the
-ADR-006 zone-state snapshot, the ADR-009 area-flags snapshot, and `SETEVENTMESSAGES`
-before live reporting continues. The `alarm_control_panel` entity itself is
-unaffected by this whole flow — it keeps reporting last-known state (including
-`triggered`) throughout; only the dedicated connectivity `binary_sensor` reflects
-the degraded/recovering link (ADR-004).
+On the dedicated ComIP, most alarms never reach a forced-disconnect branch at all.
+Earlier “real trigger always force-disconnects” findings were the signalling-module
+path (ADR-014). If a disconnect does happen, Resume re-runs login, the zone-state
+snapshot, the area-flags snapshot, and event subscribe before live reporting
+continues. The alarm entity itself is unaffected by this whole flow — it keeps
+reporting last-known state (including triggered) throughout; only the dedicated
+connectivity sensor reflects the degraded/recovering link (ADR-004).
 
 ### Arm/disarm command
 
@@ -507,7 +518,7 @@ no new external network exposure is introduced.
 **Logging and monitoring:** Standard `bashio::log` output via the s6-supervised
 process, plus a dedicated connectivity/freshness `binary_sensor` (**Alarm Panel
 Connection**) published over MQTT that reflects off/recovering panel-link health
-during recovery windows (ADR-002, ADR-004), silent-death / command-reject detection
+during recovery windows (ADR-014, ADR-004), silent-death / command-reject detection
 (ADR-010), and mid-run session heal (ADR-011) — the `alarm_control_panel`/zone
 entities themselves are not used for this signal, since their own last-known state
 must stay visible throughout (ADR-004). Everyday logs must make recovery attempts and
@@ -518,9 +529,10 @@ distinguish backoff from a hang.
 **Deployment:** Ships as a Home Assistant App (add-on) using the existing
 `config.yaml`/`Dockerfile`/`rootfs` scaffold (arch: `aarch64`, `amd64`), run as a
 single s6-supervised process that restarts automatically on a non-zero exit. Cutover
-from `the prior MQTT bridge` is a hard sequencing step, not a side-by-side rollout: `the prior MQTT bridge`
-must be stopped before this app's first connection attempt, because the panel's ComIP
-module accepts only one TCP client at a time (ADR-001).
+from `the prior MQTT bridge` is a hard sequencing step **on the dedicated local module**, not
+a side-by-side rollout on that same IP: `the prior MQTT bridge` must be stopped before this
+app's first connection attempt (ADR-001). The installer signalling module may stay
+up for the vendor app and monitoring (ADR-013).
 
 **Out of scope.**
 
@@ -542,11 +554,11 @@ module accepts only one TCP client at a time (ADR-001).
   ADR-014: the long budget is a wrong-host safety net, not the expected ComIP path.
   ADR-011 heal cadence may align with these; do not treat them as newly finalised by
   heal alone.
-- **What "alarm reset" means as a product-observable signal is unresolved** (ADR-002
-  follow-on, still open) — no distinct Connect-protocol event was observed for
-  clearing the alarm-memory indicator. This architecture assumes the `AREA` event
-  returning to `armed`/`disarmed` is the practical signal — needs confirmation
-  before building a dedicated reset signal.
+- **What "alarm reset" means as a product-observable signal is unresolved**
+  (still open from the superseded reconnect ADR) — no distinct Connect-protocol
+  event was observed for clearing the alarm-memory indicator. This architecture
+  assumes the area event returning to armed/disarmed is the practical signal —
+  needs confirmation before building a dedicated reset signal.
 - **Whether the ComIP module's one-connection-at-a-time behaviour is a fixed
   hardware/firmware limit or a configurable installer setting** was not tested — cutover
   still assumes a hard stop of `the prior MQTT bridge` before this app connects (ADR-001).
@@ -585,3 +597,4 @@ module accepts only one TCP client at a time (ADR-001).
 | 11 | 2026-08-09 | Clear | — |
 | 12 | 2026-08-10 | Issues found | 1 |
 | 13 | 2026-08-10 | Clear | — (review-12 Python technology gap cleared via ADR-012) |
+| 14 | 2026-08-21 | Clear | — |
