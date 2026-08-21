@@ -1,8 +1,9 @@
 name: Bump version
 
+# Direct pushes to main are blocked for GITHUB_TOKEN on this personal repo
+# (ruleset: PRs required; GitHub Actions cannot be a bypass actor).
+# Run this workflow manually until a maintainer PAT is wired as a secret.
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
     inputs:
       bump:
@@ -83,14 +84,30 @@ jobs:
           git commit -m "chore: bump version to ${NEXT}"
           git push -u origin "HEAD:${BRANCH}" --force
           # Open PR if missing; enable auto-merge so it lands after CI (branch protection).
+          # Requires: Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"
           if ! gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
-            gh pr create --base main --head "$BRANCH" \
+            if ! gh pr create --base main --head "$BRANCH" \
               --title "chore: bump version to ${NEXT}" \
-              --body "Automated SemVer patch after merge to \`main\`. See [docs/addon-versioning.md](docs/addon-versioning.md)."
+              --body "Automated SemVer patch after merge to \`main\`. See [docs/addon-versioning.md](docs/addon-versioning.md)."; then
+              echo "::error::Cannot create bump PR. Enable Settings → Actions → General → Allow GitHub Actions to create and approve pull requests. Branch ${BRANCH} was pushed — open the PR manually."
+              exit 1
+            fi
           fi
           gh pr merge "$BRANCH" --squash --auto --delete-branch || \
-            gh pr merge "$BRANCH" --squash --admin --delete-branch || \
-            echo "::warning::Could not auto-merge bump PR — merge chore/bump-${NEXT} when CI is green"
-          # Tag after the version exists on a branch tip (tag the bump commit).
-          git tag "v${NEXT}"
-          git push origin "v${NEXT}"
+            echo "::warning::Could not auto-merge bump PR — merge ${BRANCH} when CI is green (tag after merge)."
+          # Do not tag until the version is on main; the merge push re-triggers this
+          # workflow as github-actions[bot] and is skipped. Tag in a follow-up step
+          # after merge by re-checking main, or tag here only if already merged.
+          sleep 5
+          git fetch origin main
+          MAIN_V=$(sed -nE 's/^version:[[:space:]]*"?([0-9]+\.[0-9]+\.[0-9]+)"?.*/\1/p' <(git show origin/main:texecom_alarm/config.yaml) | head -1)
+          if [[ "$MAIN_V" == "$NEXT" ]]; then
+            if git rev-parse "v${NEXT}" >/dev/null 2>&1; then
+              echo "Tag v${NEXT} already exists"
+            else
+              git tag "v${NEXT}" "origin/main"
+              git push origin "v${NEXT}"
+            fi
+          else
+            echo "::warning::v${NEXT} not on main yet — tag after the bump PR merges"
+          fi
