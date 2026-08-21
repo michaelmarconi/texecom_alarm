@@ -7,12 +7,12 @@ on:
     branches: ["main"]
 
 jobs:
-  texecom-alarm-app:
-    name: Texecom Alarm App
+  texecom-alarm:
+    name: Texecom Alarm
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: texecom_alarm/texecom-alarm-app/
+        working-directory: texecom_alarm/
     steps:
       - uses: actions/checkout@v7
 
@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: texecom_alarm/texecom-alarm-app/pyproject.toml
+          cache-dependency-path: texecom_alarm/pyproject.toml
 
       - name: Install package (dev extras)
         run: pip install -e ".[dev]"

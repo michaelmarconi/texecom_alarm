@@ -4,10 +4,10 @@
      Task-specific acceptance criteria sit on top of these bars. -->
 
 ## Build passes
-Build succeeds (`pip install -e ".[dev]"` in `texecom_alarm/texecom-alarm-app/` exits 0).
+Build succeeds (`pip install -e ".[dev]"` in `texecom_alarm/` exits 0).
 
 ## Tests pass
-All automated tests pass (`pytest` in `texecom_alarm/texecom-alarm-app/` exits 0), including
+All automated tests pass (`pytest` in `texecom_alarm/` exits 0), including
 E2E suites that mock the alarm panel — never targeting the live household panel
 in CI.
 
@@ -16,7 +16,7 @@ Line coverage for `texecom_alarm` is at least 90%
 (`pytest --cov=texecom_alarm --cov-fail-under=90` exits 0).
 
 ## Lint and format clean
-`ruff check` and `ruff format --check` pass in `texecom_alarm/texecom-alarm-app/`; the same
+`ruff check` and `ruff format --check` pass in `texecom_alarm/`; the same
 checks are enforced on every commit via pre-commit.
 
 ## Security scan clean

@@ -19,8 +19,9 @@ RUN \
 
 # Python runtime + install the bridge package (aiomqtt pulled in via pyproject)
 RUN apk add --no-cache python3 py3-pip
-COPY texecom-alarm-app /usr/src/texecom-alarm-app
-RUN pip3 install --no-cache-dir --break-system-packages /usr/src/texecom-alarm-app
+COPY pyproject.toml /usr/src/pkg/
+COPY src /usr/src/pkg/src
+RUN pip3 install --no-cache-dir --break-system-packages /usr/src/pkg
 
 # Copy root filesystem
 COPY rootfs /

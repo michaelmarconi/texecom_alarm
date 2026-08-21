@@ -13,8 +13,8 @@ not edit version files after merge.
 
 Copies (kept in lockstep by `scripts/sync-version.sh`):
 
-- `texecom_alarm/texecom-alarm-app/pyproject.toml` `version`
-- `texecom_alarm/texecom-alarm-app/src/texecom_alarm/__init__.py` `__version__`
+- `texecom_alarm/pyproject.toml` `version`
+- `texecom_alarm/src/texecom_alarm/__init__.py` `__version__`
 - Latest dated `## [X.Y.Z]` heading in `texecom_alarm/CHANGELOG.md`
   (`## [Unreleased]` does not count)
 

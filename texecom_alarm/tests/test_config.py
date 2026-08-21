@@ -220,7 +220,7 @@ def test_addon_config_schema_uses_display_part_arm_tokens() -> None:
     only — Away is never a Part-Arm option. Settings still normalise both
     display and legacy lowercase forms to canonical home|night|unused.
     """
-    config_path = Path(__file__).resolve().parents[2] / "config.yaml"
+    config_path = Path(__file__).resolve().parents[1] / "config.yaml"
     text = config_path.read_text(encoding="utf-8")
     display_list = "list(Home 🏠|Night 🌙|Unused)"
     for slot in ("part_arm_1", "part_arm_2", "part_arm_3"):
