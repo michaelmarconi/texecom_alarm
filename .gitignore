@@ -21,6 +21,17 @@ node_modules/
 # nested pipeline worktrees (spike/build/plan/refine)
 .worktrees/
 
+# Local-sim shims: whole-repo still mounted at apps/local/texecom_alarm until
+# Cursor Rebuild remounts texecom_alarm/ (docs/run.md dual-bind). Symlinks only.
+/config.yaml
+/Dockerfile
+/build.yaml
+/icon.png
+/logo.png
+/rootfs
+/translations
+/texecom-alarm-app
+
 # raw packet captures - may contain LAN topology/hardware details; findings
 # are written up in docs/protocol-reference.md and the relevant spike instead
 docs/captures/
