@@ -20,6 +20,14 @@ jobs:
         working-directory: .
         run: ./scripts/sync-version.sh check
 
+      - name: App branch tree check
+        working-directory: .
+        run: ./scripts/build-app-branch-tree.sh "${RUNNER_TEMP}/app-branch-check"
+
+      - name: Stale DOCS.md link check
+        working-directory: .
+        run: ./scripts/check-docs-links.sh
+
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"

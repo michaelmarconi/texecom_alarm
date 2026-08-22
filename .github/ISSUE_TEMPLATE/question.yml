@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Please skim [DOCS.md](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md) first.
+        Please skim [DOCS.md](https://github.com/michaelmarconi/texecom_alarm/blob/main/texecom_alarm/DOCS.md) first.
         Common traps: [wrong network module](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md) and [another Connect client holding the slot](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md).
         Do not paste UDL or MQTT passwords.
   - type: checkboxes
@@ -14,7 +14,7 @@ body:
     attributes:
       label: Before you submit
       options:
-        - label: I have read [DOCS.md](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md)
+        - label: I have read [DOCS.md](https://github.com/michaelmarconi/texecom_alarm/blob/main/texecom_alarm/DOCS.md)
           required: true
   - type: textarea
     id: question

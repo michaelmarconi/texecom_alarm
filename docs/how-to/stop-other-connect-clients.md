@@ -22,7 +22,7 @@ signalling board.
    Assistant configuration; this app does not copy them.
 2. Stop and uninstall anything else logged into the same module. Wait until that
    client is fully stopped — a lingering login blocks this app.
-3. Install **Texecom Alarm**, fill [Configuration](../../DOCS.md#configuration)
+3. Install **Texecom Alarm**, fill [Configuration](../../texecom_alarm/DOCS.md#configuration)
    (panel, MQTT, Part-Arm slots).
 4. Start this app. Check the log for a successful login, then zone enumeration.
 5. Confirm **Alarm Panel Connection** is on, the alarm entity is present, and

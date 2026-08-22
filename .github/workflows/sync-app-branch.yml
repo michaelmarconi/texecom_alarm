@@ -1,0 +1,44 @@
+name: Sync app branch
+
+# Force-push a thin catalogue branch for Supervisor store clones.
+# Consumers add: https://github.com/michaelmarconi/texecom_alarm#app
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "repository.yaml"
+      - "texecom_alarm/**"
+      - "LICENSE"
+      - "README.md"
+      - "scripts/build-app-branch-tree.sh"
+      - ".github/workflows/sync-app-branch.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Publish app branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build thin tree
+        run: ./scripts/build-app-branch-tree.sh "${RUNNER_TEMP}/app-branch"
+
+      - name: Force-push orphan app branch
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}/app-branch"
+          git init
+          git checkout -b app
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Sync catalogue from main ${SHA:0:7}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
+          git push --force origin app

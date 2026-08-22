@@ -45,5 +45,5 @@ A restart while already in alarm does not invent a new snapshot.
 ## Related
 
 - MQTT topics: [MQTT reference](../reference/mqtt.md)
-- Option reference: [Documentation](../../DOCS.md#soft-trust-recovery)
+- Option reference: [Documentation](../../texecom_alarm/DOCS.md#soft-trust-recovery)
 - Protocol shape: [protocol overview](../protocol-overview.md)
