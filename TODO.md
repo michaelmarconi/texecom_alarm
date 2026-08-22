@@ -15,6 +15,7 @@ Product ideas and follow-ons — not committed backlog work until planned.
   - **Done when:** Critical/High redacted ✅; history purged ✅.
 - **Store-shaped App repository (community publish path)** — Official HA Apps store won't take this; distribute as a public GitHub App repository (not HACS).
   - **Catalogue layout:** **done** — root `repository.yaml` + App in `texecom_alarm/`; apps-devcontainer dual-binds the subfolder to `local_texecom_alarm`.
+  - **Thin `app` branch:** Supervisor store URL is `https://github.com/michaelmarconi/texecom_alarm#app` (CI force-syncs allowlisted catalogue paths from `main`; omits `backlog/` / Guv'nor / pipeline `docs/`).
   - **GHCR / `image:`:** **done** — `image: ghcr.io/michaelmarconi/texecom-alarm`; builder on `v*` tags (multi-arch).
-  - **Packaging smoke (same test HA is fine):** Add the GitHub URL under App Store → Repositories; install/update that copy. Do **not** run `local_*` and the store-installed copy together (single ComIP + MQTT discovery clashes). Exercise install, options, and a version-bump Update path. Rebuild/reopen the apps container after dual-bind.
+  - **Packaging smoke (same test HA is fine):** Add the `#app` URL under App Store → Repositories; install/update that copy. Do **not** run `local_*` and the store-installed copy together (single ComIP + MQTT discovery clashes). Exercise install, options, and a version-bump Update path. Rebuild/reopen the apps container after dual-bind.
   - **Discoverability later:** README `my.home-assistant.io` add-repo link; Community forum post. Product gate remains `/accept` → `/docs` → `/ship`; store shape is packaging, not product accept.

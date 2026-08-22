@@ -24,7 +24,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | CI security scans | pass | `bandit` + `pip-audit` in `.github/workflows/ci.yml` |
 | Backups | n/a | No extra datastore; HA backup of add-on options is sufficient |
 | Official HA Apps store | n/a | Will not take this; community GitHub repository is the intended path (`TODO.md`) |
-| Store-shaped repository | pass | Root `repository.yaml` + App in `texecom_alarm/` (catalogue layout). Local apps-devcontainer dual-binds the app subfolder to `/mnt/supervisor/apps/local/texecom_alarm` so `local_texecom_alarm` still works. |
+| Store-shaped repository | pass | Root `repository.yaml` + App in `texecom_alarm/` (catalogue layout). Store URL uses generated `#app` branch (thin tree; no `backlog/`). Local apps-devcontainer dual-binds the app subfolder to `/mnt/supervisor/apps/local/texecom_alarm` so `local_texecom_alarm` still works. |
 | Pre-built images (GHCR) | pass | `image: ghcr.io/michaelmarconi/texecom-alarm` in `texecom_alarm/config.yaml`; builder workflow on `v*` tags (amd64 + aarch64 → multi-arch manifest) |
 | RISK-017 fingerprint | pass | Working tree + history rewrite complete; Critical/High LAN/name/UDL fingerprint purged from `main` |
 | CHANGELOG vs product | pass | `CHANGELOG.md` `[0.1.0]` describes the real App; `[0.0.1]` retained as historical scaffold only |
@@ -34,11 +34,11 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 ## Deploy
 
 - Authorized: no — waiting on pre-deploy Ask
-- Step performed: none. Catalogue layout is in place (`repository.yaml` + `texecom_alarm/`); GHCR/`image:` still open. GitHub host alone is not treated as a completed publish.
+- Step performed: pending — install from `https://github.com/michaelmarconi/texecom_alarm#app` (Add-on store → Repositories). Thin `app` branch + GHCR `image:` are the publish path; do not run store-installed copy alongside `local_texecom_alarm`.
 
 ## Live smoke
 
-- `/run --target {url}`: not run — no production/install URL yet. Local `/run` (sim HA on 7123) is not live smoke.
+- `/run --target {url}`: not run — household store smoke uses `#app` after sync workflow publishes. Local `/run` (sim HA on 7123) is not live smoke.
 
 ## Review
 | # | Date | Verdict | Issues |

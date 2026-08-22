@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Configuration and install docs
-    url: https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md
+    url: https://github.com/michaelmarconi/texecom_alarm/blob/main/texecom_alarm/DOCS.md
     about: Panel host, MQTT, Part-Arm mapping, and reconnect options.
   - name: Disarm fails only while the alarm is sounding
     url: https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md

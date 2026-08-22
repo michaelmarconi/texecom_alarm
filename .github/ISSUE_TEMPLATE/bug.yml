@@ -13,7 +13,7 @@ body:
     attributes:
       label: Before you submit
       options:
-        - label: I have read [DOCS.md](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md)
+        - label: I have read [DOCS.md](https://github.com/michaelmarconi/texecom_alarm/blob/main/texecom_alarm/DOCS.md)
           required: true
         - label: This report does not include UDL/MQTT passwords or a full household LAN address
           required: true

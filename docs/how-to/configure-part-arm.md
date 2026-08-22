@@ -7,7 +7,7 @@ installation is different — this app does not guess the mapping.
 ## What you need
 
 - The add-on installed, with **Panel host** pointed at your dedicated local
-  module (see [Documentation](../../DOCS.md)).
+  module (see [Documentation](../../texecom_alarm/DOCS.md)).
 - A note from your installer, or a few minutes on the keypad in engineer mode,
   of which Part-Arm slots exist (1, 2, and/or 3) and what each one is for.
 
@@ -49,5 +49,5 @@ Away is not configured there.
 
 ## Related
 
-- Option reference: [Documentation](../../DOCS.md#part-arm-slots-home-and-night)
+- Option reference: [Documentation](../../texecom_alarm/DOCS.md#part-arm-slots-home-and-night)
 - Why Away is never a Part-Arm slot: [protocol overview](../protocol-overview.md#arm-part-arm-and-disarm)

@@ -4,7 +4,7 @@ Default topic prefix is `texecom`. Replace it with your **MQTT topic prefix**
 option if you changed it.
 
 This is lookup for automations and debugging. For install options see
-[Documentation](../../DOCS.md).
+[Documentation](../../texecom_alarm/DOCS.md).
 
 ## App liveness
 

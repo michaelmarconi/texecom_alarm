@@ -47,7 +47,7 @@ ComIP — see [this guide](https://github.com/michaelmarconi/texecom_alarm/blob/
 - An MQTT broker Home Assistant can use (for example the Mosquitto add-on)
 - A **dedicated ComIP** (or equivalent) for this add-on, not the same module
   the installer uses for the Texecom app and monitoring station — see
-  [Documentation](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md) for why, and how to tell the two apart
+  [Documentation](https://github.com/michaelmarconi/texecom_alarm/blob/main/texecom_alarm/DOCS.md) for why, and how to tell the two apart
 - Only **one** Connect login per module — stop anything else using that
   network connection before you start this add-on
 
@@ -56,13 +56,15 @@ ComIP — see [this guide](https://github.com/michaelmarconi/texecom_alarm/blob/
 1. Install an MQTT broker if you do not already have one.
 2. Add this GitHub repository under **Settings → Add-ons → Add-on store →
    ⋮ → Repositories**:
-   `https://github.com/michaelmarconi/texecom_alarm`
+   `https://github.com/michaelmarconi/texecom_alarm#app`
+   (the `#app` branch is the thin store catalogue — CI-managed from `main`;
+   development stays on `main`).
 3. Install **Texecom Alarm** from that repository (pre-built images from GHCR
    when the matching version tag has been published; otherwise Supervisor
    builds from git).
 4. Open **Configuration** and set the panel address, UDL password, MQTT
    settings, and which Part-Arm slots mean Home / Night on your panel.
-   Details: [Documentation](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md). Part-Arm walkthrough:
+   Details: [Documentation](https://github.com/michaelmarconi/texecom_alarm/blob/main/texecom_alarm/DOCS.md). Part-Arm walkthrough:
    [Configure Home and Night](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/configure-part-arm.md).
 5. If another Connect client still holds the same module, stop it first:
    [Free the panel module](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md).
@@ -120,7 +122,7 @@ Home Assistant).
 
 | Need                                         | Where                                                                                                                                      |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Install and configuration options            | [Documentation](https://github.com/michaelmarconi/texecom_alarm/blob/main/DOCS.md) (`DOCS.md` is also the Supervisor docs tab)             |
+| Install and configuration options            | [Documentation](https://github.com/michaelmarconi/texecom_alarm/blob/main/texecom_alarm/DOCS.md) (`DOCS.md` is also the Supervisor docs tab)             |
 | Map Home / Night to Part-Arm                 | [How to configure Part-Arm](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/configure-part-arm.md)                   |
 | Free the panel’s Connect slot                | [Stop other Connect clients](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md)          |
 | Disarm fails only during an alarm            | [Wrong network module](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md)                      |
