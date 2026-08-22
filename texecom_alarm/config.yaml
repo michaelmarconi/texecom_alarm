@@ -1,0 +1,50 @@
+# https://developers.home-assistant.io/docs/apps/configuration#app-configuration
+name: Texecom Alarm
+version: "0.1.1"
+slug: texecom_alarm
+description: Connect to a Texecom Premier Elite alarm panel and publish updates to MQTT
+url: "https://github.com/michaelmarconi/texecom_alarm"
+arch:
+  - aarch64
+  - amd64
+# Pre-built images (Track 5). Supervisor substitutes nothing — multi-arch manifest.
+image: "ghcr.io/michaelmarconi/texecom-alarm"
+init: false
+options:
+  panel_host: ""
+  panel_port: 10001
+  udl_password: "1234"
+  mqtt_host: ""
+  mqtt_port: 1883
+  mqtt_username: ""
+  mqtt_password: ""
+  mqtt_topic_prefix: texecom
+  part_arm_1: Unused
+  part_arm_2: Unused
+  part_arm_3: Unused
+  reconnect_normal_attempts: 4
+  reconnect_normal_interval_seconds: 2.5
+  reconnect_trigger_attempts: 18
+  reconnect_trigger_interval_seconds: 5
+  trust_fail_window_seconds: 90
+  log_level: INFO
+schema:
+  panel_host: str
+  panel_port: port
+  udl_password: password
+  mqtt_host: str
+  mqtt_port: port
+  mqtt_username: str?
+  mqtt_password: password?
+  mqtt_topic_prefix: str
+  # Configuration radio labels (Away is full arm — not a Part-Arm choice).
+  part_arm_1: list(Home 🏠|Night 🌙|Unused)
+  part_arm_2: list(Home 🏠|Night 🌙|Unused)
+  part_arm_3: list(Home 🏠|Night 🌙|Unused)
+  reconnect_normal_attempts: int(1,10000)
+  reconnect_normal_interval_seconds: float(0,)
+  reconnect_trigger_attempts: int(1,10000)
+  reconnect_trigger_interval_seconds: float(0,)
+  trust_fail_window_seconds: float(0,)
+  # list(...) tokens are the Configuration radio labels (AC1).
+  log_level: list(WARNING|INFO|DEBUG|TRACE)

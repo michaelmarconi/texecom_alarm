@@ -1,0 +1,71 @@
+configuration:
+  panel_host:
+    name: Panel host
+    description: IP address or hostname of the panel’s network module on your LAN.
+  panel_port:
+    name: Panel port
+    description: Network port for the panel connection (default 10001).
+  udl_password:
+    name: Panel UDL password
+    description: >-
+      Password used to log in to the panel. Default is often 1234 — ask your
+      installer if login fails.
+  mqtt_host:
+    name: MQTT host
+    description: Your MQTT broker (for example core-mosquitto).
+  mqtt_port:
+    name: MQTT port
+    description: MQTT broker port (default 1883).
+  mqtt_username:
+    name: MQTT username
+    description: Optional. Leave blank if your broker does not need a login.
+  mqtt_password:
+    name: MQTT password
+    description: Optional. Leave blank if unused.
+  mqtt_topic_prefix:
+    name: MQTT topic prefix
+    description: Root name for topics this add-on publishes (default texecom).
+  part_arm_1:
+    name: Part-Arm slot 1
+    description: >-
+      Which Home Assistant button (Home or Night) this Part-Arm slot should
+      use — or Unused if that slot is not set up on your panel. Away is always
+      full arm and is not listed here.
+  part_arm_2:
+    name: Part-Arm slot 2
+    description: >-
+      Which Home Assistant button (Home or Night) this Part-Arm slot should
+      use — or Unused if that slot is not set up on your panel. Away is always
+      full arm and is not listed here.
+  part_arm_3:
+    name: Part-Arm slot 3
+    description: >-
+      Which Home Assistant button (Home or Night) this Part-Arm slot should
+      use — or Unused if that slot is not set up on your panel. Away is always
+      full arm and is not listed here.
+  reconnect_normal_attempts:
+    name: Reconnect attempts (normal)
+    description: >-
+      How many quick retries after an ordinary panel disconnect (default 4).
+  reconnect_normal_interval_seconds:
+    name: Reconnect interval seconds (normal)
+    description: Seconds to wait between those quick retries (default 2.5).
+  reconnect_trigger_attempts:
+    name: Reconnect attempts (after trigger)
+    description: >-
+      How many longer retries after a real alarm trigger disconnect (default 18).
+  reconnect_trigger_interval_seconds:
+    name: Reconnect interval seconds (after trigger)
+    description: Seconds to wait between those longer retries (default 5).
+  trust_fail_window_seconds:
+    name: Trust fail window seconds
+    description: >-
+      How long Alarm Panel Connection may stay off from a soft trust failure
+      before the add-on tears down and logs in again (default 90). Brief
+      glitches can clear earlier via a successful house-state check. Tunable
+      for live adjustment — not a fixed forever value.
+  log_level:
+    name: Log level
+    description: >-
+      WARNING (quiet), INFO (everyday), DEBUG (more detail), or TRACE (full
+      panel traffic for tricky connection issues).

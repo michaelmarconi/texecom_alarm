@@ -1,0 +1,27 @@
+#!/usr/bin/with-contenv bashio
+# ==============================================================================
+# Start the Texecom Alarm service
+# s6-overlay docs: https://github.com/just-containers/s6-overlay
+# ==============================================================================
+
+# Panel connection
+export TEXECOM_PANEL_HOST="$(bashio::config 'panel_host')"
+export TEXECOM_PANEL_PORT="$(bashio::config 'panel_port')"
+export TEXECOM_UDL_PASSWORD="$(bashio::config 'udl_password')"
+
+# MQTT broker
+export TEXECOM_MQTT_HOST="$(bashio::config 'mqtt_host')"
+export TEXECOM_MQTT_PORT="$(bashio::config 'mqtt_port')"
+export TEXECOM_MQTT_USERNAME="$(bashio::config 'mqtt_username')"
+export TEXECOM_MQTT_PASSWORD="$(bashio::config 'mqtt_password')"
+export TEXECOM_MQTT_TOPIC_PREFIX="$(bashio::config 'mqtt_topic_prefix')"
+
+# Part-Arm slot → HA mode mapping (install-specific)
+export TEXECOM_PART_ARM_1="$(bashio::config 'part_arm_1')"
+export TEXECOM_PART_ARM_2="$(bashio::config 'part_arm_2')"
+export TEXECOM_PART_ARM_3="$(bashio::config 'part_arm_3')"
+
+bashio::log.info "Starting Texecom Alarm (panel=${TEXECOM_PANEL_HOST}:${TEXECOM_PANEL_PORT})"
+
+## Run your program
+exec /usr/bin/texecom_alarm
