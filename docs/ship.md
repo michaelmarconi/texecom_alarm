@@ -34,11 +34,11 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 ## Deploy
 
 - Authorized: no — waiting on pre-deploy Ask
-- Step performed: pending — install from `https://github.com/michaelmarconi/texecom_alarm#app` (Add-on store → Repositories). Thin `app` branch + GHCR `image:` are the publish path; do not run store-installed copy alongside `local_texecom_alarm`.
+- Step performed: catalogue path ready — store URL `https://github.com/michaelmarconi/texecom_alarm#app` (CI-managed thin `app` branch). Do not run store-installed copy alongside `local_texecom_alarm`.
 
 ## Live smoke
 
-- `/run --target {url}`: not run — household store smoke uses `#app` after sync workflow publishes. Local `/run` (sim HA on 7123) is not live smoke.
+- Store catalogue smoke (apps-devcontainer, 2026-08-22): added `…/texecom_alarm#app`; clone at `apps/git/ebb3b885` is allowlist-only (no `backlog/`); Supervisor shows `ebb3b885_texecom_alarm` v0.1.1 with Documentation; **no** `Invalid app config` for the git clone (remaining warnings are from the **local** monorepo mount’s `backlog/config.yml`, expected until local dual-bind changes). Did not install the store copy alongside `local_texecom_alarm`. Household OS install still pending `/run --target`.
 
 ## Review
 | # | Date | Verdict | Issues |
