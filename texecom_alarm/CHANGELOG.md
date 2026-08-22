@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-22
+
+### Changed
+
+- Improved logging: Supervisor add-on logs now include panel metadata in the
+  message text (zone names and Secure/Active status, AREA state labels, named
+  LOG events such as Alarm Active, panel identification on start, and command
+  labels on TRACE tx/rx) so DEBUG/INFO/TRACE are readable without a separate
+  sniffer.
+
 ## [0.1.0] - 2026-08-21
 
 ### Added

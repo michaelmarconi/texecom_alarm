@@ -54,8 +54,8 @@ with a known household event timestamp without a separate sniffer.
 |-------|-------------------|------------------|--------------------------------------|
 | **WARNING** | Quietest production | Arm rejected; command failure | `alarm_command_arm_rejected` · `alarm_command_failed: … NAK` · other warnings/errors only |
 | **INFO** | Day-to-day (default) | Start, enumerate, reconnect, connectivity | Start line · `enumerated_zones` · reconnect ok/degraded · connectivity live/degraded · plus all WARNING+ |
-| **DEBUG** | Did we handle that? | Study PIR open/clear; arm command | Zone/area handling → MQTT outcome · arm/disarm command path outcomes · snapshot/reconnect steps · plus INFO+ |
-| **TRACE** | Hunt wire/session truth | Zombie hunt; quiet keepalives | DEBUG+ · panel tx/rx (commands and unsolicited) · keepalive pairs · compact `panel_resync skipped N bytes hex=…` for non-frames |
+| **DEBUG** | Did we handle that? | Study PIR open/clear; arm command | Zone name + Secure/Active → MQTT · AREA in exit → arming · named LOG (Alarm Active) · arm/disarm outcomes · snapshot summaries · plus INFO+ |
+| **TRACE** | Hunt wire/session truth | Zombie hunt; quiet keepalives | DEBUG+ · panel tx/rx with command labels and seq · keepalive pairs · compact `panel_resync skipped N bytes hex=…` for non-frames |
 
 **Severity rule:** choosing a level includes that level and all more severe
 messages (e.g. INFO includes WARNING and ERROR; TRACE includes everything).

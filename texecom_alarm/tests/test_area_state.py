@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 from tests.fake_panel import FakePanel, FakeZone
 from tests.recording_mqtt import RecordingMqttPublisher
@@ -15,6 +17,7 @@ from texecom_alarm.area_state import (
     publish_area_state_snapshot,
 )
 from texecom_alarm.config import Settings
+from texecom_alarm.logging_setup import configure_logging
 from texecom_alarm.protocol.client import PanelClient
 from texecom_alarm.protocol.frame import CMD_GET_AREA_FLAGS
 
@@ -241,3 +244,98 @@ async def test_handle_area_message_ignores_short_body() -> None:
     )
     assert published is None
     assert mqtt.payloads_for("texecom/alarm/state") == []
+
+
+class _Capture(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(level=logging.NOTSET)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+def _area_msgs(records: list[logging.LogRecord]) -> list[str]:
+    return [r.getMessage() for r in records if r.name.startswith("texecom_alarm.area_state")]
+
+
+@pytest.mark.asyncio
+async def test_area_snapshot_debug_includes_payload_and_flags() -> None:
+    root = logging.getLogger()
+    before_level = root.level
+    before_handlers = list(root.handlers)
+    capture = _Capture()
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        configure_logging("DEBUG")
+        root.addHandler(capture)
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        capture.records.clear()
+
+        await publish_area_state_snapshot(
+            client,
+            mqtt,
+            settings=_settings(),
+            topic_prefix="texecom",
+            zone_count=12,
+        )
+
+        msgs = _area_msgs(capture.records)
+        done = [m for m in msgs if "area_state_snapshot_done" in m]
+        assert done, msgs
+        joined = " ".join(done)
+        assert "disarmed" in joined
+        assert "Alarm=0" in joined or "Alarm=" in joined
+        assert "FullArmed" in joined or "Armed" in joined
+        await client.close()
+    finally:
+        root.removeHandler(capture)
+        root.handlers.clear()
+        for handler in before_handlers:
+            root.addHandler(handler)
+        root.setLevel(before_level)
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_handle_area_message_debug_includes_state_label() -> None:
+    root = logging.getLogger()
+    before_level = root.level
+    before_handlers = list(root.handlers)
+    capture = _Capture()
+    try:
+        configure_logging("DEBUG")
+        root.addHandler(capture)
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        # state 1 = in exit → MQTT arming
+        published = await handle_area_message(
+            mqtt, bytes([2, 1, 1]), settings=_settings(), topic_prefix="texecom"
+        )
+        assert published == "arming"
+        msgs = _area_msgs(capture.records)
+        joined = " ".join(msgs)
+        assert "AREA" in joined
+        assert "in exit" in joined
+        assert "arming" in joined
+    finally:
+        root.removeHandler(capture)
+        root.handlers.clear()
+        for handler in before_handlers:
+            root.addHandler(handler)
+        root.setLevel(before_level)

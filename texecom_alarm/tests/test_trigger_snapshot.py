@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 
 import pytest
 from tests.recording_mqtt import RecordingMqttPublisher
 
+from texecom_alarm.logging_setup import configure_logging
 from texecom_alarm.trigger_snapshot import (
     TriggerActivityBuffer,
     alarm_attributes_topic,
     maybe_publish_trigger_snapshot,
 )
+from texecom_alarm.zones import Zone
 
 
 def test_alarm_attributes_topic() -> None:
@@ -156,3 +159,50 @@ async def test_attributes_retained_across_later_disarm_state_publish() -> None:
     assert mqtt.payloads_for("texecom/alarm/attributes") == attrs_before
     payload = json.loads(attrs_before[0])
     assert payload["last_trigger_zone"] == 3
+
+
+@pytest.mark.asyncio
+async def test_trigger_snapshot_debug_includes_zone_name() -> None:
+    root = logging.getLogger()
+    before_level = root.level
+    before_handlers = list(root.handlers)
+
+    class _Capture(logging.Handler):
+        def __init__(self) -> None:
+            super().__init__(level=logging.NOTSET)
+            self.records: list[logging.LogRecord] = []
+
+        def emit(self, record: logging.LogRecord) -> None:
+            self.records.append(record)
+
+    capture = _Capture()
+    try:
+        configure_logging("DEBUG")
+        root.addHandler(capture)
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        buf = TriggerActivityBuffer()
+        buf.record_zone(1, 0x01)
+        fixed = datetime(2026, 8, 4, 17, 0, 0, tzinfo=UTC)
+        await maybe_publish_trigger_snapshot(
+            mqtt,
+            previous_payload="armed_away",
+            new_payload="triggered",
+            topic_prefix="texecom",
+            buffer=buf,
+            clock=lambda: fixed,
+            zones={1: Zone(number=1, zone_type=1, name="FRONT DOOR")},
+        )
+        msgs = [
+            r.getMessage()
+            for r in capture.records
+            if r.name.startswith("texecom_alarm.trigger_snapshot")
+        ]
+        assert any("mqtt_trigger_snapshot" in m for m in msgs), msgs
+        assert any("FRONT DOOR" in m and "1" in m for m in msgs), msgs
+    finally:
+        root.removeHandler(capture)
+        root.handlers.clear()
+        for handler in before_handlers:
+            root.addHandler(handler)
+        root.setLevel(before_level)

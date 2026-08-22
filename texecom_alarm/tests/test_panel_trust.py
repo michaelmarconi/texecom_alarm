@@ -140,6 +140,14 @@ async def test_arm_nak_publishes_panel_link_off_while_keepalive_ok() -> None:
     assert extra["keepalive_still_ok"] is True
     assert extra["panel_link_payload"] == "OFF"
     assert "1234" not in warnings[-1].getMessage()
+    msg = warnings[-1].getMessage()
+    assert "away" in msg or "ha_mode=away" in msg
+    lowered = msg.lower()
+    assert (
+        "trust poll" in lowered
+        or "successful trust poll" in lowered
+        or "last successful" in lowered
+    )
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ import logging
 from typing import Protocol
 
 from texecom_alarm.config import Settings
+from texecom_alarm.log_labels import area_state_label
 from texecom_alarm.mqtt.discovery import alarm_state_topic
 from texecom_alarm.protocol.client import PanelClient, ProtocolError
 from texecom_alarm.protocol.frame import AREA_FLAGS_COUNT, AREA_MAP, MSG_AREA
@@ -138,6 +139,24 @@ def decode_area_ha_state(
     return "armed_away"
 
 
+def _flags_summary_for_log(
+    flags: bytes,
+    *,
+    area_size: int,
+    area_number: int,
+) -> str:
+    """Compact named-bit summary for DEBUG snapshot lines."""
+    alarm = int(flag_bit(flags, FLAG_ALARM, area_size=area_size, area_number=area_number))
+    armed = int(flag_bit(flags, FLAG_ARMED, area_size=area_size, area_number=area_number))
+    full_armed = int(flag_bit(flags, FLAG_FULL_ARMED, area_size=area_size, area_number=area_number))
+    part1 = flag_bit(flags, FLAG_PART_ARM_1, area_size=area_size, area_number=area_number)
+    part2 = flag_bit(flags, FLAG_PART_ARM_2, area_size=area_size, area_number=area_number)
+    part3 = flag_bit(flags, FLAG_PART_ARM_3, area_size=area_size, area_number=area_number)
+    part_arm = 1 if part1 else 2 if part2 else 3 if part3 else None
+    part_label = f"slot {part_arm}" if part_arm is not None else "none"
+    return f"Alarm={alarm} Armed={armed} FullArmed={full_armed} PartArm={part_label}"
+
+
 async def publish_alarm_state(
     mqtt: MqttPublisher,
     *,
@@ -147,7 +166,7 @@ async def publish_alarm_state(
     """Publish retained MQTT alarm state for the single HOUSE alarm entity."""
     topic = alarm_state_topic(topic_prefix)
     await mqtt.publish(topic, payload, retain=True)
-    logger.debug("mqtt_alarm_state", extra={"topic": topic, "payload": payload})
+    logger.debug("mqtt_alarm_state topic=%s payload=%s", topic, payload)
 
 
 async def publish_area_state_snapshot(
@@ -169,8 +188,10 @@ async def publish_area_state_snapshot(
             f"GetAreaFlags: area_size={area_size} dual-request path not implemented"
         )
     logger.debug(
-        "area_state_snapshot_start",
-        extra={"zone_count": zone_count, "area_size": area_size, "count": AREA_FLAGS_COUNT},
+        "area_state_snapshot_start zone_count=%s area_size=%s count=%s",
+        zone_count,
+        area_size,
+        AREA_FLAGS_COUNT,
     )
     flags = await client.get_area_flags(0, AREA_FLAGS_COUNT, area_size=area_size)
     payload = decode_area_ha_state(
@@ -180,7 +201,13 @@ async def publish_area_state_snapshot(
         settings=settings,
     )
     await publish_alarm_state(mqtt, payload=payload, topic_prefix=topic_prefix)
-    logger.debug("area_state_snapshot_done", extra={"payload": payload})
+    summary = _flags_summary_for_log(flags, area_size=area_size, area_number=HOUSE_AREA_NUMBER)
+    logger.debug(
+        "area_state_snapshot_done area=%s MQTT=%s (%s)",
+        HOUSE_AREA_NUMBER,
+        payload,
+        summary,
+    )
     return payload
 
 
@@ -196,14 +223,14 @@ async def handle_area_message(
     Returns the published HA payload string, or None if the message was ignored.
     """
     if len(body) < 3:
-        logger.debug("area_message_short", extra={"body": body.hex()})
+        logger.debug("area_message_short body=%s", body.hex())
         return None
     if body[0] != MSG_AREA:
         return None
     area_number = body[1]
     state = body[2]
     if area_number != HOUSE_AREA_NUMBER:
-        logger.debug("area_message_unused_ignored", extra={"area": area_number})
+        logger.debug("area_message_unused_ignored area=%s", area_number)
         return None
     payload = mqtt_payload_for_area_state(state, settings)
     if payload is None:
@@ -214,5 +241,12 @@ async def handle_area_message(
             area_number,
         )
         return None
+    logger.debug(
+        "AREA area=%s state=%s (%s) → MQTT %s",
+        area_number,
+        state,
+        area_state_label(state),
+        payload,
+    )
     await publish_alarm_state(mqtt, payload=payload, topic_prefix=topic_prefix)
     return payload

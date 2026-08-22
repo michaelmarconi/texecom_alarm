@@ -264,14 +264,14 @@ class PanelClient:
     async def set_area_arm(self, mode: int) -> None:
         """SETAREAARM (cmd 6): shared arm command; mode byte from Settings mapping."""
         body = bytes([mode & 0xFF, 0x01])
-        logger.debug("panel_set_area_arm", extra={"mode": mode & 0xFF})
+        logger.debug("panel_set_area_arm mode=%s", mode & 0xFF)
         payload = await self.send_command(CMD_SET_AREA_ARM, body)
         if len(payload) >= 1 and payload[0] == NAK:
             raise ProtocolError(
                 "Panel rejected the arm command (SETAREAARM NAK). "
                 "The panel may be busy, already armed differently, or blocking the request."
             )
-        logger.debug("panel_set_area_arm_ok", extra={"mode": mode & 0xFF})
+        logger.debug("panel_set_area_arm_ok mode=%s", mode & 0xFF)
 
     async def set_area_disarm(self) -> None:
         """SETAREADISARM (cmd 8): mode-independent disarm / cancel-during-exit."""
@@ -343,13 +343,11 @@ class PanelClient:
                     await self._writer.drain()
                     logger.log(
                         TRACE_LEVEL,
-                        "panel_tx",
-                        extra={
-                            "cmd": cmd,
-                            "seq": seq,
-                            "attempt": attempt,
-                            "bytes": len(frame),
-                        },
+                        "panel_tx %s seq=%s attempt=%s %s bytes",
+                        self.command_label(cmd),
+                        seq,
+                        attempt,
+                        len(frame),
                     )
                     try:
                         return await self._await_response(cmd, seq)
@@ -456,12 +454,10 @@ class PanelClient:
                     )
                 logger.log(
                     TRACE_LEVEL,
-                    "panel_rx",
-                    extra={
-                        "msg_type": frame.msg_type,
-                        "seq": frame.sequence,
-                        "bytes": len(frame.body),
-                    },
+                    "panel_rx type=%r seq=%s %s bytes",
+                    chr(frame.msg_type) if 32 <= frame.msg_type < 127 else frame.msg_type,
+                    frame.sequence,
+                    len(frame.body),
                 )
                 return frame
 
