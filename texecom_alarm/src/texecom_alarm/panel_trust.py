@@ -170,11 +170,17 @@ class PanelTrust:
             topic_prefix=self._topic_prefix,
             live=False,
         )
+        poll_age = self._seconds_since(self._last_successful_trust_poll_at)
+        poll_age_text = f"{poll_age:g}s ago" if poll_age is not None else "never"
+        mode_text = f" ha_mode={ha_mode}" if ha_mode is not None else ""
         logger.warning(
-            "Alarm Panel Connection degraded (%s); keepalive_still_ok=%s; "
+            "Alarm Panel Connection degraded (%s)%s; keepalive_still_ok=%s; "
+            "last successful trust poll %s; "
             "publishing Connection OFF. Zone/alarm entities keep last-known state.",
             reason,
+            mode_text,
             self._last_keepalive_ok,
+            poll_age_text,
             extra=self._log_extra(
                 reason=reason,
                 ha_mode=ha_mode,
@@ -276,11 +282,21 @@ class PanelTrust:
             topic_prefix=self._topic_prefix,
             live=False,
         )
+        poll_age = self._seconds_since(self._last_successful_trust_poll_at)
+        poll_age_text = f"{poll_age:g}s ago" if poll_age is not None else "never"
+        mode_text = (
+            f" ha_mode={self._last_failure_ha_mode}"
+            if self._last_failure_ha_mode is not None
+            else ""
+        )
         logger.warning(
-            "Alarm Panel Connection degraded (%s); keepalive_still_ok=%s; "
+            "Alarm Panel Connection degraded (%s)%s; keepalive_still_ok=%s; "
+            "last successful trust poll %s; "
             "publishing Connection OFF. Zone/alarm entities keep last-known state.",
             reason,
+            mode_text,
             self._last_keepalive_ok,
+            poll_age_text,
             extra=self._log_extra(
                 reason=reason,
                 ha_mode=self._last_failure_ha_mode,

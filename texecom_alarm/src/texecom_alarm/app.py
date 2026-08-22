@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from texecom_alarm.area_state import handle_area_message, publish_area_state_snapshot
 from texecom_alarm.arm_commands import handle_alarm_command
 from texecom_alarm.config import Settings, load_settings, warn_if_factory_udl
+from texecom_alarm.log_labels import log_event_label
 from texecom_alarm.logging_setup import TRACE_LEVEL, configure_logging
 from texecom_alarm.mqtt.discovery import (
     AVAILABILITY_OFFLINE,
@@ -141,7 +142,6 @@ async def run(
             )
 
         zones, zone_count = await enumerate_zones(panel_client)
-        logger.info("enumerated_zones", extra={"count": len(zones), "zone_count": zone_count})
 
         avail = availability_topic(cfg.mqtt_topic_prefix)
         await mqtt_client.connect(
@@ -386,6 +386,7 @@ async def _listen_with_reconnect(
                 settings=settings,
                 topic_prefix=topic_prefix,
                 in_use_zones=in_use_zones,
+                zones=zones,
                 idle_timeout=idle_timeout,
                 alarm_state=alarm_state,
                 activity=activity,
@@ -429,6 +430,7 @@ async def _listen_with_reconnect(
             new_payload=last_alarm_payload,
             topic_prefix=topic_prefix,
             buffer=activity,
+            zones={z.number: z for z in zones},
         )
 
 
@@ -443,6 +445,7 @@ async def _listen_panel_messages(
     idle_timeout: float = _KEEPALIVE_IDLE_TIMEOUT,
     activity: TriggerActivityBuffer | None = None,
     trust: PanelTrust | None = None,
+    zones: list[Zone] | None = None,
 ) -> None:
     """Steady-state loop until ForcedDisconnect.
 
@@ -452,6 +455,7 @@ async def _listen_panel_messages(
     """
     logger.debug("panel_listen_start")
     buffer = activity if activity is not None else TriggerActivityBuffer()
+    zone_by_number = {z.number: z for z in zones} if zones is not None else None
     try:
         while True:
             wait = idle_timeout
@@ -496,6 +500,7 @@ async def _listen_panel_messages(
                                 new_payload=new_payload,
                                 topic_prefix=topic_prefix,
                                 buffer=buffer,
+                                zones=zone_by_number,
                             )
                         except Exception:
                             logger.exception(
@@ -516,6 +521,7 @@ async def _listen_panel_messages(
                             new_payload=new_payload,
                             topic_prefix=topic_prefix,
                             buffer=buffer,
+                            zones=zone_by_number,
                         )
                     except Exception:
                         logger.exception(
@@ -538,6 +544,7 @@ async def _listen_panel_messages(
                         body,
                         topic_prefix=topic_prefix,
                         in_use_zones=in_use_zones,
+                        zones=zone_by_number,
                     )
                 except Exception:
                     logger.exception(
@@ -546,13 +553,21 @@ async def _listen_panel_messages(
             elif subtype == MSG_LOG:
                 # Record type/group when present; LOG never publishes MQTT state.
                 if len(body) >= 3:
-                    buffer.record_log(body[1], body[2])
+                    event_type = body[1]
+                    group = body[2]
+                    buffer.record_log(event_type, group)
+                    logger.debug(
+                        "LOG %s (type=%s) group=%s (kept for trigger snapshot; "
+                        "not used for alarm MQTT state)",
+                        log_event_label(event_type),
+                        event_type,
+                        group,
+                    )
                     logger.log(
                         TRACE_LEVEL,
-                        "panel_event LOG type=%s group=%s (kept for trigger snapshot; "
-                        "not used for alarm MQTT state) body=%s",
-                        body[1],
-                        body[2],
+                        "panel_event LOG type=%s group=%s body=%s",
+                        event_type,
+                        group,
                         body.hex(),
                     )
                 else:
@@ -582,6 +597,7 @@ async def _listen_panel_messages(
                             new_payload=new_payload,
                             topic_prefix=topic_prefix,
                             buffer=buffer,
+                            zones=zone_by_number,
                         )
                     except Exception:
                         logger.exception(

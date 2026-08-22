@@ -6,6 +6,8 @@ import logging
 import re
 from dataclasses import dataclass
 
+from texecom_alarm.log_labels import zone_type_label
+from texecom_alarm.logging_setup import TRACE_LEVEL
 from texecom_alarm.protocol.client import PanelClient, ProtocolError
 from texecom_alarm.protocol.frame import AREA_MAP, CMD_GETPANELIDENTIFICATION, CMD_GETZONEDETAILS
 
@@ -90,6 +92,11 @@ def zone_display_name(name: str, *, zone_number: int) -> str:
     return cleaned.title()
 
 
+def _ident_display(ident: bytes) -> str:
+    """Compact ASCII panel identification for log lines (strip padding)."""
+    return ident.decode("ascii", errors="replace").strip()
+
+
 async def enumerate_zones(client: PanelClient) -> tuple[list[Zone], int]:
     """LOGIN must already have succeeded. Ask the panel for in-use zones only.
 
@@ -99,24 +106,35 @@ async def enumerate_zones(client: PanelClient) -> tuple[list[Zone], int]:
     logger.debug("zone_enumerate_start")
     ident = await client.send_command(CMD_GETPANELIDENTIFICATION)
     zone_count = parse_zone_count(ident)
-    logger.debug("zone_count", extra={"zone_count": zone_count})
+    ident_text = _ident_display(ident)
+    logger.debug("zone_count %s (identification=%s)", zone_count, ident_text)
 
     in_use: list[Zone] = []
     for number in range(1, zone_count + 1):
         payload = await client.send_command(CMD_GETZONEDETAILS, bytes([number]))
         zone = parse_zone_details(payload, zone_number=number)
         if zone.zone_type == 0:
-            logger.debug("zone_unused_skipped", extra={"zone": number})
+            logger.log(TRACE_LEVEL, "zone_unused_skipped zone=%s", number)
             continue
         in_use.append(zone)
         logger.debug(
-            "zone_in_use",
-            extra={
-                "zone": number,
-                "zone_type": zone.zone_type,
-                "zone_name": zone.name,
-            },
+            "zone_in_use zone=%s name=%r type=%s (%s)",
+            number,
+            zone.name,
+            zone.zone_type,
+            zone_type_label(zone.zone_type),
         )
 
-    logger.debug("zone_enumerate_done", extra={"in_use": len(in_use)})
+    logger.info(
+        "enumerated_zones %s in-use of %s slots (%s)",
+        len(in_use),
+        zone_count,
+        ident_text,
+    )
+    logger.debug(
+        "zone_enumerate_done in_use=%s unused=%s of %s",
+        len(in_use),
+        zone_count - len(in_use),
+        zone_count,
+    )
     return in_use, zone_count

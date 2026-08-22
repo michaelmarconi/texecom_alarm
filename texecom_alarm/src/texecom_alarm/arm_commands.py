@@ -213,7 +213,7 @@ async def handle_alarm_command(
         )
         return None
 
-    logger.debug("alarm_command_arm", extra={"mode": ha_mode, "byte": mode_byte})
+    logger.debug("alarm_command_arm mode=%s byte=%s", ha_mode, mode_byte)
     try:
         await panel.set_area_arm(mode_byte)
     except ProtocolError as exc:

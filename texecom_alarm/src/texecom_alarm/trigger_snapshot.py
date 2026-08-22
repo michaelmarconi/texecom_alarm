@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import logging
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Protocol
 
 from texecom_alarm.mqtt.discovery import alarm_attributes_topic
+from texecom_alarm.zones import Zone
 
 # Re-export so callers/tests can import the topic helper alongside the buffer.
 __all__ = [
@@ -96,6 +97,7 @@ async def maybe_publish_trigger_snapshot(
     topic_prefix: str,
     buffer: TriggerActivityBuffer,
     clock: Callable[[], datetime] | None = None,
+    zones: Mapping[int, Zone] | None = None,
 ) -> None:
     """On edge into HA ``triggered`` only, publish retained last-trigger attributes.
 
@@ -106,13 +108,21 @@ async def maybe_publish_trigger_snapshot(
     if new_payload != "triggered" or previous_payload == "triggered":
         return
     now = (clock or (lambda: datetime.now(UTC)))()
+    zone_number = buffer.initiating_zone()
     body = {
-        "last_trigger_zone": buffer.initiating_zone(),
+        "last_trigger_zone": zone_number,
         "last_trigger_time": now.astimezone(UTC).isoformat(),
     }
     topic = alarm_attributes_topic(topic_prefix)
     await mqtt.publish(topic, json.dumps(body, separators=(",", ":")), retain=True)
+    name_part = ""
+    if zone_number is not None and zones is not None:
+        zone = zones.get(zone_number)
+        if zone is not None and zone.name:
+            name_part = f" name={zone.name!r}"
     logger.debug(
-        "mqtt_trigger_snapshot",
-        extra={"topic": topic, "zone": body["last_trigger_zone"]},
+        "mqtt_trigger_snapshot zone=%s%s topic=%s",
+        zone_number,
+        name_part,
+        topic,
     )
