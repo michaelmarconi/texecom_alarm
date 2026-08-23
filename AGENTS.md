@@ -1,6 +1,6 @@
 # Agent Instructions
 
-<!-- Synthesised by /constitute on 2026-08-21 from: ADR-001, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-010, ADR-011, ADR-012, ADR-013, ADR-014 -->
+<!-- Synthesised by /constitute on 2026-08-23 from: ADR-001, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-010, ADR-011, ADR-012, ADR-013, ADR-014, ADR-015 -->
 <!-- Re-run /constitute after any new ADR is accepted. -->
 
 ## Project
@@ -136,6 +136,20 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - Any future claim that a correctly-configured install still drops at trigger needs its own new evidence — it cannot be inherited from the original spike, which ran on the wrong module.
 - The specific reconnect wait times and retry counts remain unset by this ADR — only the expected frequency of exercising that budget has changed.
 
+### ADR-015: Use ready-to-arm switches and an MQTT blocked-arm event for refusing unready arm commands
+
+**Decision:** The app publishes three ready-to-arm switches in Home Assistant — Away, Home, Night — that start on. If a switch is off, that arm is not sent to the panel, including when Home Assistant itself asked; the alarm stays in the state it already was. Disarm is never blocked. Turning a switch off while already armed does not disarm. When an arm is refused, the app emits a Home Assistant MQTT event naming which mode was blocked, not why.
+
+**Constraints:**
+- The app must publish three ready-to-arm controls (Away, Home, Night) that start on, so a new install arms as it does today until someone turns one off.
+- When a control is off, the matching arm must not be sent to the panel — including when Home Assistant requested it — and the alarm entity must stay in the state it already was.
+- Every arm command to the panel must consult the matching ready control.
+- Disarm must never be gated by the ready controls.
+- Turning a ready control off while the house is already armed must not disarm the panel.
+- The app must not encode household rules (which doors, guests, time of day, notify text) — those stay in Home Assistant automations that turn the controls on and off.
+- On refuse, the app must emit a first-class Home Assistant MQTT event that names the mode and does not include the household's reason — not a switch, a sensor, or an unspecified "signal".
+- This does not replace ADR-003: entities stay on MQTT discovery, and household-specific arming/notification *rules* stay out of the app; a generic refuse mechanism *does* live in the app.
+
 ## Stop conditions
 
 - **[ADR-001]** Before implementing a hybrid or cached last-known-good zone list for when the panel can't be reached at startup: stop and ask a human — that path was left open and not validated by this ADR.
@@ -173,8 +187,13 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - **[ADR-014]** Before removing, disabling, or making the frame-resync or reconnect-on-drop mechanisms conditional on which module is configured: stop and ask a human — this ADR requires them to stay unconditional.
 - **[ADR-014]** Before hardcoding the reconnect wait times or retry counts as final, unchangeable values: stop and ask a human — this ADR leaves them unset; only the expected frequency of exercising that budget has changed.
 - **[ADR-014]** Before documenting or coding the long post-trigger reconnect wait as the expected outcome for a correctly set-up install: stop and ask a human — this ADR treats it as a safety net for misconfiguration, not the normal path.
+- **[ADR-015]** Before encoding household rules (which doors, guests, time of day, notify wording) in the app: stop and ask a human — those stay in Home Assistant automations; this app only honours the three ready controls and emits the blocked-arm event.
+- **[ADR-015]** Before sending an arm to the panel when the matching ready control is off, including when Home Assistant requested it: stop and ask a human — that would violate this decision.
+- **[ADR-015]** Before gating disarm on the ready controls, or disarming because a ready control was turned off while already armed: stop and ask a human — both are forbidden.
+- **[ADR-015]** Before recording a refused arm as anything other than a Home Assistant MQTT event that names the mode and not the reason (for example a sensor, a switch, a notify from the app, or a vague "signal"): stop and ask a human — the kind is decided.
+- **[ADR-015]** Before treating FakePanel/CI as proof that a real Home Assistant shows the switches and can automate on the blocked-arm event: stop and ask a human — that remains live-only.
 
 ## Testing stance
 
-- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping, silent-death / command-reject / quiet-house detector shapes, mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login per ADR-006, ADR-008, ADR-009, ADR-010, ADR-011 and architecture; forced-disconnect-at-trigger resync/reconnect regression per ADR-014).
-- **Live:** `/accept` owns product validation on the real setup (full Away / Night / Home arm sequences, trigger reconnect, real ComIP, quiet-house and zombie corroboration, mid-run heal under contention, which network module the panel address actually points to per ADR-013, and whether a correctly-configured install still forces a disconnect at trigger per ADR-014); `/ship` may smoke a real target. Green CI is not product accept.
+- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping, silent-death / command-reject / quiet-house detector shapes, mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login per ADR-006, ADR-008, ADR-009, ADR-010, ADR-011 and architecture; forced-disconnect-at-trigger resync/reconnect regression per ADR-014; ready-to-arm refuse — matching switch off means no arm command and unchanged alarm state, including Home Assistant's command path; disarm still works; switch-off while armed does not disarm — per ADR-015) and a fake MQTT client (three ready switches that start on; blocked-arm MQTT event with mode and without reason — per ADR-015).
+- **Live:** `/accept` owns product validation on the real setup (full Away / Night / Home arm sequences, trigger reconnect, real ComIP, quiet-house and zombie corroboration, mid-run heal under contention, which network module the panel address actually points to per ADR-013, whether a correctly-configured install still forces a disconnect at trigger per ADR-014, and that a real Home Assistant shows the ready-to-arm switches and can automate on the blocked-arm event per ADR-015); `/ship` may smoke a real target. Green CI is not product accept.
