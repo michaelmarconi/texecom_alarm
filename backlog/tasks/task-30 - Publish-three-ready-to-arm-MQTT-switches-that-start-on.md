@@ -4,7 +4,7 @@ title: Publish three ready-to-arm MQTT switches that start on
 status: awaiting-review
 assignee: []
 created_date: '2026-08-23 18:33'
-updated_date: '2026-08-23 19:14'
+updated_date: '2026-08-23 19:22'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -56,5 +56,5 @@ Verification: AC1 FakePanel+recording MQTT sees three switch discoveries; AC2 ea
 Notes/assumptions: Arm refuse is not implemented (TASK-31). Ready commands are handled on the existing MQTT inbound loop. In-memory state starts ON each process start; retained state is republished ON at discovery. Friendly names are Ready to arm Away/Home/Night.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
