@@ -4,8 +4,8 @@
 changes, households see an **Update** and read `CHANGELOG.md`. Bump it only
 for notable product changes — not for CI, docs, or Dependabot.
 
-`main` only moves via pull request, including for the maintainer. GitHub does
-not edit version files after merge.
+Outside contributors change `main` via pull request. The maintainer may
+push directly. GitHub does not edit version files after merge.
 
 ## Canonical source
 

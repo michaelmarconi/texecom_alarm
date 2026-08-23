@@ -62,8 +62,8 @@ See [docs/addon-versioning.md](docs/addon-versioning.md).
 
 ## Pull requests
 
-`main` only moves via pull request, including for the maintainer. Direct
-pushes are blocked.
+Outside contributors change `main` via pull request. Direct pushes are
+blocked except for the maintainer.
 
 Use the PR template. Keep the diff small, match existing style, and say how you
 tested (CI-only vs a live panel).
