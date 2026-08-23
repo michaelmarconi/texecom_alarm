@@ -58,5 +58,5 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/arm_commands.py (modi
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
