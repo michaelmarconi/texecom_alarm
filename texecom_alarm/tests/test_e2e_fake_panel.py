@@ -1263,3 +1263,101 @@ async def test_e2e_stuck_trust_fail_window_relogins_without_arm_retry() -> None:
         await asyncio.wait_for(task, timeout=2.0)
     finally:
         await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_ready_to_arm_switches_start_on_and_round_trip() -> None:
+    """TASK-30 AC-1/AC-2/AC-3: three ready switches start ON; command/state round-trip."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR")],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel, mqtt_port=1883)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        command_topics = (
+            "texecom/ready/away/command",
+            "texecom/ready/home/command",
+            "texecom/ready/night/command",
+        )
+        for _ in range(150):
+            topics = [m.topic for m in mqtt.messages]
+            if all(
+                f"homeassistant/switch/texecom_alarm_ready_{mode}/config" in topics
+                for mode in ("away", "home", "night")
+            ) and all(t in mqtt.subscribed for t in command_topics):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        for mode, object_id, name in (
+            ("away", "texecom_alarm_ready_away", "Ready to arm Away"),
+            ("home", "texecom_alarm_ready_home", "Ready to arm Home"),
+            ("night", "texecom_alarm_ready_night", "Ready to arm Night"),
+        ):
+            cfg_topic = f"homeassistant/switch/{object_id}/config"
+            cfgs = [m for m in mqtt.messages if m.topic == cfg_topic]
+            assert cfgs, f"missing discovery for {mode}"
+            assert cfgs[0].retain is True
+            payload = json.loads(
+                cfgs[0].payload if isinstance(cfgs[0].payload, str) else cfgs[0].payload.decode()
+            )
+            assert payload["name"] == name
+            assert payload["unique_id"] == object_id
+            assert payload["object_id"] == object_id
+            assert payload["default_entity_id"] == f"switch.{object_id}"
+            assert payload["state_topic"] == f"texecom/ready/{mode}/state"
+            assert payload["command_topic"] == f"texecom/ready/{mode}/command"
+            assert payload["payload_on"] == "ON"
+            assert payload["payload_off"] == "OFF"
+            assert payload["device"]["identifiers"] == ["texecom_alarm"]
+            states = [m for m in mqtt.messages if m.topic == f"texecom/ready/{mode}/state"]
+            assert states
+            assert states[0].retain is True
+            assert states[0].payload == "ON"
+            assert f"texecom/ready/{mode}/command" in mqtt.subscribed
+
+        # Command/state round-trip: OFF then ON, retained, so later arm can read current on/off.
+        await mqtt.push_inbound("texecom/ready/away/command", "OFF")
+        for _ in range(50):
+            away_states = mqtt.payloads_for("texecom/ready/away/state")
+            if away_states and away_states[-1] == "OFF":
+                break
+            await asyncio.sleep(0.02)
+        away_msgs = [m for m in mqtt.messages if m.topic == "texecom/ready/away/state"]
+        assert away_msgs[-1].payload == "OFF"
+        assert away_msgs[-1].retain is True
+        # Home/Night stay on — only the commanded switch changes.
+        assert mqtt.payloads_for("texecom/ready/home/state")[-1] == "ON"
+        assert mqtt.payloads_for("texecom/ready/night/state")[-1] == "ON"
+
+        await mqtt.push_inbound("texecom/ready/away/command", "ON")
+        for _ in range(50):
+            if mqtt.payloads_for("texecom/ready/away/state")[-1] == "ON":
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/ready/away/state")[-1] == "ON"
+        away_after_on = [m for m in mqtt.messages if m.topic == "texecom/ready/away/state"]
+        assert away_after_on[-1].retain is True
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()

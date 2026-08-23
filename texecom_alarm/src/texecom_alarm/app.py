@@ -14,11 +14,17 @@ from texecom_alarm.log_labels import log_event_label
 from texecom_alarm.logging_setup import TRACE_LEVEL, configure_logging
 from texecom_alarm.mqtt.discovery import (
     AVAILABILITY_OFFLINE,
+    READY_MODES,
+    READY_OFF,
+    READY_ON,
     alarm_command_topic,
     availability_topic,
     publish_alarm_discovery,
     publish_connectivity_discovery,
+    publish_ready_state,
+    publish_ready_to_arm_discovery,
     publish_zone_discovery,
+    ready_command_topic,
 )
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
 from texecom_alarm.panel_trust import (
@@ -91,6 +97,18 @@ class _SharedAlarmState:
     payload: str | None = None
 
 
+@dataclass
+class _ReadyToArmState:
+    """In-memory ready-to-arm flags. All start on (ADR-015)."""
+
+    away: bool = True
+    home: bool = True
+    night: bool = True
+
+    def set_mode(self, mode: str, on: bool) -> None:
+        setattr(self, mode, on)
+
+
 async def run(
     settings: Settings | None = None,
     *,
@@ -153,6 +171,7 @@ async def run(
         await publish_zone_discovery(mqtt_client, zones, topic_prefix=cfg.mqtt_topic_prefix)
         await publish_alarm_discovery(mqtt_client, topic_prefix=cfg.mqtt_topic_prefix, settings=cfg)
         await publish_connectivity_discovery(mqtt_client, topic_prefix=cfg.mqtt_topic_prefix)
+        await publish_ready_to_arm_discovery(mqtt_client, topic_prefix=cfg.mqtt_topic_prefix)
 
         await publish_zone_state_snapshot(
             panel_client,
@@ -204,6 +223,14 @@ async def run(
         await mqtt_client.publish(command_topic, "", retain=True)
         logger.debug("mqtt_alarm_command_subscribed", extra={"topic": command_topic})
 
+        ready_state = _ReadyToArmState()
+        ready_command_topics = {
+            ready_command_topic(cfg.mqtt_topic_prefix, mode): mode for mode in READY_MODES
+        }
+        for ready_topic in ready_command_topics:
+            await mqtt_client.subscribe(ready_topic)  # type: ignore[attr-defined]
+            logger.debug("mqtt_ready_command_subscribed", extra={"topic": ready_topic})
+
         alarm_state = _SharedAlarmState(payload=initial_alarm_payload)
         in_use = {z.number for z in zones}
         listen_task = asyncio.create_task(
@@ -230,6 +257,8 @@ async def run(
                 alarm_state=alarm_state,
                 trust=trust,
                 zone_count=zone_count,
+                ready_state=ready_state,
+                ready_command_topics=ready_command_topics,
             ),
             name="mqtt-alarm-commands",
         )
@@ -326,12 +355,38 @@ async def _listen_alarm_commands(
     alarm_state: _SharedAlarmState,
     trust: PanelTrust | None = None,
     zone_count: int | None = None,
+    ready_state: _ReadyToArmState | None = None,
+    ready_command_topics: dict[str, str] | None = None,
 ) -> None:
-    """Subscribe loop: MQTT ARM_*/DISARM → shared panel arm/disarm (ADR-005)."""
+    """Subscribe loop: MQTT ARM_*/DISARM and ready-to-arm switch commands."""
     inbound = mqtt.inbound_messages  # type: ignore[attr-defined]
+    ready_topics = ready_command_topics or {}
     logger.debug("mqtt_alarm_command_listen_start", extra={"topic": command_topic})
     async for message in inbound:
         topic = str(getattr(message, "topic", ""))
+        ready_mode = ready_topics.get(topic)
+        if ready_mode is not None:
+            if getattr(message, "retain", False):
+                logger.info(
+                    "Ignoring retained MQTT ready-to-arm command on %s — "
+                    "live switch taps are not retained; a leftover retain would replay on restart.",
+                    topic,
+                )
+                continue
+            try:
+                await _handle_ready_command(
+                    mqtt,
+                    payload=getattr(message, "payload", b""),
+                    mode=ready_mode,
+                    topic_prefix=settings.mqtt_topic_prefix,
+                    ready_state=ready_state,
+                )
+            except Exception:
+                logger.exception(
+                    "Unexpected failure while handling a ready-to-arm command on topic %s.",
+                    topic,
+                )
+            continue
         if topic != command_topic:
             continue
         if getattr(message, "retain", False):
@@ -360,6 +415,36 @@ async def _listen_alarm_commands(
                 "Unexpected failure while handling an MQTT alarm command on topic %s.",
                 topic,
             )
+
+
+async def _handle_ready_command(
+    mqtt: object,
+    *,
+    payload: str | bytes,
+    mode: str,
+    topic_prefix: str,
+    ready_state: _ReadyToArmState | None,
+) -> None:
+    raw = payload.decode("utf-8") if isinstance(payload, bytes) else str(payload)
+    raw = raw.strip()
+    if raw == READY_ON:
+        on = True
+    elif raw == READY_OFF:
+        on = False
+    else:
+        logger.debug(
+            "mqtt_ready_command_ignored",
+            extra={"mode": mode, "payload": raw},
+        )
+        return
+    if ready_state is not None:
+        ready_state.set_mode(mode, on)
+    await publish_ready_state(
+        mqtt,  # type: ignore[arg-type]
+        topic_prefix=topic_prefix,
+        mode=mode,
+        on=on,
+    )
 
 
 async def _listen_with_reconnect(

@@ -19,7 +19,7 @@ CONNECTIVITY_OBJECT_ID = "texecom_alarm_panel_connection"
 PANEL_LINK_ON = "ON"
 PANEL_LINK_OFF = "OFF"
 
-# Shared across zone, alarm, and panel-connection discovery so HA groups one device.
+# Shared across zone, alarm, panel-connection, and ready-to-arm discovery so HA groups one device.
 MQTT_DEVICE: dict[str, object] = {
     "identifiers": ["texecom_alarm"],
     "name": "Texecom Alarm",
@@ -199,3 +199,78 @@ async def publish_connectivity_discovery(
         "mqtt_connectivity_discovery_published",
         extra={"topic": topic, "object_id": CONNECTIVITY_OBJECT_ID},
     )
+
+
+READY_MODES = ("away", "home", "night")
+READY_ON = "ON"
+READY_OFF = "OFF"
+
+
+def ready_object_id(mode: str) -> str:
+    return f"texecom_alarm_ready_{mode}"
+
+
+def ready_state_topic(topic_prefix: str, mode: str) -> str:
+    return f"{topic_prefix}/ready/{mode}/state"
+
+
+def ready_command_topic(topic_prefix: str, mode: str) -> str:
+    return f"{topic_prefix}/ready/{mode}/command"
+
+
+def ready_discovery_topic(object_id: str) -> str:
+    return f"homeassistant/switch/{object_id}/config"
+
+
+def ready_discovery_payload(mode: str, *, topic_prefix: str) -> dict[str, object]:
+    object_id = ready_object_id(mode)
+    return {
+        "name": f"Ready to arm {mode.capitalize()}",
+        "unique_id": object_id,
+        "object_id": object_id,
+        "default_entity_id": f"switch.{object_id}",
+        "device": MQTT_DEVICE,
+        "state_topic": ready_state_topic(topic_prefix, mode),
+        "command_topic": ready_command_topic(topic_prefix, mode),
+        "availability_topic": availability_topic(topic_prefix),
+        "payload_available": AVAILABILITY_ONLINE,
+        "payload_not_available": AVAILABILITY_OFFLINE,
+        "payload_on": READY_ON,
+        "payload_off": READY_OFF,
+    }
+
+
+async def publish_ready_state(
+    mqtt: MqttPublisher,
+    *,
+    topic_prefix: str,
+    mode: str,
+    on: bool,
+) -> None:
+    """Publish retained ready-to-arm switch state (ON/OFF)."""
+    topic = ready_state_topic(topic_prefix, mode)
+    payload = READY_ON if on else READY_OFF
+    await mqtt.publish(topic, payload, retain=True)
+    logger.debug(
+        "mqtt_ready_state_published",
+        extra={"topic": topic, "mode": mode, "payload": payload},
+    )
+
+
+async def publish_ready_to_arm_discovery(
+    mqtt: MqttPublisher,
+    *,
+    topic_prefix: str,
+) -> None:
+    """Publish retained switch discovery and initial ON state (ADR-015)."""
+    for mode in READY_MODES:
+        object_id = ready_object_id(mode)
+        topic = ready_discovery_topic(object_id)
+        payload = ready_discovery_payload(mode, topic_prefix=topic_prefix)
+        body = json.dumps(payload, separators=(",", ":"))
+        await mqtt.publish(topic, body, retain=True)
+        logger.debug(
+            "mqtt_ready_discovery_published",
+            extra={"topic": topic, "object_id": object_id, "mode": mode},
+        )
+        await publish_ready_state(mqtt, topic_prefix=topic_prefix, mode=mode, on=True)
