@@ -1,10 +1,10 @@
 ---
 id: TASK-30
 title: Publish three ready-to-arm MQTT switches that start on
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-23 18:33'
-updated_date: '2026-08-23 18:55'
+updated_date: '2026-08-23 19:14'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -49,6 +49,12 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/mqtt/discovery.py (mo
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: MQTT-discovers three ready-to-arm switches (Away/Home/Night) that start ON, share the Texecom device, and keep retained command/state round-trip in memory.
+Changed files: texecom_alarm/src/texecom_alarm/mqtt/discovery.py, texecom_alarm/src/texecom_alarm/app.py, texecom_alarm/tests/test_mqtt_discovery.py, texecom_alarm/tests/test_e2e_fake_panel.py
+Verification: AC1 FakePanel+recording MQTT sees three switch discoveries; AC2 each retained state starts ON; AC3 OFF/ON command republishes retained state and updates in-memory flags. pytest tests/test_mqtt_discovery.py plus e2e ready-to-arm test 23 passed; full suite 313 passed, 92% coverage; ruff check and ruff format --check clean.
+Notes/assumptions: Arm refuse is not implemented (TASK-31). Ready commands are handled on the existing MQTT inbound loop. In-memory state starts ON each process start; retained state is republished ON at discovery. Friendly names are Ready to arm Away/Home/Night.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
