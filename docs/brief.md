@@ -4,7 +4,7 @@ A Home Assistant app for a Texecom Premier Elite alarm panel (via ComIP/Texecom
 Connect) that publishes zones and an alarm control panel over MQTT, including
 Home arm mode.
 
-**Date:** 2026-08-01
+**Date:** 2026-08-01 (amended 2026-08-23)
 **State:** Accepted ✅
 
 ## Problem & Context
@@ -59,6 +59,12 @@ Non-goals for what that does *not* include).
   zone count and Part-Arm slot-to-mode mapping via documented add-on options (no
   code changes), and published as a public HA Add-on repository so other
   households can actually install it.
+- Three switches in Home Assistant — ready to arm Away, Home, and Night — that
+  start switched on, so arming works as it does today until someone turns one
+  off. If a switch is off, that kind of arm does not set the alarm. Home
+  Assistant can see that it was blocked, so the household can notify someone or
+  look it up later. Each household still decides *when* a mode is ready (open
+  doors, night, guests) with their own automations; this app does not.
 
 **Non-goals**
 
@@ -75,10 +81,11 @@ Non-goals for what that does *not* include).
 - Support for the older UDL/Wintex protocol (engineer-level config access) — only
   the Texecom Connect protocol (zones/areas/arm/disarm/log/power) needed for
   day-to-day HA use is in scope.
-- Reimplementing the arm guard-condition, notification, or auto-arm/auto-disarm
-  logic that already lives in the HA config layer (`configuration/templates/
-  house_alarm.yaml`, `script.notify_actor`, `configuration/automations/
-  house_alarm.yaml`) — it operates purely on HA-side entities and stays as-is.
+- Encoding this household's (or any household's) rules for when arming is allowed
+  — which doors and windows, whether it is dark, whether guests are staying —
+  or taking over the notifications and auto-arm / auto-disarm that already live
+  in Home Assistant. Those stay in the household's own automations. This app only
+  provides the three ready switches and will not arm a mode whose switch is off.
 - Building a new dashboard or UI — the existing Lovelace "Security" dashboard and
   HomeKit bridges keep working off the same entity names/states.
 
