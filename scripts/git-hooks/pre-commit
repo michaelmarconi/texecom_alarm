@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
-# Repo-relative pre-commit wrapper. Copied to .git/hooks by
+# Repo-relative pre-commit wrapper. Installed to .git/hooks by
 # scripts/install-git-hooks.sh — do not run `pre-commit install`.
+#
+# Worktrees share this hook (common .git/hooks). The venv lives in the
+# primary checkout, so look there when this worktree has no .venv of its own.
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ARGS=(hook-impl --config="$ROOT/.pre-commit-config.yaml" --hook-type=pre-commit --hook-dir "$HERE" -- "$@")
+
+common_dir="$(git rev-parse --git-common-dir)"
+if [[ "$common_dir" != /* ]]; then
+  common_dir="$(cd "$ROOT/$common_dir" && pwd)"
+else
+  common_dir="$(cd "$common_dir" && pwd)"
+fi
+PRIMARY="$(cd "$common_dir/.." && pwd)"
 
 run_with() {
   local py="$1"
@@ -15,8 +26,11 @@ run_with() {
   return 1
 }
 
+# Prefer a worktree-local venv if someone created one, then the primary checkout.
 run_with "$ROOT/texecom_alarm/.venv/bin/python3" || true
+run_with "$PRIMARY/texecom_alarm/.venv/bin/python3" || true
 run_with "$ROOT/.venv/bin/python3" || true
+run_with "$PRIMARY/.venv/bin/python3" || true
 
 if command -v pre-commit >/dev/null 2>&1; then
   exec pre-commit "${ARGS[@]}"
@@ -25,7 +39,9 @@ fi
 cat >&2 <<'EOF'
 Git pre-commit hook: no working pre-commit install.
 
-Create the app venv, then install this wrapper (not `pre-commit install`):
+Create the app venv in the primary checkout, then install this wrapper
+(not `pre-commit install`). Linked worktrees reuse that venv — they do
+not need their own.
 
   python3 -m venv texecom_alarm/.venv
   texecom_alarm/.venv/bin/pip install -e "texecom_alarm/[dev]"
