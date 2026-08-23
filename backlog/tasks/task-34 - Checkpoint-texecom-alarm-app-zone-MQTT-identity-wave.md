@@ -1,10 +1,10 @@
 ---
 id: TASK-34
 title: 'Checkpoint: texecom-alarm-app zone MQTT identity wave'
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-23 18:42'
-updated_date: '2026-08-23 19:48'
+updated_date: '2026-08-23 19:49'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
@@ -23,8 +23,15 @@ ordinal: 28000
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Verification result
+verdict: pass
+- Zone identity suites pass: pass — `cd texecom_alarm && .venv/bin/python -m pytest tests/test_mqtt_discovery.py tests/test_zone_parse.py tests/test_e2e_fake_panel.py -q` exited 0 (47 passed).
+- FakePanel default_entity_id / unique_id / no leftovers: pass — FakePanel e2e asserts `binary_sensor.texecom_alarm_front_door_zone_1` and `texecom_alarm_zone_1`; src has no `texecom_alarm_{slug}_{N}` identity leftovers (old IDs appear only as negative assertions).
+- Build/import clean: pass — `.venv/bin/python -c "import texecom_alarm"` succeeded; pytest collected and ran the identity suites.
+Notes: DoD 1–3 also hold (explicit `_zone_{N}`, Title Case / `Zone {N}` names, alarm id and `{prefix}/zone/{N}/state` unchanged, no keep-old-id path).
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
