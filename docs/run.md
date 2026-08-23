@@ -107,6 +107,27 @@ only (Away excluded — ADR-008). If an older options file still has Away on a
 slot, the app coerces that slot to Unused at load and logs a warning; Away
 continues to arm via full-arm mode byte `0`.
 
+## Household Update rehearsal (not local rebuild)
+
+What a real HA OS host does on a version bump is Supervisor **Update** on the
+**store** slug (`…/texecom_alarm#app` + GHCR `image:` pull) — not
+`ha apps rebuild local_texecom_alarm`. Local rebuild refreshes the bind-mount
+dev copy; it does not exercise missing GHCR tags, stale `#app`, or options
+persistence across a store Update.
+
+Before `/ship` Accept, rehearse that path in this sim HA:
+
+```bash
+./scripts/ha-store-upgrade-smoke.sh
+# optional: --from X.Y.Z   --no-restart-local
+```
+
+The script stops `local_texecom_alarm`, installs a prior SemVer on the store
+slug, runs Update to the current version, asserts options survived, then stops
+the store copy. **Do not** run the store-installed copy and `local_*` together
+(single ComIP + MQTT discovery clash). Details: Ship skill “This repository”
+overlay; checklist row in [ship.md](ship.md).
+
 ## Down
 
 1. Stop `supervisor_run` (Ctrl+C in its terminal, or kill the pid recorded by cold-start).
