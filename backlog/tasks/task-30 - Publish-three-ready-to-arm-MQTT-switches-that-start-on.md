@@ -50,5 +50,5 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/mqtt/discovery.py (mo
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: claimed
+phase: provisioned
 <!-- SECTION:FINAL_SUMMARY:END -->
