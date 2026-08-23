@@ -1,9 +1,17 @@
 # Analysis
 
-<!-- Synthesised by /analyse on 2026-08-09 from: spec-alarm-control.md, spec-zone-monitoring.md, spec-panel-link-liveness.md, spec-continuous-operation.md, spec-diagnostics-logging.md, spec-startup-login-backoff.md, spec-panel-session-heal.md -->
+<!-- Synthesised by /analyse on 2026-08-23 from: spec-alarm-control.md, spec-zone-monitoring.md, spec-panel-link-liveness.md, spec-continuous-operation.md, spec-diagnostics-logging.md, spec-startup-login-backoff.md, spec-panel-session-heal.md, spec-ready-to-arm.md -->
 
-**Date:** 2026-08-09  
+**Date:** 2026-08-23  
 **State:** Accepted ✅
+
+**Update note (2026-08-23):** Re-run against eight Accepted specs (adds
+`spec-ready-to-arm.md`). The spec’s Spike Candidate (HA entity shape for ready
+controls / blocked-arm) is **not** a genuine unknown: MQTT switch discovery is
+first-party Home Assistant, and this app already publishes MQTT entities.
+Dismissed — no RISK-021, no SPIKE-011. Remaining product choice (blocked-arm
+signal flavour) is `/adr` or architecture, not a spike. All other Spike
+Candidates re-checked. Scope remains **Medium**.
 
 **Update note (2026-08-09):** Re-run against all seven Accepted specs (adds
 `spec-panel-session-heal`). Silent-death **detection** is closed by ADR-010 /
@@ -255,18 +263,15 @@ removed from history.
 |---|---|
 | Source | Protocol research candidate (cmd 9); related open product question in ADR-002 / SPIKE-002 (“alarm reset” as a signal) |
 | Category | Technology unknowns |
-| Severity | Medium |
-| Severity rationale | Disarm (cmd 8) is confirmed for ordinary armed/exit-cancel paths (SPIKE-005), but behaviour immediately after a real in-alarm / triggered state is not proven. If this panel expects a separate ResetArea (cmd 9) before disarm, HA Disarm after a trigger could NAK or leave the panel uncleared — a household-facing control gap. Wire shape is a small, testable unknown; product meaning of “alarm reset” as an MQTT/automation signal remains a separate ADR-002 stop condition. |
-| Spike required | Yes |
+| Severity | Low |
+| Severity rationale | Downgraded 2026-08-23 — ADR-008 already records mode-independent disarm (cmd 8); ADR-013 records that HA Disarm during a live alarm is expected to work on the dedicated local module (ordinary disarm unsets). Cmd 9 is not a production prerequisite on that path. Residual is optional SmartCom-era curiosity and the separate ADR-002 “alarm reset” *signal* product question. |
+| Spike required | No (closed 2026-08-23; was Yes) |
 
-Candidate (not live-confirmed): Connect command byte `9` with the same area-select body
-family as disarm (`01` for area 1), issued when the area is in alarm, then disarm (cmd 8).
-Recorded as a provisional row in [protocol-reference.md](protocol-reference.md). Do **not**
-wire into production arm_commands until SPIKE-009 validates ACK/effect on a Premier Elite.
-Distinct from implementing an HA “alarm reset” entity/signal (AGENTS.md ADR-002 stop —
-ask a human before that product path). Validation remains **live-only** (SPIKE-009 /
-accept-walk on a Premier Elite); once wire shapes are known, FakePanel should stand in for
-cmd-9 ACK/effect in CI.
+Production disarm-when-triggered is cmd 8 on the dedicated local module (ADR-013, ADR-008).
+Do not treat ResetArea (cmd 9) as an open production decision. A dedicated HA “alarm reset”
+entity/signal remains an ADR-002 stop — ask a human before that product path. Provisional
+cmd-9 protocol notes may stay in [protocol-reference.md](protocol-reference.md) as
+historical; FakePanel need not model cmd 9 for the current disarm contract.
 
 ### RISK-019: Mid-run session heal / re-login policy not yet in an ADR
 
@@ -303,9 +308,11 @@ Ordinary `/correction` (and constitute/architecture follow-through). No spike.
 ### Categories scanned and clear of additional entries
 
 Team capability gaps beyond RISK-010: none new. Security surface: RISK-009 (panel
-factory-default UDL) and RISK-017 (repo publish fingerprint) are recorded; no further
-security-surface entries. Performance beyond RISK-004: none new. MQTT broker and HA
-Supervisor Add-on Store remain ordinary standing dependencies with known contracts.
+factory-default UDL) and RISK-017 (repo publish fingerprint) are recorded; ready-to-arm
+does not add a new auth boundary. Performance beyond RISK-004: none new. MQTT broker and HA
+Supervisor Add-on Store remain ordinary standing dependencies with known contracts. How we'll
+know on `spec-ready-to-arm` ACs 1–7 name FakePanel / fake MQTT client; AC8 is honest
+manual HomeKit/iOS.
 
 ## Section 2 — Dismissed candidates
 
@@ -321,6 +328,7 @@ Supervisor Add-on Store remain ordinary standing dependencies with known contrac
 | How mid-run health-check timeout should join clean-disconnect recovery | spec-panel-session-heal.md § Spike Candidates | Settled 2026-08-09 — treat as dead session; same keep-trying reconnect heal; RISK-019 → `/adr` then build (no spike) |
 | Whether trust-degrade heal requires session tear-down / re-login | spec-panel-session-heal.md § Spike Candidates | Settled 2026-08-09 — corroboration first; tear-down/re-login if stuck after bounded window; RISK-019 → `/adr` (no spike) |
 | Whether Connection rename needs unique_id / Entity ID change | spec-panel-session-heal.md § Spike Candidates | Settled 2026-08-09 — yes, clean refactor; no backwards compat (RISK-013) |
+| How the three ready controls and the blocked-arm signal should appear as ordinary Home Assistant entities | spec-ready-to-arm.md § Spike Candidates | Not a genuine unknown — MQTT switch discovery is first-party HA and this app already publishes MQTT entities; honouring on/off before arm is ordinary subscribe-and-gate. Blocked-arm signal flavour (e.g. event) is a small `/adr` or architecture choice, not a spike |
 
 **Note:** Com Port isolation remains RISK-011 (not dismissed). Continuous-operation,
 diagnostics-logging, and startup-login-backoff have no Spike Candidates sections;
@@ -329,23 +337,9 @@ residuals are RISK-015 / RISK-016.
 ## Section 3 — Ordered spike list
 
 No new research spikes for session heal (decisions recorded; `/adr` then architecture/build).
-Active research spike remains SPIKE-009 only. SPIKE-008 is complete (below).
-
-### SPIKE-009: Validate ResetArea (cmd 9) before disarm when the panel is in alarm
-
-| Field | Value |
-|---|---|
-| Resolves | RISK-018 |
-| Depends on | SPIKE-005 (disarm framing known); preferably after a controlled trigger or known in-alarm state (SPIKE-002 trigger path) |
-| Sequencing rationale | Small wire unknown with direct disarm-after-trigger product impact; can run independently of SPIKE-008. Does **not** by itself decide ADR-002’s open “alarm reset” *signal* question — only whether cmd 9 is real and useful on the panel under test. |
-
-Against a live Premier Elite: after the panel is in alarm (or an equivalent safe test state),
-compare disarm-only (cmd 8) vs ResetArea (cmd 9) then disarm (cmd 8). Record ACK/NAK,
-AREA/LOG follow-on, and whether sirens/alarm clear. Output: whether production disarm
-when `triggered` must send cmd 9 first; update protocol-reference; leave product “reset
-signal” to a separate human/ADR decision per AGENTS.md.
-
-Active spikes: SPIKE-009. Historical spikes below remain for traceability.
+No spike for ready-to-arm entity shape (dismissed — known MQTT switch discovery).
+No active research spike: SPIKE-009 closed 2026-08-23 (ADR-013 / ADR-008). SPIKE-008 is
+complete (below). Historical spikes remain for traceability.
 
 ### Historical spikes (complete or dismissed — retained for traceability)
 
@@ -399,6 +393,16 @@ Active spikes: SPIKE-009. Historical spikes below remain for traceability.
 | Depends on | SPIKE-002 |
 | Outcome | ADR-008 (supersedes ADR-005) |
 
+### SPIKE-009: Validate ResetArea (cmd 9) before disarm when the panel is in alarm — Closed ✅
+
+| Field | Value |
+|---|---|
+| Resolves | RISK-018 |
+| Depends on | SPIKE-005 (disarm framing known); preferably after a controlled trigger (SPIKE-002) |
+| Outcome | Closed 2026-08-23 — not a production unknown. ADR-008 records cmd 8 disarm; ADR-013 records HA Disarm during live alarm on the dedicated local module. Cmd 9 is SmartCom-era follow-on at most, not a required send-path. |
+
+**Closed — no further experiment required for production disarm-when-triggered.** See RISK-018.
+
 ### SPIKE-006: Startup zone-state snapshot read — Validated ✅
 
 | Field | Value |
@@ -427,3 +431,5 @@ Active spikes: SPIKE-009. Historical spikes below remain for traceability.
 | 6 | 2026-08-08 | Clear | — |
 | 7 | 2026-08-09 | Issues found | 1 |
 | 8 | 2026-08-09 | Clear | — |
+| 9 | 2026-08-23 | Issues found | 2 |
+| 10 | 2026-08-23 | Clear | — |
