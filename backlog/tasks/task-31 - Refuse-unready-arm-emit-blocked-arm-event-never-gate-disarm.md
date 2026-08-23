@@ -1,9 +1,10 @@
 ---
 id: TASK-31
 title: 'Refuse unready arm, emit blocked-arm event, never gate disarm'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-23 18:34'
+updated_date: '2026-08-23 19:24'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
