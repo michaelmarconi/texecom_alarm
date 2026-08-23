@@ -1,13 +1,10 @@
 # Ship
 
-**Date:** 2026-08-21
-**State:** Draft 📝
+**Date:** 2026-08-23
+**State:** Accepted ✅
 <!-- Terminals: N/A | Accepted ✅ | Deferred ⏸️ -->
-<!-- Draft only: -->
-**Applicability:** yes
-<!-- Applicability on Draft is only yes|pending — never no (use State: N/A) -->
 
-**Reason / Deferral:** Applicable — architecture names a public Home Assistant App for other Premier Elite households; GitHub is already the publish URL; the practitioner wants this App on a real HA OS host. Not N/A.
+**Reason / Deferral:** Go-live Accepted 2026-08-23 — checklist pass (including store Update rehearsal 0.1.0→0.1.1), deploy authorized and performed on household HA from `#app`, live smoke pass (practitioner confirmation).
 
 ## Checklist
 
@@ -30,15 +27,18 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | CHANGELOG vs product | pass | `CHANGELOG.md` `[0.1.0]` describes the real App; `[0.0.1]` retained as historical scaffold only |
 | Licence label consistency | pass | `Dockerfile` OCI label is MIT (matches `LICENSE`) |
 | Version bump policy | pass | Supervisor SemVer only for notable product releases; CI checks copies match; tag `vX.Y.Z` when that version first lands on `main` |
+| Store Update rehearsal | pass | 2026-08-23: `./scripts/ha-store-upgrade-smoke.sh --from 0.1.0` → `STORE_UPGRADE_SMOKE_PASS from=0.1.0 to=0.1.1 slug=ebb3b885_texecom_alarm`. GHCR tag `0.1.1` was missing (only `0.1.0`/`latest`); re-published via Builder workflow_dispatch before the smoke. Options marker `mqtt_username=texecom-store-smoke` survived Update. |
 
 ## Deploy
 
-- Authorized: no — waiting on pre-deploy Ask
-- Step performed: catalogue path ready — store URL `https://github.com/michaelmarconi/texecom_alarm#app` (CI-managed thin `app` branch). Do not run store-installed copy alongside `local_texecom_alarm`.
+- Authorized: yes — 2026-08-22 (practitioner authorized community GitHub App install on a real HA OS host)
+- Step performed: yes — household HA install/Update from `https://github.com/michaelmarconi/texecom_alarm#app` (practitioner-confirmed 2026-08-23)
 
 ## Live smoke
 
-- Store catalogue smoke (apps-devcontainer, 2026-08-22): added `…/texecom_alarm#app`; clone at `apps/git/ebb3b885` is allowlist-only (no `backlog/`); Supervisor shows `ebb3b885_texecom_alarm` v0.1.1 with Documentation; **no** `Invalid app config` for the git clone (remaining warnings are from the **local** monorepo mount’s `backlog/config.yml`, expected until local dual-bind changes). Did not install the store copy alongside `local_texecom_alarm`. Household OS install still pending `/run --target`.
+- Store catalogue smoke (apps-devcontainer, 2026-08-22): added `…/texecom_alarm#app`; clone at `apps/git/ebb3b885` is allowlist-only (no `backlog/`); Supervisor shows `ebb3b885_texecom_alarm` v0.1.1 with Documentation; **no** `Invalid app config` for the git clone (remaining warnings are from the **local** monorepo mount’s `backlog/config.yml`, expected until local dual-bind changes). Did not install the store copy alongside `local_texecom_alarm`.
+- Store Update rehearsal: pass 2026-08-23 — see checklist row (not Live smoke).
+- `/run --target`: pass — 2026-08-23 practitioner walked household HA after store Install/Update; App working well (agent has no LAN reach — smoke recorded from practitioner confirmation, not an in-session URL fetch). Local `/run` (sim HA on 7123) is not live smoke.
 
 ## Review
 | # | Date | Verdict | Issues |
