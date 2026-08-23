@@ -1,6 +1,6 @@
 # Spec: alarm-control
 
-**Date:** 2026-08-01
+**Date:** 2026-08-01 (amended 2026-08-23)
 **State:** Accepted ✅
 
 ---
@@ -51,11 +51,10 @@ normal arm/disarm cycles or an actual alarm trigger.
 
 - Zone monitoring (the ~35 zone `binary_sensor` entities) — covered by
   `spec-zone-monitoring.md`.
-- The arm guard-condition logic (blocking `arm_away`/`arm_night` when doors/windows
-  are open, or the night-mode dark/no-guests checks) — lives in
-  `configuration/templates/house_alarm.yaml` and stays as-is.
-- The notification logic for blocked-arm explanations (`script.notify_actor`) —
-  stays as-is in the HA config layer.
+- Household rules for when arming is allowed (which doors and windows, night,
+  guests) and the wording of blocked-arm notifications — those stay in the HA
+  config layer. Ready-to-arm switches and refusing arm before it reaches the
+  panel are specified in `spec-ready-to-arm.md`, not here.
 - Building or changing the Lovelace dashboard or HomeKit exposure.
 
 ## Acceptance Criteria
@@ -143,8 +142,8 @@ normal arm/disarm cycles or an actual alarm trigger.
   config choice is Home, Night, or Unused only; Away must not appear as a
   Part-Arm option. Different Premier Elite installations can and do configure
   these slots differently.
-- The `house_alarm_panel` wrapper entity's guard-condition and notification logic is
-  not reimplemented here — this spec only needs to keep the underlying entity's
+- Household arm policy and blocked-arm notifications are not specified here (see
+  `spec-ready-to-arm.md`). This spec only needs the underlying entity's
   forwarding contract (state in, command out) intact.
 - Must support all seven MQTT alarm states used by Home Assistant:
   disarmed, armed_away, armed_night, armed_home, triggered, pending, arming.
