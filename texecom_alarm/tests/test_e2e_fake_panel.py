@@ -239,20 +239,29 @@ async def _e2e_discovery_retained_and_lwt() -> None:
                     elif topic == "texecom/panel_connection/state":
                         link_states.append(payload)
 
-                assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in discovered
                 assert (
-                    "homeassistant/binary_sensor/texecom_alarm_kitchen_pir_3/config" in discovered
+                    "homeassistant/binary_sensor/texecom_alarm_front_door_zone_1/config"
+                    in discovered
+                )
+                assert (
+                    "homeassistant/binary_sensor/texecom_alarm_kitchen_pir_zone_3/config"
+                    in discovered
                 )
                 assert alarm_cfg in discovered
                 assert link_cfg in discovered
                 assert AVAILABILITY_ONLINE in status_payloads
                 assert link_states and link_states[-1] == "ON"
 
-                front = discovered["homeassistant/binary_sensor/texecom_alarm_front_door_1/config"]
+                front = discovered[
+                    "homeassistant/binary_sensor/texecom_alarm_front_door_zone_1/config"
+                ]
                 assert front["availability_topic"] == "texecom/status"
-                assert front["unique_id"] == "texecom_alarm_front_door_1"
-                assert front["default_entity_id"] == "binary_sensor.texecom_alarm_front_door_1"
+                assert front["unique_id"] == "texecom_alarm_zone_1"
+                assert front["default_entity_id"] == (
+                    "binary_sensor.texecom_alarm_front_door_zone_1"
+                )
                 assert front["name"] == "Front Door"
+                assert "_zone_" not in str(front["name"])
                 assert front["device"]["identifiers"] == ["texecom_alarm"]
 
                 link = discovered[link_cfg]
@@ -358,7 +367,7 @@ async def test_e2e_app_run_with_recording_mqtt() -> None:
         await asyncio.wait_for(task, timeout=2.0)
 
         topics = [m.topic for m in mqtt.messages]
-        assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in topics
+        assert "homeassistant/binary_sensor/texecom_alarm_front_door_zone_1/config" in topics
         assert "homeassistant/alarm_control_panel/texecom_alarm_arm_status/config" in topics
         link_cfg = "homeassistant/binary_sensor/texecom_alarm_panel_connection/config"
         assert link_cfg in topics
@@ -377,13 +386,17 @@ async def test_e2e_app_run_with_recording_mqtt() -> None:
         zone_disc = next(
             m
             for m in mqtt.messages
-            if m.topic == "homeassistant/binary_sensor/texecom_alarm_front_door_1/config"
+            if m.topic == "homeassistant/binary_sensor/texecom_alarm_front_door_zone_1/config"
         )
         zone_payload = json.loads(
             zone_disc.payload if isinstance(zone_disc.payload, str) else zone_disc.payload.decode()
         )
         assert zone_payload["availability_topic"] == "texecom/status"
         assert zone_payload["availability_topic"] != "texecom/panel_connection/state"
+        assert zone_payload["unique_id"] == "texecom_alarm_zone_1"
+        assert zone_payload["default_entity_id"] == (
+            "binary_sensor.texecom_alarm_front_door_zone_1"
+        )
     finally:
         await panel.stop()
 
