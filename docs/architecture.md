@@ -1,10 +1,12 @@
 # Architecture
 
-<!-- Synthesised by /architecture on 2026-08-21 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md, adr-010-use-command-reject-events-and-periodic-house-state-polling-for-silent-panel-path-death-detection.md, adr-011-use-automatic-session-recovery-for-mid-run-panel-path-failures.md, adr-012-use-python-3-for-the-texecom-alarm-app.md, adr-013-use-dedicated-local-network-module-for-home-assistant-panel-access.md, adr-014-use-host-scoped-trigger-disconnect-assumptions-for-panel-reconnect-design.md -->
+<!-- Synthesised by /architecture on 2026-08-23 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md, adr-010-use-command-reject-events-and-periodic-house-state-polling-for-silent-panel-path-death-detection.md, adr-011-use-automatic-session-recovery-for-mid-run-panel-path-failures.md, adr-012-use-python-3-for-the-texecom-alarm-app.md, adr-013-use-dedicated-local-network-module-for-home-assistant-panel-access.md, adr-014-use-host-scoped-trigger-disconnect-assumptions-for-panel-reconnect-design.md, adr-015-use-ready-to-arm-switches-and-mqtt-blocked-arm-event-for-unready-arm-refusal.md -->
 
-**Date:** 2026-08-21
+**Date:** 2026-08-23
 **State:** Accepted ✅
 <!-- Update 2026-08-21: /architecture Update — fold ADR-013 (dedicated local module) and ADR-014 (host-scoped trigger-disconnect). Synthesis comment lists current Accepted ADRs only (ADR-002 superseded). -->
+<!-- Update 2026-08-23: /architecture Update — zone MQTT discovery identity (`spec-zone-monitoring` `_zone_{N}`). -->
+<!-- Update 2026-08-23: /architecture Update — fold ADR-015 (ready-to-arm switches and blocked-arm MQTT event). -->
 
 ## Overview
 
@@ -60,8 +62,17 @@ Building this commits the project to:
   Reconnect-on-drop stays; a longer retry budget after a trigger-adjacent drop is
   a safety net for a mis-pointed signalling module, not the expected path on a
   correctly configured ComIP (ADR-014).
-- Publishing to Home Assistant purely via MQTT discovery, with all household-specific
-  arming and notification logic staying entirely outside this app.
+- Publishing to Home Assistant purely via MQTT discovery. Household *rules* (which
+  doors, guests, time of day, what to say) stay in Home Assistant automations.
+  This app does publish three ready-to-arm switches and, on refuse, a blocked-arm
+  event — a generic choke, not that household's policy (ADR-015).
+- Giving each zone a Home Assistant identity that uses the panel's own name **and**
+  the word "zone" plus the panel's zone number, so two sensors with the same name
+  stay distinct and that number is clearly the panel's zone — not Home Assistant's
+  "this name already existed" suffix. The on-screen name stays ordinary Title Case
+  panel text (Front Door), without that zone marker glued on. Ids that used only a
+  trailing number will be replaced; automations pointing at the old ids need a
+  one-time update. There is no silent keep-the-old-id path.
 - Issuing arm and disarm with the empirically confirmed shared command mechanism.
   Away always uses the panel's full-arm mode; Home and Night map to Part-Arm slots
   from per-installation configuration (Home / Night / Unused only — Away is never a
@@ -135,6 +146,10 @@ broker) and its internal shape are detailed under `## Components` below.
   successful check; if trust stays broken past a bounded fail window, the app tears
   down and logs in again (ADR-011). Zone/alarm entities keep last-known state
   (ADR-004). Failed arm/disarm taps are not auto-retried.
+- **Ready-to-arm switch off** — that arm is not sent to the panel; the alarm
+  entity stays as it was; a blocked-arm MQTT event names the mode only. This
+  app does not speak or explain. Disarm still works. Turning the switch off
+  while already armed does not disarm (ADR-015).
 - **Health check unanswered mid-run** — treat like a dead session: Connection stays
   off, keep trying the same reconnect path used after a clean panel drop, then
   re-sync zone/alarm state when the panel accepts again — no manual restart
@@ -184,13 +199,17 @@ live against the panel in SPIKE-001, SPIKE-002, and SPIKE-005 (production comman
 mapping is ADR-008). Docker base and s6 supervision are platform packaging, not a
 separate language decision (ADR-012).
 **Exposes:** Home Assistant MQTT discovery topics and their paired state/command
-topics for: one `alarm_control_panel` entity; one `binary_sensor` entity per in-use
-zone; one dedicated connectivity/freshness `binary_sensor` — friendly name
+topics for: one `alarm_control_panel` entity (`alarm_control_panel.texecom_alarm_arm_status`);
+one `binary_sensor` entity per in-use zone
+(`binary_sensor.texecom_alarm_{slug}_zone_{N}`, `unique_id` `texecom_alarm_zone_{N}` —
+`spec-zone-monitoring`); one dedicated connectivity/freshness `binary_sensor` — friendly name
 **Alarm Panel Connection** — reporting panel-link health (ADR-004;
-`spec-panel-session-heal`); and a "last trigger" snapshot attribute (initiating zone,
-timestamp) on the alarm entity (ADR-004). No HTTP API, no HA config-flow, no
+`spec-panel-session-heal`); a "last trigger" snapshot attribute (initiating zone,
+timestamp) on the alarm entity (ADR-004); three MQTT `switch` entities for
+ready-to-arm Away / Home / Night (start on); and one MQTT `event` entity for a
+blocked arm that names the mode only (ADR-015, `spec-ready-to-arm`). No HTTP API, no HA config-flow, no
 entity-registry presence beyond what HA's own MQTT integration creates from these
-discovery payloads (ADR-003). Clean rename of that connectivity entity’s
+discovery payloads (ADR-003). Clean rename of zone and connectivity
 `unique_id` / Entity ID is in scope (no backwards-compat soft path).
 **Consumes:**
 - Texecom Connect protocol over TCP to the panel's **dedicated local network
@@ -209,6 +228,33 @@ language; ADR-003 App shape).
 
 Key behaviours:
 
+- **Ready-to-arm refuse** (ADR-015, `spec-ready-to-arm`): discover three MQTT
+  switches (Away, Home, Night) that start on. Subscribe to their command/state
+  topics. Before any arm command to the panel, if the matching switch is off, do
+  not send the arm (including when the request arrived on the alarm entity's MQTT
+  command topic); leave alarm state unchanged; publish an MQTT event whose event
+  type / payload names the blocked mode and does not include a household reason.
+  Disarm never consults the switches. Turning a switch off while already armed
+  does not disarm. Successful arm when the matching switch is on is unchanged
+  (ADR-008). Do not encode which doors or guests flip the switches — that is HA
+  automations. Topic names and exact `event_type` strings are implementation.
+- **MQTT discovery identity** (`spec-zone-monitoring` ACs 6–9): zone discovery
+  `object_id` / `default_entity_id` is `binary_sensor.texecom_alarm_{slug}_zone_{N}`
+  (example: Front Door, panel zone 1 → `binary_sensor.texecom_alarm_front_door_zone_1`).
+  `{slug}` is the panel name, lowercased, non-alphanumerics to underscores; empty
+  names use `zone`. `{N}` is the 1-based panel zone number. `unique_id` is
+  zone-stable `texecom_alarm_zone_{N}` (slug not in `unique_id`, so a later panel
+  rename does not fork identity). Discovery `name` is Title Case panel text
+  without `_zone_N` (empty name → `Zone {N}`). Two in-use zones with the same
+  panel name stay distinct via `_zone_{N}`. Forbidden: `texecom_alarm_{slug}_{N}`
+  (trailing `_{N}` looks like Home Assistant's collision suffix) and slug-only
+  ids with no `_zone_{N}`. Alarm identity stays
+  `alarm_control_panel.texecom_alarm_arm_status`. Zone **state** topics stay
+  `{prefix}/zone/{N}/state` — this contract is discovery identity only. Changing
+  `unique_id` orphans previous entities (same no-soft-path rule as the
+  connectivity rename); household automations on the old ids need a one-time
+  retarget. FakePanel/unit tests must assert `default_entity_id` and `unique_id`
+  shape.
 - **Startup / first-login progressive backoff** (`spec-startup-login-backoff`, on
   `spec-continuous-operation`): until the first successful panel connect/login
   (including after an add-on restart), failed attempts do not exit the process.
@@ -471,22 +517,34 @@ connectivity sensor reflects the degraded/recovering link (ADR-004).
 
 ### Arm/disarm command
 
-Household arm/disarm arrives via the unchanged `house_alarm_panel` wrapper onto this
-app's MQTT command topic; the app maps Away to full arm and Home/Night through
-install-time Part-Arm slot configuration, then issues the confirmed Connect-protocol
-command (ADR-008).
+Arm and disarm arrive on this app's MQTT command topic from Home Assistant (and
+anything that talks to that alarm entity). Disarm is always forwarded. For an
+arm, the app first reads the matching ready-to-arm switch (ADR-015). If that
+switch is off, the app does not talk to the panel, leaves the alarm in the state
+it already was, and publishes a blocked-arm MQTT event naming the mode — not
+why. Home Assistant automations own the "why" (open door, guests) and any spoken
+message. If the switch is on, the app maps Away to full arm and Home/Night
+through install-time Part-Arm slots, then issues the confirmed Connect command
+(ADR-008).
 
 ```mermaid
 flowchart LR
-    Cmd["Household arm/disarm<br/>via HA / HomeKit"]:::external
-    Wrapper["house_alarm_panel<br/>wrapper (unchanged)"]:::external
-    MqttCmd["MQTT command<br/>topic"]:::external
+    Cmd["Arm or disarm<br/>from Home Assistant"]:::external
     Recv["App receives<br/>command"]:::owned
+    Ready{"Matching ready<br/>switch on?"}:::owned
+    Event["MQTT event:<br/>mode blocked"]:::owned
+    Stay["Alarm stays<br/>as it was"]:::owned
     Map["Map HA mode via<br/>install-time config"]:::owned
-    Send["Issue confirmed<br/>arm or disarm cmd"]:::owned
+    Send["Issue confirmed<br/>arm or disarm"]:::owned
     Panel["Panel ACKs +<br/>AREA/LOG events"]:::external
+    HA["HA automation<br/>may explain why"]:::external
 
-    Cmd --> Wrapper --> MqttCmd --> Recv --> Map --> Send --> Panel
+    Cmd --> Recv
+    Recv -->|disarm| Send
+    Recv -->|arm| Ready
+    Ready -->|no| Event --> Stay
+    Event --> HA
+    Ready -->|yes| Map --> Send --> Panel
 
     classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
@@ -495,14 +553,16 @@ flowchart LR
 Away, Night, Home, and Disarm are all implementable from SPIKE-005 / ADR-008. Away is
 always the full-arm mode byte; the only install-specific input is which Part-Arm slot
 is Home vs Night (Unused allowed) — documented add-on options, not code. Away must not
-appear on that Part-Arm option surface.
+appear on that Part-Arm option surface. Ready switches start on, so a new install
+arms as today until someone turns one off. Turning a switch off while already
+armed does not disarm.
 
 ## Outside systems & tests
 
 | Outside system | In CI | What CI may claim | Live-only |
 |---|---|---|---|
-| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), frame resync, reconnect-when-TCP-dies (including a simulated trigger-time drop — CI must not claim a correctly pointed ComIP always drops); silent-death / command-reject / quiet-house detector shapes (ADR-010 / SPIKE-008); mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login (ADR-011); progressive startup-login backoff (fail-N-then-succeed waits strictly increasing then capped at 30 s; recovery without process exit) | Real Away/Night/Home arm sequences; which module `panel_host` is (ADR-013); survive-trigger and HA Disarm-during-alarm on dedicated ComIP (SPIKE-010 / ADR-014 — live-only; FakePanel must not claim the opposite); live quiet-house / zombie corroboration; mid-run heal under real ComIP contention; live Supervisor timing (RISK-015) |
-| MQTT broker | Hermetic / test broker (or FakePanel + recording MQTT client) | Discovery payloads, state/command publish/subscribe, connectivity sensor and last-trigger snapshot attributes | Household HA entity behaviour, wrapper/HomeKit/automations |
+| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), frame resync, reconnect-when-TCP-dies (including a simulated trigger-time drop — CI must not claim a correctly pointed ComIP always drops); silent-death / command-reject / quiet-house detector shapes (ADR-010 / SPIKE-008); mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login (ADR-011); progressive startup-login backoff (fail-N-then-succeed waits strictly increasing then capped at 30 s; recovery without process exit); ready-to-arm refuse — matching switch off means no arm command and unchanged alarm state, including the Home Assistant command path; disarm still works; switch-off while armed does not disarm (ADR-015) | Real Away/Night/Home arm sequences; which module `panel_host` is (ADR-013); survive-trigger and HA Disarm-during-alarm on dedicated ComIP (SPIKE-010 / ADR-014 — live-only; FakePanel must not claim the opposite); live quiet-house / zombie corroboration; mid-run heal under real ComIP contention; live Supervisor timing (RISK-015) |
+| MQTT broker | Hermetic / test broker (or FakePanel + recording MQTT client) | Discovery payloads, state/command publish/subscribe, connectivity sensor and last-trigger snapshot attributes; three ready-to-arm switches that start on; blocked-arm MQTT event with mode and without reason (ADR-015) | Household HA entity behaviour; that a real Home Assistant shows the ready switches and can automate on the blocked-arm event (ADR-015); HomeKit/iOS still offering an arm button when a switch is off |
 
 CI never targets the live household panel or a production broker account. Product
 validation of live behaviour belongs at `/accept` (optional go-live smoke at `/ship`).
@@ -539,9 +599,10 @@ up for the vendor app and monitoring (ADR-013).
 
 - Building or changing the Lovelace dashboard or HomeKit exposure — both keep working
   off the same entity names/states this app publishes.
-- Reimplementing the arm guard-condition or notification logic that lives in
-  `configuration/templates/house_alarm.yaml` / `script.notify_actor` — stays entirely
-  in the household's own Home Assistant configuration (ADR-003).
+- Encoding household arming *rules* or spoken/notify wording in this app (which
+  doors, guests, time of day). Those stay in Home Assistant automations that
+  flip the ready-to-arm switches and listen for the blocked-arm event. The
+  generic refuse (switches + event) *does* live in this app (ADR-003, ADR-015).
 - Support for the older UDL/Wintex serial protocol, or panel families other than
   Premier Elite.
 - A guided config-flow/setup-wizard UI, HACS packaging, or a natively-registered
@@ -599,3 +660,5 @@ up for the vendor app and monitoring (ADR-013).
 | 12 | 2026-08-10 | Issues found | 1 |
 | 13 | 2026-08-10 | Clear | — (review-12 Python technology gap cleared via ADR-012) |
 | 14 | 2026-08-21 | Clear | — |
+| 15 | 2026-08-23 | Clear | — |
+| 16 | 2026-08-23 | Clear | — |
