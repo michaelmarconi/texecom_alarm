@@ -4,7 +4,7 @@ title: Publish zone MQTT identity as slug_zone_N with a zone-number unique_id
 status: awaiting-review
 assignee: []
 created_date: '2026-08-23 18:42'
-updated_date: '2026-08-23 19:30'
+updated_date: '2026-08-23 19:32'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -57,5 +57,5 @@ Verification: ACs 6–9: default_entity_id is binary_sensor.texecom_alarm_{slug}
 Notes/assumptions: test_app_mqtt.py was updated only so a discovery-topic assertion matches the new object_id (full-suite green). zone_slug still accepts zone_number= but ignores it; uniqueness is `_zone_{N}` on object_id. Empty panel name → object_id texecom_alarm_zone_zone_{N}. Zone state topics and alarm identity unchanged. No addon version bump.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
