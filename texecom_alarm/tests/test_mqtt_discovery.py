@@ -22,7 +22,13 @@ from texecom_alarm.mqtt.discovery import (
     connectivity_state_topic,
     publish_alarm_discovery,
     publish_connectivity_discovery,
+    publish_ready_to_arm_discovery,
     publish_zone_discovery,
+    ready_command_topic,
+    ready_discovery_payload,
+    ready_discovery_topic,
+    ready_object_id,
+    ready_state_topic,
     zone_discovery_payload,
     zone_discovery_topic,
     zone_object_id,
@@ -136,10 +142,17 @@ def test_zone_alarm_and_connectivity_share_one_device_block() -> None:
     zone_payload = zone_discovery_payload(zone, topic_prefix="texecom")
     alarm_payload = alarm_discovery_payload(topic_prefix="texecom")
     link_payload = connectivity_discovery_payload(topic_prefix="texecom")
+    ready_payload = ready_discovery_payload("away", topic_prefix="texecom")
     assert zone_payload["device"] == EXPECTED_DEVICE
     assert alarm_payload["device"] == EXPECTED_DEVICE
     assert link_payload["device"] == EXPECTED_DEVICE
-    assert zone_payload["device"] is alarm_payload["device"] is link_payload["device"]
+    assert ready_payload["device"] == EXPECTED_DEVICE
+    assert (
+        zone_payload["device"]
+        is alarm_payload["device"]
+        is link_payload["device"]
+        is ready_payload["device"]
+    )
 
 
 def test_zone_and_alarm_discovery_use_app_lwt_only() -> None:
@@ -276,3 +289,67 @@ def test_zone_discovery_name_is_title_case() -> None:
 
     empty = Zone(number=9, zone_type=1, name="")
     assert zone_discovery_payload(empty, topic_prefix="texecom")["name"] == "Zone 9"
+
+
+def test_ready_object_ids() -> None:
+    assert ready_object_id("away") == "texecom_alarm_ready_away"
+    assert ready_object_id("home") == "texecom_alarm_ready_home"
+    assert ready_object_id("night") == "texecom_alarm_ready_night"
+
+
+def test_ready_discovery_and_state_topics() -> None:
+    assert (
+        ready_discovery_topic("texecom_alarm_ready_away")
+        == "homeassistant/switch/texecom_alarm_ready_away/config"
+    )
+    assert ready_state_topic("texecom", "away") == "texecom/ready/away/state"
+    assert ready_command_topic("texecom", "home") == "texecom/ready/home/command"
+    assert ready_state_topic("texecom", "night") == "texecom/ready/night/state"
+
+
+def test_ready_discovery_payload_shape() -> None:
+    payload = ready_discovery_payload("away", topic_prefix="texecom")
+    assert payload["name"] == "Ready to arm Away"
+    assert payload["unique_id"] == "texecom_alarm_ready_away"
+    assert payload["object_id"] == "texecom_alarm_ready_away"
+    assert payload["default_entity_id"] == "switch.texecom_alarm_ready_away"
+    assert payload["device"] == EXPECTED_DEVICE
+    assert payload["state_topic"] == "texecom/ready/away/state"
+    assert payload["command_topic"] == "texecom/ready/away/command"
+    assert payload["payload_on"] == "ON"
+    assert payload["payload_off"] == "OFF"
+    assert payload["availability_topic"] == "texecom/status"
+    assert payload["payload_available"] == AVAILABILITY_ONLINE
+    assert payload["payload_not_available"] == AVAILABILITY_OFFLINE
+
+
+@pytest.mark.asyncio
+async def test_publish_ready_to_arm_discovery_retained_starts_on() -> None:
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect(
+        will_topic=availability_topic("texecom"),
+        will_payload=AVAILABILITY_OFFLINE,
+        will_retain=True,
+    )
+    await publish_ready_to_arm_discovery(mqtt, topic_prefix="texecom")
+    for mode, object_id, name in (
+        ("away", "texecom_alarm_ready_away", "Ready to arm Away"),
+        ("home", "texecom_alarm_ready_home", "Ready to arm Home"),
+        ("night", "texecom_alarm_ready_night", "Ready to arm Night"),
+    ):
+        cfg_topic = f"homeassistant/switch/{object_id}/config"
+        cfgs = [m for m in mqtt.messages if m.topic == cfg_topic]
+        assert len(cfgs) == 1
+        assert cfgs[0].retain is True
+        payload = json.loads(
+            cfgs[0].payload if isinstance(cfgs[0].payload, str) else cfgs[0].payload.decode()
+        )
+        assert payload["unique_id"] == object_id
+        assert payload["name"] == name
+        assert payload["command_topic"] == f"texecom/ready/{mode}/command"
+        assert payload["state_topic"] == f"texecom/ready/{mode}/state"
+        assert payload["device"] == EXPECTED_DEVICE
+        states = [m for m in mqtt.messages if m.topic == f"texecom/ready/{mode}/state"]
+        assert states
+        assert states[0].retain is True
+        assert states[0].payload == "ON"
