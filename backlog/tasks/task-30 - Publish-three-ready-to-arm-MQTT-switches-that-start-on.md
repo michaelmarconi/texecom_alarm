@@ -1,7 +1,7 @@
 ---
 id: TASK-30
 title: Publish three ready-to-arm MQTT switches that start on
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-23 18:33'
 updated_date: '2026-08-23 19:22'
@@ -35,9 +35,9 @@ ordinal: 24000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 After discovery, Home Assistant (fake MQTT client) sees three ready-to-arm switches for Away, Home, and Night
-- [ ] #2 Each switch starts on so a new install arms as it does today
-- [ ] #3 Switch command/state round-trip is retained so a later arm command can read the current on/off
+- [x] #1 After discovery, Home Assistant (fake MQTT client) sees three ready-to-arm switches for Away, Home, and Night
+- [x] #2 Each switch starts on so a new install arms as it does today
+- [x] #3 Switch command/state round-trip is retained so a later arm command can read the current on/off
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -56,5 +56,5 @@ Verification: AC1 FakePanel+recording MQTT sees three switch discoveries; AC2 ea
 Notes/assumptions: Arm refuse is not implemented (TASK-31). Ready commands are handled on the existing MQTT inbound loop. In-memory state starts ON each process start; retained state is republished ON at discovery. Friendly names are Ready to arm Away/Home/Night.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
