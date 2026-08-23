@@ -35,14 +35,22 @@ Python 3.12. Package and Supervisor App folder are both under `texecom_alarm/`
 (`pyproject.toml`, `src/`, `tests/` next to `config.yaml`).
 
 ```bash
+python3 -m venv texecom_alarm/.venv
+texecom_alarm/.venv/bin/pip install -e "texecom_alarm/[dev]"
+./scripts/install-git-hooks.sh
+
 cd texecom_alarm
-pip install -e ".[dev]"
-ruff check .
-ruff format --check .
-pytest --cov=texecom_alarm --cov-fail-under=90
-bandit -r src -ll
-pip-audit
+.venv/bin/ruff check .
+.venv/bin/ruff format --check .
+.venv/bin/pytest --cov=texecom_alarm --cov-fail-under=90
+.venv/bin/bandit -r src -ll
+.venv/bin/pip-audit
 ```
+
+The git hook runs Ruff on `texecom_alarm/` before each commit. Use
+`./scripts/install-git-hooks.sh` (a repo-relative wrapper). Do **not** run
+`pre-commit install` — that hard-codes the venv’s absolute path and breaks when
+the directory is moved or renamed.
 
 CI runs the same checks on pull requests to `main`. Tests must use the
 in-repo FakePanel stand-in — do not point CI or unit tests at a live panel.

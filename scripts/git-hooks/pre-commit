@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Repo-relative pre-commit wrapper. Copied to .git/hooks by
+# scripts/install-git-hooks.sh — do not run `pre-commit install`.
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ARGS=(hook-impl --config="$ROOT/.pre-commit-config.yaml" --hook-type=pre-commit --hook-dir "$HERE" -- "$@")
+
+run_with() {
+  local py="$1"
+  if [[ -x "$py" ]] && "$py" -c "import pre_commit" >/dev/null 2>&1; then
+    exec "$py" -m pre_commit "${ARGS[@]}"
+  fi
+  return 1
+}
+
+run_with "$ROOT/texecom_alarm/.venv/bin/python3" || true
+run_with "$ROOT/.venv/bin/python3" || true
+
+if command -v pre-commit >/dev/null 2>&1; then
+  exec pre-commit "${ARGS[@]}"
+fi
+
+cat >&2 <<'EOF'
+Git pre-commit hook: no working pre-commit install.
+
+Create the app venv, then install this wrapper (not `pre-commit install`):
+
+  python3 -m venv texecom_alarm/.venv
+  texecom_alarm/.venv/bin/pip install -e "texecom_alarm/[dev]"
+  ./scripts/install-git-hooks.sh
+
+`pre-commit install` bakes an absolute venv path into .git/hooks and breaks
+when that directory is moved or renamed.
+EOF
+exit 1
