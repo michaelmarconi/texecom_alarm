@@ -1,9 +1,10 @@
 ---
 id: TASK-34
 title: 'Checkpoint: texecom-alarm-app zone MQTT identity wave'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-23 18:42'
+updated_date: '2026-08-23 19:48'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
