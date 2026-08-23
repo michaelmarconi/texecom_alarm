@@ -20,6 +20,13 @@ ordinal: 28000
 - [ ] #3 Build/import clean for texecom_alarm package (python -c 'import texecom_alarm' from app env / pytest collection succeeds)
 <!-- AC:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 Zone Entity IDs use explicit _zone_{N}; unique_id is zone-number stable with no slug (spec-zone-monitoring ACs 6–9, ADR-003)
