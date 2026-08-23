@@ -1,10 +1,10 @@
 ---
 id: TASK-33
 title: Publish zone MQTT identity as slug_zone_N with a zone-number unique_id
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-23 18:42'
-updated_date: '2026-08-23 19:32'
+updated_date: '2026-08-23 19:34'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -36,9 +36,9 @@ ordinal: 27000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Discovery default_entity_id is binary_sensor.texecom_alarm_{slug}_zone_{N} (e.g. front_door zone 1 → binary_sensor.texecom_alarm_front_door_zone_1), not trailing _{N} and not slug-only
-- [ ] #2 unique_id is zone-stable texecom_alarm_zone_{N} with no slug, so a later panel rename does not fork identity
-- [ ] #3 Discovery name is Title Case panel text without _zone_N (empty name → Zone {N}); FakePanel e2e asserts both default_entity_id and unique_id
+- [x] #1 Discovery default_entity_id is binary_sensor.texecom_alarm_{slug}_zone_{N} (e.g. front_door zone 1 → binary_sensor.texecom_alarm_front_door_zone_1), not trailing _{N} and not slug-only
+- [x] #2 unique_id is zone-stable texecom_alarm_zone_{N} with no slug, so a later panel rename does not fork identity
+- [x] #3 Discovery name is Title Case panel text without _zone_N (empty name → Zone {N}); FakePanel e2e asserts both default_entity_id and unique_id
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -57,5 +57,5 @@ Verification: ACs 6–9: default_entity_id is binary_sensor.texecom_alarm_{slug}
 Notes/assumptions: test_app_mqtt.py was updated only so a discovery-topic assertion matches the new object_id (full-suite green). zone_slug still accepts zone_number= but ignores it; uniqueness is `_zone_{N}` on object_id. Empty panel name → object_id texecom_alarm_zone_zone_{N}. Zone state topics and alarm identity unchanged. No addon version bump.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
