@@ -8,14 +8,7 @@ Product ideas and follow-ons — not committed backlog work until planned.
 
 ## Before public release
 
-- **Redact household security fingerprint** (was DRAFT-2) — Gate before public GitHub / Add-on publish (RISK-017).
-  - **Working tree:** Critical + High + cheap Medium **closed** (2026-08-21).
-  - **History:** **closed** (2026-08-21) — `main` rewritten; re-clone any other checkouts.
-  - **Keep:** Generic “household” product language; consumer note that UDL is *usually* `1234`; FakePanel/`1234` test doubles; author/LICENSE; protocol facts without install fingerprint.
-  - **Done when:** Critical/High redacted ✅; history purged ✅.
-- **Store-shaped App repository (community publish path)** — Official HA Apps store won't take this; distribute as a public GitHub App repository (not HACS).
-  - **Catalogue layout:** **done** — root `repository.yaml` + App in `texecom_alarm/`; apps-devcontainer dual-binds the subfolder to `local_texecom_alarm`.
-  - **Thin `app` branch:** Supervisor store URL is `https://github.com/michaelmarconi/texecom_alarm#app` (CI force-syncs allowlisted catalogue paths from `main`; omits `backlog/` / Guv'nor / pipeline `docs/`).
-  - **GHCR / `image:`:** **done** — `image: ghcr.io/michaelmarconi/texecom-alarm`; builder on `v*` tags (multi-arch).
-  - **Packaging smoke (same test HA is fine):** Add the `#app` URL under App Store → Repositories; install/update that copy. Do **not** run `local_*` and the store-installed copy together (single ComIP + MQTT discovery clashes). **Version-bump Update path** is gated by `/ship`: run `./scripts/ha-store-upgrade-smoke.sh` and record **Store Update rehearsal** in `docs/ship.md` (not a second ad-hoc procedure). Rebuild/reopen the apps container after dual-bind.
-  - **Discoverability later:** README `my.home-assistant.io` add-repo link; Community forum post. Product gate remains `/accept` → `/docs` → `/ship`; store shape is packaging, not product accept.
+Store layout is already in place (`repository.yaml`, `texecom_alarm/`, `#app` catalogue branch, GHCR `image:`). Left:
+
+- **Packaging smoke (same test HA is fine):** Add the `#app` URL under App Store → Repositories; install/update that copy. Do **not** run `local_*` and the store-installed copy together (single ComIP + MQTT discovery clashes). **Version-bump Update path** is gated by `/ship`: run `./scripts/ha-store-upgrade-smoke.sh` and record **Store Update rehearsal** in `docs/ship.md` (not a second ad-hoc procedure). Rebuild/reopen the apps container after dual-bind.
+- **Discoverability later:** README `my.home-assistant.io` add-repo link; Community forum post. Product gate remains `/accept` → `/docs` → `/ship`; store shape is packaging, not product accept.
