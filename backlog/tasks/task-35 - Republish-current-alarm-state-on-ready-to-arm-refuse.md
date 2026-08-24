@@ -1,9 +1,10 @@
 ---
 id: TASK-35
 title: Republish current alarm state on ready-to-arm refuse
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-24 13:32'
+updated_date: '2026-08-24 13:58'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
