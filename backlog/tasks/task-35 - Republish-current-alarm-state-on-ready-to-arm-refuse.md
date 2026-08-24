@@ -1,10 +1,10 @@
 ---
 id: TASK-35
 title: Republish current alarm state on ready-to-arm refuse
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-24 13:32'
-updated_date: '2026-08-24 14:01'
+updated_date: '2026-08-24 14:44'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -49,6 +49,12 @@ Files likely affected: texecom_alarm/src/texecom_alarm/arm_commands.py (modify),
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Refused arms now re-publish the current retained alarm MQTT state (same payload) after the blocked-arm event, mirroring panel NAK.
+Changed files: texecom_alarm/src/texecom_alarm/arm_commands.py, texecom_alarm/tests/test_arm_commands.py, texecom_alarm/tests/test_app_mqtt.py, texecom_alarm/tests/test_e2e_fake_panel.py
+Verification: named pytest GREEN; full pytest --cov 337 passed, 92%; ruff clean.
+Notes/assumptions: CHANGELOG/DOCS left unchanged. No add-on version bump.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
