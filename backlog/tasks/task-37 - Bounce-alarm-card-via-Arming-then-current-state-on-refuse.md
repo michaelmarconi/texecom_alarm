@@ -1,10 +1,10 @@
 ---
 id: TASK-37
 title: Bounce alarm card via Arming then current state on refuse
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-24 16:10'
-updated_date: '2026-08-24 16:48'
+updated_date: '2026-08-24 16:49'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -37,9 +37,9 @@ ordinal: 31000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Matching switch off: FakePanel receives no arm; MQTT alarm state is arming then the pre-command payload
-- [ ] #2 The same Arming-then-current sequence happens when the arm arrives on Home Assistant's alarm command topic
-- [ ] #3 Disarm is still not gated; refuse while already armed bounces to that current armed state and does not disarm
+- [x] #1 Matching switch off: FakePanel receives no arm; MQTT alarm state is arming then the pre-command payload
+- [x] #2 The same Arming-then-current sequence happens when the arm arrives on Home Assistant's alarm command topic
+- [x] #3 Disarm is still not gated; refuse while already armed bounces to that current armed state and does not disarm
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -58,5 +58,5 @@ Verification: unit + FakePanel integration; matching switch off: no panel arm; M
 Notes/assumptions: Bounce is MQTT-only (live alarm state is not set to arming). ~0.35s asyncio.sleep between the two publishes so Home Assistant can apply Arming first; skipped when already arming. Disarm remains ungated.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
