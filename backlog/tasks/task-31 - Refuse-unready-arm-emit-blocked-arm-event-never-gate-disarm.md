@@ -1,10 +1,10 @@
 ---
 id: TASK-31
 title: 'Refuse unready arm, emit blocked-arm event, never gate disarm'
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-23 18:34'
-updated_date: '2026-08-24 08:58'
+updated_date: '2026-08-24 09:03'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -43,9 +43,9 @@ ordinal: 25000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Matching switch off: FakePanel receives no arm command and alarm MQTT state stays unchanged, including when the payload arrives on Home Assistant's alarm command topic
-- [ ] #2 That refuse publishes an MQTT event that names the blocked mode and does not include a household reason
-- [ ] #3 Disarm still reaches the panel with every switch off, and turning a switch off while armed does not disarm
+- [x] #1 Matching switch off: FakePanel receives no arm command and alarm MQTT state stays unchanged, including when the payload arrives on Home Assistant's alarm command topic
+- [x] #2 That refuse publishes an MQTT event that names the blocked mode and does not include a household reason
+- [x] #3 Disarm still reaches the panel with every switch off, and turning a switch off while armed does not disarm
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -64,5 +64,5 @@ Verification: python -m pytest tests/test_arm_commands.py tests/test_e2e_fake_pa
 Notes/assumptions: Existing tests that mention older TASK/AC labels were left as-is; new product code and TASK-31 tests do not cite pipeline IDs. config.yaml version was not bumped. Ready-to-arm switches were not re-implemented. After commit, main was merged into task-31 so TASK-33 zone MQTT identity is preserved.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
