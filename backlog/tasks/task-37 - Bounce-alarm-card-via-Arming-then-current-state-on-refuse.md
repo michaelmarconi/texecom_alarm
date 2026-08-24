@@ -1,10 +1,10 @@
 ---
 id: TASK-37
 title: Bounce alarm card via Arming then current state on refuse
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-24 16:10'
-updated_date: '2026-08-24 16:22'
+updated_date: '2026-08-24 16:42'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -51,6 +51,12 @@ Files likely affected: texecom_alarm/src/texecom_alarm/arm_commands.py (modify),
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Refused arms now bounce MQTT arming then the pre-command payload (no panel arm); Home Assistant command path and already-armed refuse match.
+Changed files: texecom_alarm/src/texecom_alarm/arm_commands.py, texecom_alarm/tests/test_arm_commands.py, texecom_alarm/tests/test_app_mqtt.py, texecom_alarm/tests/test_e2e_fake_panel.py, texecom_alarm/CHANGELOG.md
+Verification: unit + FakePanel integration; matching switch off: no panel arm; MQTT sequence is arming then the pre-command payload (including the Home Assistant command path); already-armed refuse ends on the armed payload. cd texecom_alarm && python -m pytest tests/test_arm_commands.py tests/test_app_mqtt.py tests/test_e2e_fake_panel.py -q — 14 bounce/disarm cases passed; full suite python -m pytest --cov=texecom_alarm --cov-fail-under=90 — 338 passed, 92.55% coverage; ruff check + ruff format --check — clean.
+Notes/assumptions: Bounce is MQTT-only (live alarm state is not set to arming). ~0.35s asyncio.sleep between the two publishes so Home Assistant can apply Arming first; skipped when already arming. Disarm remains ungated.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
