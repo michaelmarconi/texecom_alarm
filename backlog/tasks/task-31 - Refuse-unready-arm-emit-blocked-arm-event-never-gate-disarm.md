@@ -4,7 +4,7 @@ title: 'Refuse unready arm, emit blocked-arm event, never gate disarm'
 status: awaiting-review
 assignee: []
 created_date: '2026-08-23 18:34'
-updated_date: '2026-08-24 08:49'
+updated_date: '2026-08-24 08:58'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -64,5 +64,5 @@ Verification: python -m pytest tests/test_arm_commands.py tests/test_e2e_fake_pa
 Notes/assumptions: Existing tests that mention older TASK/AC labels were left as-is; new product code and TASK-31 tests do not cite pipeline IDs. config.yaml version was not bumped. Ready-to-arm switches were not re-implemented. After commit, main was merged into task-31 so TASK-33 zone MQTT identity is preserved.
 
 ## Build phase
-phase: awaiting-merge-signoff
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
