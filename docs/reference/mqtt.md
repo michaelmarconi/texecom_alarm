@@ -40,6 +40,35 @@ mapped to a Part-Arm slot. `ARM_AWAY` always uses full arm.
 Home Assistant MQTT discovery config:
 `homeassistant/alarm_control_panel/texecom_alarm_arm_status/config`.
 
+If the matching ready-to-arm switch is off, `ARM_*` is not sent to the panel
+and alarm state is left unchanged. `DISARM` is never gated.
+
+## Ready to arm
+
+Three MQTT switches start **on**. Automations in Home Assistant turn them off
+to refuse that arm mode.
+
+| Topic | Role | Payload |
+|-------|------|---------|
+| `{prefix}/ready/{mode}/state` | State (retained) | `ON` / `OFF` |
+| `{prefix}/ready/{mode}/command` | Command | `ON` / `OFF` |
+
+`{mode}` is `away`, `home`, or `night`. Discovery:
+`homeassistant/switch/texecom_alarm_ready_{mode}/config`.
+
+## Blocked arm event
+
+When an arm is refused because the matching ready switch is off, the app
+publishes a one-shot MQTT event (not retained). The JSON names the mode and
+does not include a household reason.
+
+| Topic | Retained | Payload |
+|-------|----------|---------|
+| `{prefix}/blocked_arm/event` | no | `{"event_type": "away"}` (or `home` / `night`) |
+
+Entity: `event.texecom_alarm_blocked_arm`. Discovery:
+`homeassistant/event/texecom_alarm_blocked_arm/config`.
+
 ## Zones
 
 | Topic | Role | Payload |
@@ -61,4 +90,5 @@ Assistant if you want door/window/motion icons.
 
 Discovery payloads share one MQTT device (`identifiers: ["texecom_alarm"]`,
 name **Texecom Alarm**, manufacturer Texecom, model Premier Elite) so Home
-Assistant groups the alarm, connection sensor, and zones together.
+Assistant groups the alarm, ready-to-arm switches, blocked-arm event,
+connection sensor, and zones together.

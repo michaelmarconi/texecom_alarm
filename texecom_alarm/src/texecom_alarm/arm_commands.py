@@ -17,6 +17,7 @@ from texecom_alarm.area_state import (
     publish_alarm_state,
 )
 from texecom_alarm.config import Settings
+from texecom_alarm.mqtt.discovery import publish_blocked_arm_event
 from texecom_alarm.panel_trust import (
     REASON_ARM_DISCONNECT,
     REASON_ARM_NAK,
@@ -144,6 +145,7 @@ async def handle_alarm_command(
     get_current_alarm_state: Callable[[], str | None] | None = None,
     trust: PanelTrust | None = None,
     zone_count: int | None = None,
+    ready_state: object | None = None,
 ) -> str | None:
     """Translate ARM_*/DISARM MQTT payloads into shared panel commands (ADR-008).
 
@@ -211,6 +213,16 @@ async def handle_alarm_command(
             "alarm_command_unmapped",
             extra={"payload": text, "mode": ha_mode},
         )
+        return None
+
+    if ready_state is not None and not getattr(ready_state, ha_mode, True):
+        logger.info("alarm_command_blocked mode=%s", ha_mode)
+        if mqtt is not None and topic_prefix is not None:
+            await publish_blocked_arm_event(
+                mqtt,
+                topic_prefix=topic_prefix,
+                mode=ha_mode,
+            )
         return None
 
     logger.debug("alarm_command_arm mode=%s byte=%s", ha_mode, mode_byte)

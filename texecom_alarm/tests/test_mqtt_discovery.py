@@ -17,10 +17,15 @@ from texecom_alarm.mqtt.discovery import (
     alarm_discovery_payload,
     alarm_discovery_topic,
     availability_topic,
+    blocked_arm_discovery_payload,
+    blocked_arm_discovery_topic,
+    blocked_arm_state_topic,
     connectivity_discovery_payload,
     connectivity_discovery_topic,
     connectivity_state_topic,
     publish_alarm_discovery,
+    publish_blocked_arm_discovery,
+    publish_blocked_arm_event,
     publish_connectivity_discovery,
     publish_ready_to_arm_discovery,
     publish_zone_discovery,
@@ -143,15 +148,18 @@ def test_zone_alarm_and_connectivity_share_one_device_block() -> None:
     alarm_payload = alarm_discovery_payload(topic_prefix="texecom")
     link_payload = connectivity_discovery_payload(topic_prefix="texecom")
     ready_payload = ready_discovery_payload("away", topic_prefix="texecom")
+    blocked_payload = blocked_arm_discovery_payload(topic_prefix="texecom")
     assert zone_payload["device"] == EXPECTED_DEVICE
     assert alarm_payload["device"] == EXPECTED_DEVICE
     assert link_payload["device"] == EXPECTED_DEVICE
     assert ready_payload["device"] == EXPECTED_DEVICE
+    assert blocked_payload["device"] == EXPECTED_DEVICE
     assert (
         zone_payload["device"]
         is alarm_payload["device"]
         is link_payload["device"]
         is ready_payload["device"]
+        is blocked_payload["device"]
     )
 
 
@@ -353,3 +361,60 @@ async def test_publish_ready_to_arm_discovery_retained_starts_on() -> None:
         assert states
         assert states[0].retain is True
         assert states[0].payload == "ON"
+
+
+def test_blocked_arm_discovery_topics() -> None:
+    assert blocked_arm_discovery_topic() == "homeassistant/event/texecom_alarm_blocked_arm/config"
+    assert blocked_arm_state_topic("texecom") == "texecom/blocked_arm/event"
+
+
+def test_blocked_arm_discovery_payload_shape() -> None:
+    payload = blocked_arm_discovery_payload(topic_prefix="texecom")
+    assert payload["name"] == "Blocked arm"
+    assert payload["unique_id"] == "texecom_alarm_blocked_arm"
+    assert payload["object_id"] == "texecom_alarm_blocked_arm"
+    assert payload["default_entity_id"] == "event.texecom_alarm_blocked_arm"
+    assert payload["device"] == EXPECTED_DEVICE
+    assert payload["state_topic"] == "texecom/blocked_arm/event"
+    assert payload["event_types"] == ["away", "home", "night"]
+    assert payload["availability_topic"] == "texecom/status"
+    assert payload["payload_available"] == AVAILABILITY_ONLINE
+    assert payload["payload_not_available"] == AVAILABILITY_OFFLINE
+    assert "reason" not in payload
+    assert "command_topic" not in payload
+
+
+@pytest.mark.asyncio
+async def test_publish_blocked_arm_discovery_retained() -> None:
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect(
+        will_topic=availability_topic("texecom"),
+        will_payload=AVAILABILITY_OFFLINE,
+        will_retain=True,
+    )
+    await publish_blocked_arm_discovery(mqtt, topic_prefix="texecom")
+    cfg_topic = "homeassistant/event/texecom_alarm_blocked_arm/config"
+    cfgs = [m for m in mqtt.messages if m.topic == cfg_topic]
+    assert len(cfgs) == 1
+    assert cfgs[0].retain is True
+    payload = json.loads(
+        cfgs[0].payload if isinstance(cfgs[0].payload, str) else cfgs[0].payload.decode()
+    )
+    assert payload["unique_id"] == "texecom_alarm_blocked_arm"
+    assert payload["event_types"] == ["away", "home", "night"]
+    assert payload["device"] == EXPECTED_DEVICE
+
+
+@pytest.mark.asyncio
+async def test_publish_blocked_arm_event_not_retained_mode_only() -> None:
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await publish_blocked_arm_event(mqtt, topic_prefix="texecom", mode="home")
+    msgs = [m for m in mqtt.messages if m.topic == "texecom/blocked_arm/event"]
+    assert len(msgs) == 1
+    assert msgs[0].retain is False
+    body = json.loads(
+        msgs[0].payload if isinstance(msgs[0].payload, str) else msgs[0].payload.decode()
+    )
+    assert body == {"event_type": "home"}
+    assert "reason" not in body

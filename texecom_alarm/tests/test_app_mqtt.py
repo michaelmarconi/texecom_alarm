@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -378,3 +379,164 @@ async def test_run_clears_retained_command_topic_after_subscribe() -> None:
         await asyncio.wait_for(task, timeout=2.0)
     finally:
         await panel.stop()
+
+
+def _command_settings() -> Settings:
+    return Settings(
+        panel_host="127.0.0.1",
+        panel_port=10001,
+        udl_password="1234",
+        mqtt_host="127.0.0.1",
+        mqtt_port=1883,
+        mqtt_username="",
+        mqtt_password="",
+        mqtt_topic_prefix="texecom",
+        part_arm_1="night",
+        part_arm_2="home",
+        part_arm_3="unused",
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mode", "arm_payload"),
+    [
+        ("away", "ARM_AWAY"),
+        ("home", "ARM_HOME"),
+        ("night", "ARM_NIGHT"),
+    ],
+)
+async def test_alarm_command_topic_refuses_unready_arm(mode: str, arm_payload: str) -> None:
+    """HA alarm command topic: matching ready switch off skips panel arm and emits event."""
+    from texecom_alarm.app import _listen_alarm_commands, _ReadyToArmState
+    from texecom_alarm.mqtt.discovery import alarm_command_topic, ready_command_topic
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.set_area_arm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    settings = _command_settings()
+    command_topic = alarm_command_topic("texecom")
+    ready_topics = {
+        ready_command_topic("texecom", item): item for item in ("away", "home", "night")
+    }
+    ready_state = _ReadyToArmState()
+    ready_state.set_mode(mode, False)
+    alarm_state = _SharedAlarmState(payload="disarmed")
+    task = asyncio.create_task(
+        _listen_alarm_commands(
+            panel,
+            mqtt,
+            settings=settings,
+            command_topic=command_topic,
+            alarm_state=alarm_state,
+            zone_count=12,
+            ready_state=ready_state,
+            ready_command_topics=ready_topics,
+        )
+    )
+    await mqtt.push_inbound(command_topic, arm_payload)
+    for _ in range(50):
+        if mqtt.payloads_for("texecom/blocked_arm/event"):
+            break
+        await asyncio.sleep(0.02)
+    panel.set_area_arm.assert_not_awaited()
+    assert alarm_state.payload == "disarmed"
+    assert mqtt.payloads_for("texecom/alarm/state") == []
+    events = mqtt.payloads_for("texecom/blocked_arm/event")
+    assert events
+    body = json.loads(events[-1])
+    assert body["event_type"] == mode
+    assert "reason" not in body
+    event_msgs = [m for m in mqtt.messages if m.topic == "texecom/blocked_arm/event"]
+    assert event_msgs[-1].retain is False
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_disarm_on_alarm_command_topic_with_all_ready_off() -> None:
+    """DISARM on HA's alarm command topic still reaches the panel when every switch is off."""
+    from texecom_alarm.app import _listen_alarm_commands, _ReadyToArmState
+    from texecom_alarm.mqtt.discovery import alarm_command_topic, ready_command_topic
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.set_area_arm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    settings = _command_settings()
+    command_topic = alarm_command_topic("texecom")
+    ready_state = _ReadyToArmState()
+    for mode in ("away", "home", "night"):
+        ready_state.set_mode(mode, False)
+    ready_topics = {
+        ready_command_topic("texecom", mode): mode for mode in ("away", "home", "night")
+    }
+    alarm_state = _SharedAlarmState(payload="armed_away")
+    task = asyncio.create_task(
+        _listen_alarm_commands(
+            panel,
+            mqtt,
+            settings=settings,
+            command_topic=command_topic,
+            alarm_state=alarm_state,
+            zone_count=12,
+            ready_state=ready_state,
+            ready_command_topics=ready_topics,
+        )
+    )
+    await mqtt.push_inbound(command_topic, "DISARM")
+    for _ in range(50):
+        if panel.set_area_disarm.await_count:
+            break
+        await asyncio.sleep(0.02)
+    panel.set_area_disarm.assert_awaited_once()
+    panel.set_area_arm.assert_not_awaited()
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_ready_switch_off_while_armed_does_not_disarm() -> None:
+    """Turning a ready switch off while armed must not send disarm."""
+    from texecom_alarm.app import _listen_alarm_commands, _ReadyToArmState
+    from texecom_alarm.mqtt.discovery import READY_OFF, alarm_command_topic, ready_command_topic
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.set_area_arm = AsyncMock()
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    settings = _command_settings()
+    command_topic = alarm_command_topic("texecom")
+    away_cmd = ready_command_topic("texecom", "away")
+    ready_state = _ReadyToArmState()
+    alarm_state = _SharedAlarmState(payload="armed_away")
+    task = asyncio.create_task(
+        _listen_alarm_commands(
+            panel,
+            mqtt,
+            settings=settings,
+            command_topic=command_topic,
+            alarm_state=alarm_state,
+            zone_count=12,
+            ready_state=ready_state,
+            ready_command_topics={away_cmd: "away"},
+        )
+    )
+    await mqtt.push_inbound(away_cmd, READY_OFF)
+    for _ in range(50):
+        if mqtt.payloads_for("texecom/ready/away/state")[-1:] == ["OFF"]:
+            break
+        await asyncio.sleep(0.02)
+    assert mqtt.payloads_for("texecom/ready/away/state")[-1] == "OFF"
+    assert ready_state.away is False
+    panel.set_area_disarm.assert_not_awaited()
+    panel.set_area_arm.assert_not_awaited()
+    assert alarm_state.payload == "armed_away"
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)

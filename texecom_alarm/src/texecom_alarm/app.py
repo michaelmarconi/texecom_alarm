@@ -20,6 +20,7 @@ from texecom_alarm.mqtt.discovery import (
     alarm_command_topic,
     availability_topic,
     publish_alarm_discovery,
+    publish_blocked_arm_discovery,
     publish_connectivity_discovery,
     publish_ready_state,
     publish_ready_to_arm_discovery,
@@ -172,6 +173,7 @@ async def run(
         await publish_alarm_discovery(mqtt_client, topic_prefix=cfg.mqtt_topic_prefix, settings=cfg)
         await publish_connectivity_discovery(mqtt_client, topic_prefix=cfg.mqtt_topic_prefix)
         await publish_ready_to_arm_discovery(mqtt_client, topic_prefix=cfg.mqtt_topic_prefix)
+        await publish_blocked_arm_discovery(mqtt_client, topic_prefix=cfg.mqtt_topic_prefix)
 
         await publish_zone_state_snapshot(
             panel_client,
@@ -407,6 +409,7 @@ async def _listen_alarm_commands(
                 get_current_alarm_state=lambda: alarm_state.payload,
                 trust=trust,
                 zone_count=zone_count,
+                ready_state=ready_state,
             )
             if new_payload is not None:
                 alarm_state.payload = new_payload

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ready-to-arm switches (Away, Home, Night) that start on. When a switch is
+  off, that arm is not sent to the panel — including from Home Assistant —
+  and the alarm entity stays as it was. Disarm is never blocked; turning a
+  switch off while already armed does not disarm.
+- A **Blocked arm** MQTT event that names the refused mode (`away`, `home`,
+  or `night`) so automations can notify. The payload does not include a
+  household reason.
+
 ## [0.1.1] - 2026-08-22
 
 ### Changed

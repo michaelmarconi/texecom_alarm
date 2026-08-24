@@ -274,3 +274,71 @@ async def publish_ready_to_arm_discovery(
             extra={"topic": topic, "object_id": object_id, "mode": mode},
         )
         await publish_ready_state(mqtt, topic_prefix=topic_prefix, mode=mode, on=True)
+
+
+# HA MQTT event entity for a refused arm (ADR-015).
+# Discovery: homeassistant/event/texecom_alarm_blocked_arm/config (retained)
+# State topic: {prefix}/blocked_arm/event (not retained)
+# Payload: {"event_type": "away"|"home"|"night"} — mode only, no reason.
+BLOCKED_ARM_OBJECT_ID = "texecom_alarm_blocked_arm"
+BLOCKED_ARM_EVENT_TYPES = READY_MODES
+
+
+def blocked_arm_object_id() -> str:
+    return BLOCKED_ARM_OBJECT_ID
+
+
+def blocked_arm_state_topic(topic_prefix: str) -> str:
+    return f"{topic_prefix}/blocked_arm/event"
+
+
+def blocked_arm_discovery_topic(object_id: str = BLOCKED_ARM_OBJECT_ID) -> str:
+    return f"homeassistant/event/{object_id}/config"
+
+
+def blocked_arm_discovery_payload(*, topic_prefix: str) -> dict[str, object]:
+    object_id = BLOCKED_ARM_OBJECT_ID
+    return {
+        "name": "Blocked arm",
+        "unique_id": object_id,
+        "object_id": object_id,
+        "default_entity_id": f"event.{object_id}",
+        "device": MQTT_DEVICE,
+        "state_topic": blocked_arm_state_topic(topic_prefix),
+        "availability_topic": availability_topic(topic_prefix),
+        "payload_available": AVAILABILITY_ONLINE,
+        "payload_not_available": AVAILABILITY_OFFLINE,
+        "event_types": list(BLOCKED_ARM_EVENT_TYPES),
+    }
+
+
+async def publish_blocked_arm_discovery(
+    mqtt: MqttPublisher,
+    *,
+    topic_prefix: str,
+) -> None:
+    """Publish retained MQTT event discovery for refused arms (ADR-015)."""
+    topic = blocked_arm_discovery_topic()
+    payload = blocked_arm_discovery_payload(topic_prefix=topic_prefix)
+    body = json.dumps(payload, separators=(",", ":"))
+    await mqtt.publish(topic, body, retain=True)
+    logger.debug(
+        "mqtt_blocked_arm_discovery_published",
+        extra={"topic": topic, "object_id": BLOCKED_ARM_OBJECT_ID},
+    )
+
+
+async def publish_blocked_arm_event(
+    mqtt: MqttPublisher,
+    *,
+    topic_prefix: str,
+    mode: str,
+) -> None:
+    """Publish a one-shot blocked-arm event naming ``mode``; not retained, no reason."""
+    topic = blocked_arm_state_topic(topic_prefix)
+    body = json.dumps({"event_type": mode}, separators=(",", ":"))
+    await mqtt.publish(topic, body, retain=False)
+    logger.debug(
+        "mqtt_blocked_arm_event_published",
+        extra={"topic": topic, "mode": mode},
+    )
