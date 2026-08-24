@@ -1,10 +1,10 @@
 ---
 id: TASK-36
 title: 'Checkpoint: texecom-alarm-app refuse-state-republish wave'
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-24 13:33'
-updated_date: '2026-08-24 15:11'
+updated_date: '2026-08-24 15:13'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
@@ -23,8 +23,18 @@ ordinal: 30000
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Verification result
+verdict: pass
+- All tests pass: pass — pytest in texecom_alarm/: 337 passed, exit 0
+- Build clean: pass — ruff check All checks passed; ruff format --check 46 files already formatted
+- Wave e2e refuse path: pass — FakePanel refuse: no arm command; last alarm payload equals pre-command; new publish after refuse; blocked-arm event names mode only
+- ADR-015 refuse contract: pass — matching switch off does not call set_area_arm; HA payload unchanged
+- Re-publish matches NAK pattern: pass — refuse uses get_current_alarm_state + publish_alarm_state (retained), same as panel NAK; tests require a new publish of the same payload
+
+Notes: Named refuse suite green; skip-panel, unchanged payload, NAK-style retained re-publish.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
