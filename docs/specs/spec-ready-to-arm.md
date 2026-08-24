@@ -1,6 +1,6 @@
 # Spec: ready-to-arm
 
-**Date:** 2026-08-23 (amended 2026-08-24)
+**Date:** 2026-08-23 (amended 2026-08-24 twice)
 **State:** Accepted ✅
 
 ---
@@ -29,9 +29,9 @@ protocol experts.
   start **on**, so arming behaves as it does today until someone turns one off.
 - If a control is off, the matching arm does not set the alarm, including when
   Home Assistant itself requested it. The alarm stays in the state it already
-  was (usually Disarmed if they were arming from rest). The app immediately
-  re-sends that current alarm state (same reading is fine) so the Home
-  Assistant alarm card can drop an optimistic Away / Home / Night tap.
+  was (usually Disarmed if they were arming from rest). The app briefly
+  presents Arming, then returns to that current state, so the Home Assistant
+  alarm card can drop an optimistic Away / Home / Night tap.
 - Disarm always works, even if every ready control is off.
 - Home Assistant can see that an arm was blocked, so Activity and a notify
   automation can use it. This app does not explain *why*.
@@ -59,18 +59,18 @@ protocol experts.
      Home Assistant / MQTT client)
 
 2. Given the Away, Home, or Night ready control is off, When that arm is
-   requested, Then the panel is not armed, the alarm entity stays in the
-   state it already was, and the app immediately re-publishes that current
-   state on the alarm MQTT state topic (same payload is fine).
+   requested, Then the panel is not armed, the alarm entity ends in the
+   state it already was, and the app first publishes Arming then that
+   current state on the alarm MQTT state topic.
    - **How we'll know:** integration test (stand-in: FakePanel — no arm
-     command; MQTT alarm state payload equals the pre-command value; a new
-     publish of that payload is observed after the refuse)
+     command; an `arming` MQTT alarm state is observed after the refuse,
+     then a publish of the pre-command payload)
 
 3. Given a ready control is off, When Home Assistant itself requests that arm,
-   Then the refuse is the same as AC2 (panel not armed, same state, current
-   state re-published).
+   Then the refuse is the same as AC2 (panel not armed, same ending state,
+   Arming then current state).
    - **How we'll know:** integration test (stand-in: FakePanel), arm issued on
-     the same command path Home Assistant uses; same MQTT re-publish as AC2
+     the same command path Home Assistant uses; same MQTT sequence as AC2
 
 4. Given every ready control is off, When disarm is requested, Then the panel
    still disarms.
@@ -101,9 +101,9 @@ protocol experts.
 
 - As a household member, I want an arm that is not ready to leave the alarm
   as it was, so an open door cannot set the panel off immediately.
-- As a household member, I want the Home Assistant alarm card to return to
-  the real state after a refused tap, so it does not keep highlighting Away,
-  Home, or Night when the panel never armed.
+- As a household member, I want the Home Assistant alarm card to show a
+  brief Arming and then the real state after a refused tap, so it does not
+  keep highlighting Away, Home, or Night when the panel never armed.
 - As a household member, I want to allow Home and not Night (or the reverse)
   when guests are staying, so part-arm matches the house that day.
 - As someone writing Home Assistant automations, I want to turn the ready
@@ -116,7 +116,7 @@ protocol experts.
 
 - Arm requested while already armed in another mode, and the requested mode’s
   ready control is off — stay in the current armed state; do not disarm;
-  re-publish that current armed state.
+  briefly present Arming, then re-publish that current armed state.
 - Ready control turned off during exit / arming — do not complete that arm on
   the panel; do not treat that as a disarm of a fully armed house (AC6). If
   live timing is ambiguous, prefer “panel not newly armed.”
@@ -144,3 +144,4 @@ protocol experts.
 |---|------|---------|--------|
 | 1 | 2026-08-23 | Clear | — |
 | 2 | 2026-08-24 | Clear | — |
+| 3 | 2026-08-24 | Clear | — |
