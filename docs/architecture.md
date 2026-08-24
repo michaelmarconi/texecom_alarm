@@ -7,6 +7,7 @@
 <!-- Update 2026-08-21: /architecture Update — fold ADR-013 (dedicated local module) and ADR-014 (host-scoped trigger-disconnect). Synthesis comment lists current Accepted ADRs only (ADR-002 superseded). -->
 <!-- Update 2026-08-23: /architecture Update — zone MQTT discovery identity (`spec-zone-monitoring` `_zone_{N}`). -->
 <!-- Update 2026-08-23: /architecture Update — fold ADR-015 (ready-to-arm switches and blocked-arm MQTT event). -->
+<!-- Update 2026-08-24: /correction — on ready-to-arm refuse, re-publish current alarm MQTT state (same payload) so Home Assistant can drop an optimistic mode tap (`spec-ready-to-arm`). -->
 
 ## Overview
 
@@ -147,9 +148,11 @@ broker) and its internal shape are detailed under `## Components` below.
   down and logs in again (ADR-011). Zone/alarm entities keep last-known state
   (ADR-004). Failed arm/disarm taps are not auto-retried.
 - **Ready-to-arm switch off** — that arm is not sent to the panel; the alarm
-  entity stays as it was; a blocked-arm MQTT event names the mode only. This
-  app does not speak or explain. Disarm still works. Turning the switch off
-  while already armed does not disarm (ADR-015).
+  entity stays as it was; the app immediately re-publishes that current alarm
+  MQTT state (same payload is fine) so Home Assistant can drop an optimistic
+  mode tap; a blocked-arm MQTT event names the mode only. This app does not
+  speak or explain. Disarm still works. Turning the switch off while already
+  armed does not disarm (ADR-015, `spec-ready-to-arm`).
 - **Health check unanswered mid-run** — treat like a dead session: Connection stays
   off, keep trying the same reconnect path used after a clean panel drop, then
   re-sync zone/alarm state when the panel accepts again — no manual restart
@@ -232,7 +235,10 @@ Key behaviours:
   switches (Away, Home, Night) that start on. Subscribe to their command/state
   topics. Before any arm command to the panel, if the matching switch is off, do
   not send the arm (including when the request arrived on the alarm entity's MQTT
-  command topic); leave alarm state unchanged; publish an MQTT event whose event
+  command topic); do not change the Home Assistant alarm payload; immediately
+  re-publish that current state on the alarm MQTT state topic (same payload is
+  fine — same pattern as a panel NAK) so Home Assistant can drop an optimistic
+  mode tap; publish an MQTT event whose event
   type / payload names the blocked mode and does not include a household reason.
   Disarm never consults the switches. Turning a switch off while already armed
   does not disarm. Successful arm when the matching switch is on is unchanged
@@ -521,7 +527,8 @@ Arm and disarm arrive on this app's MQTT command topic from Home Assistant (and
 anything that talks to that alarm entity). Disarm is always forwarded. For an
 arm, the app first reads the matching ready-to-arm switch (ADR-015). If that
 switch is off, the app does not talk to the panel, leaves the alarm in the state
-it already was, and publishes a blocked-arm MQTT event naming the mode — not
+it already was, immediately re-publishes that current alarm MQTT state (same
+payload is fine), and publishes a blocked-arm MQTT event naming the mode — not
 why. Home Assistant automations own the "why" (open door, guests) and any spoken
 message. If the switch is on, the app maps Away to full arm and Home/Night
 through install-time Part-Arm slots, then issues the confirmed Connect command
@@ -561,7 +568,7 @@ armed does not disarm.
 
 | Outside system | In CI | What CI may claim | Live-only |
 |---|---|---|---|
-| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), frame resync, reconnect-when-TCP-dies (including a simulated trigger-time drop — CI must not claim a correctly pointed ComIP always drops); silent-death / command-reject / quiet-house detector shapes (ADR-010 / SPIKE-008); mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login (ADR-011); progressive startup-login backoff (fail-N-then-succeed waits strictly increasing then capped at 30 s; recovery without process exit); ready-to-arm refuse — matching switch off means no arm command and unchanged alarm state, including the Home Assistant command path; disarm still works; switch-off while armed does not disarm (ADR-015) | Real Away/Night/Home arm sequences; which module `panel_host` is (ADR-013); survive-trigger and HA Disarm-during-alarm on dedicated ComIP (SPIKE-010 / ADR-014 — live-only; FakePanel must not claim the opposite); live quiet-house / zombie corroboration; mid-run heal under real ComIP contention; live Supervisor timing (RISK-015) |
+| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), frame resync, reconnect-when-TCP-dies (including a simulated trigger-time drop — CI must not claim a correctly pointed ComIP always drops); silent-death / command-reject / quiet-house detector shapes (ADR-010 / SPIKE-008); mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login (ADR-011); progressive startup-login backoff (fail-N-then-succeed waits strictly increasing then capped at 30 s; recovery without process exit); ready-to-arm refuse — matching switch off means no arm command, Home Assistant alarm payload unchanged, and a fresh MQTT publish of that current payload (including the Home Assistant command path); disarm still works; switch-off while armed does not disarm (ADR-015, `spec-ready-to-arm`) | Real Away/Night/Home arm sequences; which module `panel_host` is (ADR-013); survive-trigger and HA Disarm-during-alarm on dedicated ComIP (SPIKE-010 / ADR-014 — live-only; FakePanel must not claim the opposite); live quiet-house / zombie corroboration; mid-run heal under real ComIP contention; live Supervisor timing (RISK-015) |
 | MQTT broker | Hermetic / test broker (or FakePanel + recording MQTT client) | Discovery payloads, state/command publish/subscribe, connectivity sensor and last-trigger snapshot attributes; three ready-to-arm switches that start on; blocked-arm MQTT event with mode and without reason (ADR-015) | Household HA entity behaviour; that a real Home Assistant shows the ready switches and can automate on the blocked-arm event (ADR-015); HomeKit/iOS still offering an arm button when a switch is off |
 
 CI never targets the live household panel or a production broker account. Product
@@ -662,3 +669,4 @@ up for the vendor app and monitoring (ADR-013).
 | 14 | 2026-08-21 | Clear | — |
 | 15 | 2026-08-23 | Clear | — |
 | 16 | 2026-08-23 | Clear | — |
+| 17 | 2026-08-24 | Clear | — |
