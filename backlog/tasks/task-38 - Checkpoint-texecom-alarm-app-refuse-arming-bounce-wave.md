@@ -1,9 +1,10 @@
 ---
 id: TASK-38
 title: 'Checkpoint: texecom-alarm-app refuse-arming-bounce wave'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-24 16:10'
+updated_date: '2026-08-24 16:51'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
