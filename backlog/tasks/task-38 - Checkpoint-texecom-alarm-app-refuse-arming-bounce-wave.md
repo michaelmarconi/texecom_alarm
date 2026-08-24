@@ -1,10 +1,10 @@
 ---
 id: TASK-38
 title: 'Checkpoint: texecom-alarm-app refuse-arming-bounce wave'
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-24 16:10'
-updated_date: '2026-08-24 16:53'
+updated_date: '2026-08-24 16:59'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
@@ -18,9 +18,9 @@ ordinal: 32000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 All tests pass (pytest in texecom_alarm/ exits 0)
-- [ ] #2 Build clean (ruff check and ruff format --check in texecom_alarm/ exit 0)
-- [ ] #3 Wave end-to-end FakePanel refuse path: no panel arm; MQTT arming then pre-command payload; blocked-arm event names mode only
+- [x] #1 All tests pass (pytest in texecom_alarm/ exits 0)
+- [x] #2 Build clean (ruff check and ruff format --check in texecom_alarm/ exit 0)
+- [x] #3 Wave end-to-end FakePanel refuse path: no panel arm; MQTT arming then pre-command payload; blocked-arm event names mode only
 <!-- AC:END -->
 
 ## Final Summary
@@ -34,11 +34,11 @@ verdict: pass
 Notes: ADR-015 and architecture bounce (arming then current, not duplicate-only) hold in source and FakePanel e2e.
 
 ## Build phase
-phase: awaiting-review
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 ADR-015: refuse does not send the arm to the panel; disarm is not gated; switch-off while armed does not disarm
-- [ ] #2 Architecture: refuse publishes MQTT arming then current alarm state (not a duplicate-only republish)
+- [x] #1 ADR-015: refuse does not send the arm to the panel; disarm is not gated; switch-off while armed does not disarm
+- [x] #2 Architecture: refuse publishes MQTT arming then current alarm state (not a duplicate-only republish)
 <!-- DOD:END -->
