@@ -1,9 +1,10 @@
 ---
 id: TASK-37
 title: Bounce alarm card via Arming then current state on refuse
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-24 16:10'
+updated_date: '2026-08-24 16:21'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
