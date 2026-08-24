@@ -4,7 +4,7 @@ title: Bounce alarm card via Arming then current state on refuse
 status: awaiting-review
 assignee: []
 created_date: '2026-08-24 16:10'
-updated_date: '2026-08-24 16:42'
+updated_date: '2026-08-24 16:48'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -58,5 +58,5 @@ Verification: unit + FakePanel integration; matching switch off: no panel arm; M
 Notes/assumptions: Bounce is MQTT-only (live alarm state is not set to arming). ~0.35s asyncio.sleep between the two publishes so Home Assistant can apply Arming first; skipped when already arming. Disarm remains ungated.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
