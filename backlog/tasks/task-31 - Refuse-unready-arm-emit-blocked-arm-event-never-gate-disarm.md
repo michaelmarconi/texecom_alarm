@@ -53,3 +53,10 @@ ordinal: 25000
 <!-- SECTION:PLAN:BEGIN -->
 Files likely affected: texecom-alarm-app/src/texecom_alarm/arm_commands.py (modify), texecom-alarm-app/src/texecom_alarm/app.py (modify), texecom-alarm-app/src/texecom_alarm/mqtt/discovery.py (modify), texecom-alarm-app/tests/test_arm_commands.py (modify), texecom-alarm-app/tests/test_e2e_fake_panel.py (modify), texecom-alarm-app/tests/test_app_mqtt.py (modify), texecom-alarm-app/tests/fake_panel.py (modify if assertions on commands sent). 1. Before ARM_AWAY/HOME/NIGHT, if matching switch is off: do not send panel arm; do not change alarm MQTT state; publish MQTT event entity with mode only. 2. Same refuse when the request is the alarm command topic Home Assistant uses. 3. DISARM never consults switches. 4. Switch off while armed does not send disarm. Test strategy: how we'll know = unit + FakePanel integration; `cd texecom-alarm-app && python -m pytest tests/test_arm_commands.py tests/test_e2e_fake_panel.py tests/test_app_mqtt.py -q` — off switch: no arm command, state unchanged, event with mode; disarm still sent; switch-off while armed sends no disarm.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->

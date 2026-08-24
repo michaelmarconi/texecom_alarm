@@ -101,7 +101,7 @@ async def test_run_owns_panel_with_login_delay() -> None:
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)
         assert mqtt.will_payload == AVAILABILITY_OFFLINE
-        assert any("front_door_1" in m.topic for m in mqtt.messages)
+        assert any("front_door_zone_1" in m.topic for m in mqtt.messages)
         assert mqtt.payloads_for("texecom/status")[-1] == AVAILABILITY_OFFLINE
         link_cfg = "homeassistant/binary_sensor/texecom_alarm_panel_connection/config"
         assert any(m.topic == link_cfg and m.retain for m in mqtt.messages)

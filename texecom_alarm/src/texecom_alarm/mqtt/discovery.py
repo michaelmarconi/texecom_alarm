@@ -47,8 +47,13 @@ def availability_topic(topic_prefix: str) -> str:
 
 
 def zone_object_id(zone: Zone) -> str:
-    """object_id / unique_id: texecom_alarm_{slug}_{zone_number} (unique per zone)."""
-    return f"texecom_alarm_{zone_slug(zone.name, zone_number=zone.number)}"
+    """object_id: texecom_alarm_{slug}_zone_{N} (slug from panel name; empty → zone)."""
+    return f"texecom_alarm_{zone_slug(zone.name, zone_number=zone.number)}_zone_{zone.number}"
+
+
+def zone_unique_id(zone: Zone) -> str:
+    """unique_id: texecom_alarm_zone_{N} — stable across panel name changes."""
+    return f"texecom_alarm_zone_{zone.number}"
 
 
 def zone_state_topic(topic_prefix: str, zone_number: int) -> str:
@@ -87,7 +92,7 @@ def zone_discovery_payload(zone: Zone, *, topic_prefix: str) -> dict[str, object
     object_id = zone_object_id(zone)
     return {
         "name": zone_display_name(zone.name, zone_number=zone.number),
-        "unique_id": object_id,
+        "unique_id": zone_unique_id(zone),
         "object_id": object_id,
         # Modern HA ignores topic/object_id for entity_id; name would win otherwise.
         "default_entity_id": f"binary_sensor.{object_id}",

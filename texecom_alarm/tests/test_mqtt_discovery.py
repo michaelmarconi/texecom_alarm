@@ -216,23 +216,32 @@ async def test_publish_alarm_discovery_retained() -> None:
     assert payload["availability_topic"] == "texecom/status"
 
 
-def test_zone_object_id_matches_provisional_texecom_alarm_naming() -> None:
+def test_zone_object_id_is_slug_zone_n() -> None:
+    """AC-6: object_id is texecom_alarm_{slug}_zone_{N}, not trailing _{N} or slug-only."""
     zone = Zone(number=1, zone_type=1, name="FRONT DOOR")
-    assert zone_object_id(zone) == "texecom_alarm_front_door_1"
+    object_id = zone_object_id(zone)
+    assert object_id == "texecom_alarm_front_door_zone_1"
+    assert object_id != "texecom_alarm_front_door_1"
+    assert object_id != "texecom_alarm_front_door"
 
 
 def test_zone_object_id_unique_when_names_collide() -> None:
     a = Zone(number=1, zone_type=1, name="PIR")
     b = Zone(number=5, zone_type=1, name="PIR")
-    assert zone_object_id(a) == "texecom_alarm_pir_1"
-    assert zone_object_id(b) == "texecom_alarm_pir_5"
+    assert zone_object_id(a) == "texecom_alarm_pir_zone_1"
+    assert zone_object_id(b) == "texecom_alarm_pir_zone_5"
     assert zone_object_id(a) != zone_object_id(b)
+
+
+def test_zone_object_id_empty_name_uses_zone_slug() -> None:
+    empty = Zone(number=9, zone_type=1, name="")
+    assert zone_object_id(empty) == "texecom_alarm_zone_zone_9"
 
 
 def test_zone_discovery_topic() -> None:
     assert (
-        zone_discovery_topic("texecom_alarm_front_door_1")
-        == "homeassistant/binary_sensor/texecom_alarm_front_door_1/config"
+        zone_discovery_topic("texecom_alarm_front_door_zone_1")
+        == "homeassistant/binary_sensor/texecom_alarm_front_door_zone_1/config"
     )
 
 
@@ -253,8 +262,8 @@ async def test_publish_zone_discovery_skips_nothing_for_in_use_only() -> None:
 
     topics = [m.topic for m in mqtt.messages]
     assert availability_topic("texecom") in topics
-    assert "homeassistant/binary_sensor/texecom_alarm_front_door_1/config" in topics
-    assert "homeassistant/binary_sensor/texecom_alarm_kitchen_pir_3/config" in topics
+    assert "homeassistant/binary_sensor/texecom_alarm_front_door_zone_1/config" in topics
+    assert "homeassistant/binary_sensor/texecom_alarm_kitchen_pir_zone_3/config" in topics
     # No discovery for an unused slot that was never passed in.
     assert not any("unused" in t for t in topics)
     assert len([t for t in topics if t.startswith("homeassistant/")]) == 2
@@ -262,16 +271,16 @@ async def test_publish_zone_discovery_skips_nothing_for_in_use_only() -> None:
     front = next(
         m
         for m in mqtt.messages
-        if m.topic == "homeassistant/binary_sensor/texecom_alarm_front_door_1/config"
+        if m.topic == "homeassistant/binary_sensor/texecom_alarm_front_door_zone_1/config"
     )
     assert front.retain is True
     payload = json.loads(
         front.payload if isinstance(front.payload, str) else front.payload.decode()
     )
     assert payload["name"] == "Front Door"
-    assert payload["unique_id"] == "texecom_alarm_front_door_1"
-    assert payload["object_id"] == "texecom_alarm_front_door_1"
-    assert payload["default_entity_id"] == "binary_sensor.texecom_alarm_front_door_1"
+    assert payload["unique_id"] == "texecom_alarm_zone_1"
+    assert payload["object_id"] == "texecom_alarm_front_door_zone_1"
+    assert payload["default_entity_id"] == "binary_sensor.texecom_alarm_front_door_zone_1"
     assert payload["device"] == EXPECTED_DEVICE
     assert payload["state_topic"] == "texecom/zone/1/state"
     assert payload["availability_topic"] == "texecom/status"
@@ -287,16 +296,45 @@ async def test_publish_zone_discovery_skips_nothing_for_in_use_only() -> None:
 
 
 def test_zone_discovery_name_is_title_case() -> None:
-    """AC-2: zone friendly names are Title Case derived from panel names."""
+    """AC-8: zone friendly names are Title Case panel text without _zone_N."""
     zone = Zone(number=1, zone_type=1, name="FRONT DOOR")
     payload = zone_discovery_payload(zone, topic_prefix="texecom")
     assert payload["name"] == "Front Door"
-    assert payload["object_id"] == "texecom_alarm_front_door_1"
-    assert payload["unique_id"] == "texecom_alarm_front_door_1"
-    assert payload["default_entity_id"] == "binary_sensor.texecom_alarm_front_door_1"
+    assert "_zone_" not in str(payload["name"])
+    assert payload["object_id"] == "texecom_alarm_front_door_zone_1"
+    assert payload["unique_id"] == "texecom_alarm_zone_1"
+    assert payload["default_entity_id"] == "binary_sensor.texecom_alarm_front_door_zone_1"
 
     empty = Zone(number=9, zone_type=1, name="")
-    assert zone_discovery_payload(empty, topic_prefix="texecom")["name"] == "Zone 9"
+    empty_payload = zone_discovery_payload(empty, topic_prefix="texecom")
+    assert empty_payload["name"] == "Zone 9"
+    assert empty_payload["object_id"] == "texecom_alarm_zone_zone_9"
+    assert empty_payload["unique_id"] == "texecom_alarm_zone_9"
+
+
+def test_zone_discovery_unique_id_is_zone_stable_without_slug() -> None:
+    """AC-7: unique_id is texecom_alarm_zone_{N}; a panel rename does not fork it."""
+    original = Zone(number=1, zone_type=1, name="FRONT DOOR")
+    renamed = Zone(number=1, zone_type=1, name="PORCH")
+    original_payload = zone_discovery_payload(original, topic_prefix="texecom")
+    renamed_payload = zone_discovery_payload(renamed, topic_prefix="texecom")
+    assert original_payload["unique_id"] == "texecom_alarm_zone_1"
+    assert renamed_payload["unique_id"] == original_payload["unique_id"]
+    assert "front_door" not in str(original_payload["unique_id"])
+    assert "porch" not in str(renamed_payload["unique_id"])
+    assert renamed_payload["object_id"] != original_payload["object_id"]
+    assert renamed_payload["object_id"] == "texecom_alarm_porch_zone_1"
+
+
+def test_zone_discovery_default_entity_id_does_not_claim_bare_slug() -> None:
+    """AC-6/AC-9: default_entity_id is …_{slug}_zone_{N}, not trailing _{N} or slug-only."""
+    payload = zone_discovery_payload(
+        Zone(number=1, zone_type=1, name="FRONT DOOR"), topic_prefix="texecom"
+    )
+    entity_id = payload["default_entity_id"]
+    assert entity_id == "binary_sensor.texecom_alarm_front_door_zone_1"
+    assert entity_id != "binary_sensor.texecom_alarm_front_door_1"
+    assert entity_id != "binary_sensor.texecom_alarm_front_door"
 
 
 def test_ready_object_ids() -> None:

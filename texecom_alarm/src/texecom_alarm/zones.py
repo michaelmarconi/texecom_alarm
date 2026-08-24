@@ -77,11 +77,12 @@ def parse_zone_details(payload: bytes, *, zone_number: int) -> Zone:
 
 
 def zone_slug(name: str, *, zone_number: int) -> str:
-    """Slugify a panel zone name; always includes zone number to avoid collisions."""
+    """Slugify a panel zone name. Empty names become 'zone'. Number is not in the slug."""
+    _ = zone_number  # uniqueness is `_zone_{N}` on object_id, not the slug
     base = _ZONE_NAME_SLUG_RE.sub("_", name.lower()).strip("_")
     if not base:
         base = "zone"
-    return f"{base}_{zone_number}"
+    return base
 
 
 def zone_display_name(name: str, *, zone_number: int) -> str:

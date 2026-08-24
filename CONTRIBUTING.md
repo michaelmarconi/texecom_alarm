@@ -50,7 +50,8 @@ cd texecom_alarm
 The git hook runs Ruff on `texecom_alarm/` before each commit. Use
 `./scripts/install-git-hooks.sh` (a repo-relative wrapper). Do **not** run
 `pre-commit install` — that hard-codes the venv’s absolute path and breaks when
-the directory is moved or renamed.
+the directory is moved or renamed. Linked git worktrees share that hook and
+the primary `texecom_alarm/.venv`; they do not need a second venv.
 
 CI runs the same checks on pull requests to `main`. Tests must use the
 in-repo FakePanel stand-in — do not point CI or unit tests at a live panel.

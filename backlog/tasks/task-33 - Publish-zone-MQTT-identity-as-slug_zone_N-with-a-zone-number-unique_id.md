@@ -1,10 +1,10 @@
 ---
 id: TASK-33
 title: Publish zone MQTT identity as slug_zone_N with a zone-number unique_id
-status: in-progress
+status: done
 assignee: []
 created_date: '2026-08-23 18:42'
-updated_date: '2026-08-23 19:12'
+updated_date: '2026-08-23 19:34'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -36,9 +36,9 @@ ordinal: 27000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Discovery default_entity_id is binary_sensor.texecom_alarm_{slug}_zone_{N} (e.g. front_door zone 1 → binary_sensor.texecom_alarm_front_door_zone_1), not trailing _{N} and not slug-only
-- [ ] #2 unique_id is zone-stable texecom_alarm_zone_{N} with no slug, so a later panel rename does not fork identity
-- [ ] #3 Discovery name is Title Case panel text without _zone_N (empty name → Zone {N}); FakePanel e2e asserts both default_entity_id and unique_id
+- [x] #1 Discovery default_entity_id is binary_sensor.texecom_alarm_{slug}_zone_{N} (e.g. front_door zone 1 → binary_sensor.texecom_alarm_front_door_zone_1), not trailing _{N} and not slug-only
+- [x] #2 unique_id is zone-stable texecom_alarm_zone_{N} with no slug, so a later panel rename does not fork identity
+- [x] #3 Discovery name is Title Case panel text without _zone_N (empty name → Zone {N}); FakePanel e2e asserts both default_entity_id and unique_id
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -50,6 +50,12 @@ Files likely affected: texecom_alarm/src/texecom_alarm/mqtt/discovery.py (modify
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Zone MQTT identity is now texecom_alarm_{slug}_zone_{N} with unique_id texecom_alarm_zone_{N}.
+Changed files: texecom_alarm/src/texecom_alarm/mqtt/discovery.py, texecom_alarm/src/texecom_alarm/zones.py, texecom_alarm/tests/test_mqtt_discovery.py, texecom_alarm/tests/test_zone_parse.py, texecom_alarm/tests/test_e2e_fake_panel.py, texecom_alarm/tests/test_app_mqtt.py
+Verification: ACs 6–9: default_entity_id is binary_sensor.texecom_alarm_{slug}_zone_{N} (not trailing _{N} or slug-only); unique_id is texecom_alarm_zone_{N} (stable across rename); name is Title Case without _zone_N; FakePanel e2e asserts both ids. pytest tests/test_mqtt_discovery.py tests/test_zone_parse.py tests/test_e2e_fake_panel.py -q passed; full suite 311 passed, coverage 92.60%, ruff check/format clean.
+Notes/assumptions: test_app_mqtt.py was updated only so a discovery-topic assertion matches the new object_id (full-suite green). zone_slug still accepts zone_number= but ignores it; uniqueness is `_zone_{N}` on object_id. Empty panel name → object_id texecom_alarm_zone_zone_{N}. Zone state topics and alarm identity unchanged. No addon version bump.
+
 ## Build phase
-phase: executing
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
