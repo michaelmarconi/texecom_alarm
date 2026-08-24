@@ -20,6 +20,13 @@ ordinal: 30000
 - [ ] #3 Wave end-to-end path still green: FakePanel refuse cases skip the panel, re-publish current alarm state, and emit the blocked-arm event
 <!-- AC:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 Refuse still does not send the arm to the panel and does not change the Home Assistant payload (ADR-015)
