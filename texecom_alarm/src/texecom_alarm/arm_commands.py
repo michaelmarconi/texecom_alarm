@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from typing import Protocol
@@ -31,6 +32,9 @@ from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient, Protoco
 from texecom_alarm.protocol.frame import AREA_FLAGS_COUNT
 
 logger = logging.getLogger(__name__)
+
+# Pause so Home Assistant can apply Arming before the snap-back payload.
+_REFUSE_ARMING_HOLD_S = 0.35
 
 PAYLOAD_ARM_AWAY = "ARM_AWAY"
 PAYLOAD_ARM_NIGHT = "ARM_NIGHT"
@@ -225,7 +229,17 @@ async def handle_alarm_command(
             )
             live_state = get_current_alarm_state() if get_current_alarm_state is not None else None
             if live_state is not None:
-                # Same retained re-publish as a panel NAK so Home Assistant drops an optimistic tap.
+                # MQTT-only bounce: Home Assistant ignores a second copy of the
+                # same payload, so flash Arming first, then the panel's current state.
+                # Do not update live alarm state to arming — flags/trust polls must
+                # still see the real current payload.
+                if live_state != "arming":
+                    await publish_alarm_state(
+                        mqtt,
+                        payload="arming",
+                        topic_prefix=topic_prefix,
+                    )
+                    await asyncio.sleep(_REFUSE_ARMING_HOLD_S)
                 await publish_alarm_state(
                     mqtt,
                     payload=live_state,

@@ -407,7 +407,10 @@ def _command_settings() -> Settings:
     ],
 )
 async def test_alarm_command_topic_refuses_unready_arm(mode: str, arm_payload: str) -> None:
-    """HA alarm command topic: matching ready switch off skips panel arm, re-publishes state."""
+    """HA alarm command topic: matching ready switch off skips panel arm.
+
+    MQTT sequence is arming then the current alarm payload.
+    """
     from texecom_alarm.app import _listen_alarm_commands, _ReadyToArmState
     from texecom_alarm.mqtt.discovery import alarm_command_topic, ready_command_topic
 
@@ -439,14 +442,16 @@ async def test_alarm_command_topic_refuses_unready_arm(mode: str, arm_payload: s
     )
     await mqtt.push_inbound(command_topic, arm_payload)
     for _ in range(50):
-        if mqtt.payloads_for("texecom/blocked_arm/event"):
+        if mqtt.payloads_for("texecom/alarm/state")[-2:] == ["arming", "disarmed"]:
             break
         await asyncio.sleep(0.02)
     panel.set_area_arm.assert_not_awaited()
     assert alarm_state.payload == "disarmed"
-    assert mqtt.payloads_for("texecom/alarm/state") == ["disarmed"]
+    assert mqtt.payloads_for("texecom/alarm/state") == ["arming", "disarmed"]
     alarm_msgs = [m for m in mqtt.messages if m.topic == "texecom/alarm/state"]
     assert alarm_msgs[-1].retain is True
+    assert alarm_msgs[-2].retain is True
+    assert alarm_msgs[-2].payload == "arming"
     events = mqtt.payloads_for("texecom/blocked_arm/event")
     assert events
     body = json.loads(events[-1])
@@ -460,7 +465,7 @@ async def test_alarm_command_topic_refuses_unready_arm(mode: str, arm_payload: s
 
 @pytest.mark.asyncio
 async def test_alarm_command_topic_refuses_unready_arm_while_armed() -> None:
-    """HA command path: refuse while armed re-publishes that armed state and does not disarm."""
+    """HA command path: refuse while armed bounces MQTT arming then that armed state; no disarm."""
     from texecom_alarm.app import _listen_alarm_commands, _ReadyToArmState
     from texecom_alarm.mqtt.discovery import alarm_command_topic, ready_command_topic
 
@@ -492,13 +497,13 @@ async def test_alarm_command_topic_refuses_unready_arm_while_armed() -> None:
     )
     await mqtt.push_inbound(command_topic, "ARM_AWAY")
     for _ in range(50):
-        if mqtt.payloads_for("texecom/blocked_arm/event"):
+        if mqtt.payloads_for("texecom/alarm/state")[-2:] == ["arming", "armed_home"]:
             break
         await asyncio.sleep(0.02)
     panel.set_area_arm.assert_not_awaited()
     panel.set_area_disarm.assert_not_awaited()
     assert alarm_state.payload == "armed_home"
-    assert mqtt.payloads_for("texecom/alarm/state") == ["armed_home"]
+    assert mqtt.payloads_for("texecom/alarm/state") == ["arming", "armed_home"]
     events = mqtt.payloads_for("texecom/blocked_arm/event")
     assert events
     body = json.loads(events[-1])
