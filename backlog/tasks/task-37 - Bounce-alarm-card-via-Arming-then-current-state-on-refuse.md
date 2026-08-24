@@ -4,7 +4,7 @@ title: Bounce alarm card via Arming then current state on refuse
 status: in-progress
 assignee: []
 created_date: '2026-08-24 16:10'
-updated_date: '2026-08-24 16:21'
+updated_date: '2026-08-24 16:22'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -47,3 +47,10 @@ ordinal: 31000
 <!-- SECTION:PLAN:BEGIN -->
 Files likely affected: texecom_alarm/src/texecom_alarm/arm_commands.py (modify), texecom_alarm/tests/test_arm_commands.py (modify), texecom_alarm/tests/test_app_mqtt.py (modify), texecom_alarm/tests/test_e2e_fake_panel.py (modify). 1. On refuse, after the blocked-arm event, publish retained MQTT alarm state arming, then publish the pre-command current payload (same retained helper as panel NAK). 2. Do not send arm or disarm to the panel. 3. If a short pause is needed so Home Assistant applies Arming first, keep it MQTT-only: do not leave the app's live alarm state as arming, and do not let a flags/trust poll replace the bounce with a lagging disarmed except after a real disarm. 4. Refuse while already armed must bounce back to that armed payload, not disarmed. 5. Same sequence on Home Assistant's alarm command topic. Test strategy: how we'll know = unit + FakePanel integration; `cd texecom_alarm && python -m pytest tests/test_arm_commands.py tests/test_app_mqtt.py tests/test_e2e_fake_panel.py -q` — matching switch off: no panel arm; MQTT sequence is arming then the pre-command payload (including the Home Assistant command path); already-armed refuse ends on the armed payload.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
