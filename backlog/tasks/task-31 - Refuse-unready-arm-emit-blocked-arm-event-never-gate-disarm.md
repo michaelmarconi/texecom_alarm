@@ -1,10 +1,10 @@
 ---
 id: TASK-31
 title: 'Refuse unready arm, emit blocked-arm event, never gate disarm'
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-23 18:34'
-updated_date: '2026-08-23 19:24'
+updated_date: '2026-08-24 08:38'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -57,6 +57,12 @@ Files likely affected: texecom-alarm-app/src/texecom_alarm/arm_commands.py (modi
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Unready arm is refused (no panel command, alarm MQTT unchanged), a blocked-arm MQTT event names the mode only, and disarm is never gated.
+Changed files: README.md, DOCS.md, docs/reference/mqtt.md, texecom_alarm/CHANGELOG.md, texecom_alarm/DOCS.md, texecom_alarm/README.md, texecom_alarm/src/texecom_alarm/app.py, texecom_alarm/src/texecom_alarm/arm_commands.py, texecom_alarm/src/texecom_alarm/mqtt/discovery.py, texecom_alarm/tests/test_app_mqtt.py, texecom_alarm/tests/test_arm_commands.py, texecom_alarm/tests/test_e2e_fake_panel.py, texecom_alarm/tests/test_mqtt_discovery.py
+Verification: python -m pytest tests/test_arm_commands.py tests/test_e2e_fake_panel.py tests/test_app_mqtt.py -q → 64 passed; ruff check . and ruff format --check . → clean; pytest --cov=texecom_alarm --cov-fail-under=90 → 332 passed, 92.55% coverage.
+Notes/assumptions: Existing tests that mention older TASK/AC labels were left as-is; new product code and TASK-31 tests do not cite pipeline IDs. config.yaml version was not bumped. Ready-to-arm switches were not re-implemented. After commit, main was merged into task-31 so TASK-33 zone MQTT identity is preserved.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
