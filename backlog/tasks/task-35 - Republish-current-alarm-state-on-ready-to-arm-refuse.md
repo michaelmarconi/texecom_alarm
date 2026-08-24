@@ -1,10 +1,10 @@
 ---
 id: TASK-35
 title: Republish current alarm state on ready-to-arm refuse
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-24 13:32'
-updated_date: '2026-08-24 15:05'
+updated_date: '2026-08-24 15:10'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -35,9 +35,9 @@ ordinal: 29000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Matching switch off: FakePanel receives no arm command; MQTT alarm state payload equals the pre-command value; a new publish of that payload is observed after the refuse
-- [ ] #2 The same re-publish happens when the arm arrives on Home Assistant's alarm command topic
-- [ ] #3 Disarm is still not gated; refuse while already armed re-publishes that current armed state and does not disarm
+- [x] #1 Matching switch off: FakePanel receives no arm command; MQTT alarm state payload equals the pre-command value; a new publish of that payload is observed after the refuse
+- [x] #2 The same re-publish happens when the arm arrives on Home Assistant's alarm command topic
+- [x] #3 Disarm is still not gated; refuse while already armed re-publishes that current armed state and does not disarm
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -56,5 +56,5 @@ Verification: named pytest GREEN; full pytest --cov 337 passed, 92%; ruff clean.
 Notes/assumptions: CHANGELOG/DOCS left unchanged. No add-on version bump.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
