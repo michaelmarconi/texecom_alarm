@@ -40,8 +40,10 @@ mapped to a Part-Arm slot. `ARM_AWAY` always uses full arm.
 Home Assistant MQTT discovery config:
 `homeassistant/alarm_control_panel/texecom_alarm_arm_status/config`.
 
-If the matching ready-to-arm switch is off, `ARM_*` is not sent to the panel
-and alarm state is left unchanged. `DISARM` is never gated.
+If the matching ready-to-arm switch is off, `ARM_*` is not sent to the panel.
+The app publishes retained `arming` on `{prefix}/alarm/state`, then the current
+payload, so the Home Assistant card can drop an optimistic tap. It does not set
+live alarm state to arming. `DISARM` is never gated.
 
 ## Ready to arm
 

@@ -143,10 +143,12 @@ If the panel link drops, alarm and zone entities stay available with their last
 known state. Use **Alarm Panel Connection** to tell live data from a stale link.
 
 If a ready-to-arm switch is **off**, that arm is not sent to the panel — even
-when Home Assistant itself requested it — and the alarm stays in the state it
-already was. **Disarm** always works. Turning a ready switch off while the
-house is already armed does not disarm. Household rules (open doors, guests,
-time of day) belong in your own automations that flip those switches.
+when Home Assistant itself requested it. The alarm card shows a brief **Arming**,
+then returns to the state it already was. **Disarm** always works. Turning a
+ready switch off while the house is already armed does not disarm. Household
+rules (open doors, guests, time of day) belong in your own automations that
+flip those switches. Walkthrough:
+[Refuse an arm that is not ready](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/use-ready-to-arm.md).
 
 The **Blocked arm** event names the mode (`away`, `home`, or `night`) and does
 not include a reason, so a notify automation can speak for the household.
@@ -164,6 +166,7 @@ markdown files from this App.
 
 - [Getting started](https://github.com/michaelmarconi/texecom_alarm/blob/main/README.md#getting-started)
 - [Configure Home and Night](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/configure-part-arm.md)
+- [Refuse an arm that is not ready](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/use-ready-to-arm.md)
 - [Stop other Connect clients](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md)
 - HA locked out only while the alarm is sounding:
   [wrong network module / COM-port signalling](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md)

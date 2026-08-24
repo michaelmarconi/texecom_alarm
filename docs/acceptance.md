@@ -1,73 +1,81 @@
 # Acceptance
 
-**Date:** 2026-08-21
+**Date:** 2026-08-24
 **State:** Accepted ✅
 <!-- State is exactly one of: Draft 📝 | Accepted ✅ | Deferred ⏸️ -->
 
 ## What we set out to build
 
-A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premier Elite panel: zone sensors and an alarm control panel over MQTT discovery, including a working Home arm mode, without the old add-on crashing on Home or locking out Disarm during a live alarm when Home Assistant uses the dedicated local network module.
+A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premier Elite panel: zone sensors and an alarm control panel over MQTT, including a working Home arm mode. Ready-to-arm switches let the household block Away, Home, or Night without encoding their rules in the add-on; a refused arm must not set the panel, and the Home Assistant card must snap back to the real state.
 
 ## Scorecard
 
 | # | Scenario | Result | Notes |
 |---|----------|--------|-------|
-| 1 | Replacement is live | ✅ pass | ~40 in-use zones, alarm entity, Alarm Panel Connection ON; add-on on the dedicated local ComIP; the prior MQTT bridge not installed |
-| 2 | One door/window open-close | ✅ pass | two contact zones followed on MQTT; Connection stayed ON |
-| 3 | Today's Home + siren walks | ✅ pass | Practitioner confirmed this afternoon's live Home arm/disarm and Away → alarm → HA Disarm on this add-on; link stayed on |
+| 1 | Replacement still live | ✅ pass | Add-on started after local rebuild; panel keepalives and zone MQTT flowing |
+| 2 | Ready-to-arm switches | ✅ pass | Away, Home, Night present |
+| 3 | Refused arm snaps back | ✅ pass | Away refused; card snapped back; logs showed blocked then MQTT arming |
+| 4 | Disarm still works | ✅ pass | Disarm not gated by ready switches |
 
-## Scenario: Replacement is live
-
-**Status:** Pass ✅
-
-- **What we're proving:** The replacement surfaces the panel's zones and alarm in Home Assistant with the prior MQTT bridge gone, and the panel link looks healthy.
-- **Examples:** Given the new integration is running with the prior MQTT bridge fully uninstalled, When Home Assistant is up, Then the in-use zone entities and alarm control panel are present; Connection is on; we are not talking to the installer signalling module.
-- **You:** Open Home Assistant, find the Texecom Alarm device, confirm zones look like the house, Alarm Panel Connection is on, and the prior MQTT bridge is not in the add-on list.
-- **I check:** MQTT zone states (~40 in-use), alarm `disarmed`, `texecom/panel_connection/state` ON, add-on `panel_host` pointing at the dedicated local ComIP, no the prior MQTT bridge add-on.
-- **How we know:** Pass if the entities look like this panel and the old add-on is gone. Fail if zones are missing, Connection is off, or the host is still the signalling module.
-- **Result:** pass — practitioner confirmed the HA view; MQTT matched (40 zone states, Connection ON, last-trigger snapshot still from 17:09 zone 4).
-
-## Scenario: One door/window open-close
+## Scenario: Replacement still live
 
 **Status:** Pass ✅
 
-- **What we're proving:** A physical zone change shows up in Home Assistant quickly, with the connection staying live.
-- **Examples:** Given a representative contact zone, When it is physically opened and then closed, Then the HA entity follows within about 2 seconds.
-- **You:** Open a reachable door/window contact, wait for HA, then close it. Practitioner also exercised a second contact zone.
-- **I check:** MQTT `texecom/zone/{n}/state` flipping `0 → 1 → 0` for those contacts; Connection stays ON.
-- **How we know:** Pass if the entity follows both ways without Connection dropping. Fail if it stays closed, lags badly, or Connection drops.
-- **Result:** pass — Door contact (zone 1) and a window contact (zone 18) each went open then closed. PIRs along the walk also fired. Only one of the two intended window contacts published a flip; practitioner did not flag the second as missing.
+- **What we're proving:** The replacement is the live panel in Home Assistant — zones, alarm, connection healthy; old MQTT bridge gone.
+- **Examples:** Given the add-on is running with the prior MQTT bridge uninstalled, When Home Assistant is up, Then in-use zone entities and the alarm control panel are present and Alarm Panel Connection is on.
+- **You:** Open Home Assistant, find the Texecom Alarm device, confirm zones look like the house, the alarm entity is there, Connection is on, and the old MQTT bridge is not installed.
+- **I check:** Add-on `started`; panel keepalives and zone MQTT still flowing.
+- **How we know:** Pass if the house view looks right and Connection is on. Fail if zones are missing, Connection is off, or the old bridge is still in use.
+- **Result:** pass — practitioner confirmed the live view; add-on had been rebuilt and was publishing zone updates.
 
-## Scenario: Today's Home + siren walks
+## Scenario: Ready-to-arm switches
 
 **Status:** Pass ✅
 
-- **What we're proving:** Home arm works without crashing the add-on, and Disarm from Home Assistant actually stops a live alarm while the panel link stays on (dedicated local module).
-- **Examples:** Given the prior MQTT bridge uninstalled, When Home is armed then disarmed from HA, Then the panel follows and the add-on stays up. Given the panel is armed and a zone triggers so the siren sounds, When Disarm is sent from HA, Then the alarm stops and Connection stays ON.
-- **You:** Confirm this afternoon's live walks were this add-on on the ComIP: Arm Home then Disarm, and Arm → real alarm → Disarm from HA.
-- **I check:** This afternoon's MQTT log (`arming` → `armed_home` → `disarmed`; then `armed_away` → `triggered` → `disarmed` with no Connection OFF) and the retained last-trigger snapshot (zone 4, 17:09:47).
-- **How we know:** Pass if those walks are confirmed for this add-on. Fail if Home still crashes, HA Disarm does not stop the alarm, or Connection drops on the dedicated module.
-- **Result:** pass — practitioner confirmed both walks; we did not re-arm or re-trigger in this session.
+- **What we're proving:** Away, Home, and Night each have a ready-to-arm switch, and they start on so arming still works until someone turns one off.
+- **Examples:** Given a fresh install or restart, When Home Assistant has received discovery, Then three ready-to-arm controls exist and each starts on.
+- **You:** Find Ready to arm Away, Home, and Night; confirm they exist and are on (unless turned off on purpose).
+- **I check:** Discovery names match those three switches.
+- **How we know:** Pass if all three are there. Fail if a switch is missing.
+- **Result:** pass — practitioner confirmed all three switches.
+
+## Scenario: Refused arm snaps back
+
+**Status:** Pass ✅
+
+- **What we're proving:** If a mode is not ready, that arm never hits the panel; the alarm card briefly shows Arming then the real state; Home Assistant can see the mode was blocked, not why.
+- **Examples:** Given Ready to arm Away (or Home/Night) is off, When that arm is tapped on the alarm card, Then the panel stays as it was and the card returns to that state after a brief Arming.
+- **You:** Turn the matching ready switch off, tap that mode, watch the card snap back, confirm the panel did not arm, check Blocked arm named the mode only.
+- **I check:** Add-on logs for blocked command and MQTT `arming`.
+- **How we know:** Pass if the card snaps back and the panel stays put. Fail if the card stays on the tapped mode or the panel arms.
+- **Result:** pass — practitioner confirmed snap-back; logs showed `alarm_command_blocked mode=away` then MQTT `arming`.
+
+## Scenario: Disarm still works
+
+**Status:** Pass ✅
+
+- **What we're proving:** Ready switches never block Disarm. Turning a switch off while already armed does not disarm.
+- **Examples:** Given every ready switch is off, When Disarm is requested, Then the panel still disarms. Given the house is already armed, When a ready switch is turned off, Then the panel stays armed.
+- **You:** With a ready switch off, tap Disarm; confirm switch-off did not disarm an armed house.
+- **I check:** Disarm is not gated on the ready switches.
+- **How we know:** Pass if Disarm still works and switch-off did not disarm. Fail if Disarm is refused because a ready switch is off.
+- **Result:** pass — practitioner confirmed Disarm still works.
 
 ## How it went
 
-- HA was already running; cold-start left the add-on on the dedicated local ComIP (not the old signalling-module address).
-- Zone inventory in HA looked right to the practitioner (~40 in-use slots from the panel, not a hand-kept list).
-- One physical walk was enough: a door contact plus a window contact, with PIRs along the way.
-- Home arm and live-alarm Disarm were not repeated — they were done on this add-on this afternoon, and the practitioner confirmed that still stands.
-- We did not walk Night ×3, five sensor classes, TRACE log hunting, the household `house_alarm_panel` wrapper (that lives on household HA, not this sim), a month of crash-free running, or a second household's install.
+- Home Assistant was already up; the add-on had just been rebuilt from the UI and was started.
+- This walk focused on the live replacement plus the new ready-to-arm refuse snap-back — not a repeat of the 21 Aug Home/siren walks.
+- Refused Away from the alarm card snapped back; add-on logs matched (blocked, then MQTT arming).
+- We did not re-walk Night ×3, every sensor class, TRACE log hunting, the household alarm wrapper, a crash-free month, or a second household install — those stayed accepted limitations from 21 Aug.
+- HomeKit/iOS refuse (button still offered when the matching ready switch is off; that mode still must not arm) cannot be walked until this add-on is on household Home Assistant.
 
 ## Still open
 
-- [x] Night arm ×3 (spec-alarm-control: Away / Night / Home each three times; this walk covered Home + Away, not Night) (limitation accepted)
-- [x] One physical zone per sensor class (door, window, shock, PIR, other) — this walk covered door + window + incidental PIR (limitation accepted)
-- [x] TRACE live hunt: correlate a known zone event with add-on TRACE logs (limitation accepted)
-- [x] Household `house_alarm_panel` wrapper and HA aggregates (`all_doors`, automations) against this add-on — lives on household HA, not this sim (limitation accepted)
-- [x] Month of crash-free running (brief reliability metric) (limitation accepted)
-- [x] Second Premier Elite household can install from the public add-on repo and configure Part-Arm mapping without code changes (limitation accepted)
+- [x] HomeKit/iOS refuse when a ready switch is off — cannot walk until this add-on is on household HA (limitation accepted)
 
 ## Review
+
 | # | Date | Verdict | Issues |
 |---|------|---------|--------|
-| 1 | 2026-08-21 | Issues found | 1 |
-
+| 1 | 2026-08-24 | Issues found | 1 |
+| 2 | 2026-08-24 | Clear | — |

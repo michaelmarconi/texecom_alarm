@@ -71,8 +71,9 @@ ComIP — see [this guide](https://github.com/michaelmarconi/texecom_alarm/blob/
 5. If another Connect client still holds the same module, stop it first:
    [Free the panel module](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md).
 6. Start the add-on and check the log for a successful panel login.
-7. Confirm an alarm control panel, in-use zone sensors, and **Alarm Panel
-   Connection** appear in Home Assistant.
+7. Confirm an alarm control panel, in-use zone sensors, **Alarm Panel
+   Connection**, and three **Ready to arm** switches (Away, Home, Night) appear
+   in Home Assistant.
 
 ### This repository (local development)
 
@@ -126,6 +127,7 @@ Home Assistant).
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Install and configuration options            | [Documentation](https://github.com/michaelmarconi/texecom_alarm/blob/main/texecom_alarm/DOCS.md) (`DOCS.md` is also the Supervisor docs tab)             |
 | Map Home / Night to Part-Arm                 | [How to configure Part-Arm](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/configure-part-arm.md)                   |
+| Refuse an arm when a mode is not ready       | [How to use ready-to-arm](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/use-ready-to-arm.md)                      |
 | Free the panel’s Connect slot                | [Stop other Connect clients](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md)          |
 | Disarm fails only during an alarm            | [Wrong network module](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md)                      |
 | Why zones stay available when the link drops | [Availability vs panel connection](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/concepts/availability-and-connection.md) |
