@@ -1,9 +1,10 @@
 ---
 id: TASK-32
 title: 'Checkpoint: texecom-alarm-app ready-to-arm wave'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-23 18:37'
+updated_date: '2026-08-24 09:11'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
