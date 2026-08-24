@@ -223,6 +223,14 @@ async def handle_alarm_command(
                 topic_prefix=topic_prefix,
                 mode=ha_mode,
             )
+            live_state = get_current_alarm_state() if get_current_alarm_state is not None else None
+            if live_state is not None:
+                # Same retained re-publish as a panel NAK so Home Assistant drops an optimistic tap.
+                await publish_alarm_state(
+                    mqtt,
+                    payload=live_state,
+                    topic_prefix=topic_prefix,
+                )
         return None
 
     logger.debug("alarm_command_arm mode=%s byte=%s", ha_mode, mode_byte)

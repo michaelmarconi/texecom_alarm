@@ -487,7 +487,7 @@ def _ready(*, away: bool = True, home: bool = True, night: bool = True) -> Simpl
 async def test_unready_arm_does_not_call_panel_or_change_alarm_state(
     mode: str, payload: str
 ) -> None:
-    """Matching ready flag off: no panel arm, alarm MQTT unchanged, blocked event."""
+    """Matching ready flag off: no panel arm, same payload re-published, blocked event."""
     panel = MagicMock()
     panel.set_area_arm = AsyncMock()
     panel.set_area_disarm = AsyncMock()
@@ -497,6 +497,7 @@ async def test_unready_arm_does_not_call_panel_or_change_alarm_state(
     flags = {m: m == mode for m in ("away", "home", "night")}
     ready = _ready(**{k: not v for k, v in flags.items()})
 
+    alarm_before = list(mqtt.payloads_for("texecom/alarm/state"))
     result = await handle_alarm_command(
         panel,
         _settings(),
@@ -510,7 +511,11 @@ async def test_unready_arm_does_not_call_panel_or_change_alarm_state(
     panel.set_area_arm.assert_not_awaited()
     panel.set_area_disarm.assert_not_awaited()
     assert result is None
-    assert mqtt.payloads_for("texecom/alarm/state") == ["disarmed"]
+    alarm_after = mqtt.payloads_for("texecom/alarm/state")
+    assert alarm_after[-1] == alarm_before[-1] == "disarmed"
+    assert len(alarm_after) > len(alarm_before)
+    alarm_msgs = [m for m in mqtt.messages if m.topic == "texecom/alarm/state"]
+    assert alarm_msgs[-1].retain is True
     events = [m for m in mqtt.messages if m.topic == "texecom/blocked_arm/event"]
     assert events
     assert events[-1].retain is False
@@ -558,3 +563,41 @@ async def test_ready_on_still_sends_arm() -> None:
 
     panel.set_area_arm.assert_awaited_once_with(0)
     panel.set_area_disarm.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_unready_arm_while_armed_republishes_armed_state() -> None:
+    """Refuse while already armed: re-publish that armed payload; do not disarm."""
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    panel.set_area_disarm = AsyncMock()
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/alarm/state", "armed_home", retain=True)
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_AWAY",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "armed_home",
+        ready_state=_ready(away=False, home=True, night=True),
+    )
+
+    panel.set_area_arm.assert_not_awaited()
+    panel.set_area_disarm.assert_not_awaited()
+    assert result is None
+    alarm_payloads = mqtt.payloads_for("texecom/alarm/state")
+    assert alarm_payloads[-1] == "armed_home"
+    assert len(alarm_payloads) > 1
+    assert "disarmed" not in alarm_payloads
+    alarm_msgs = [m for m in mqtt.messages if m.topic == "texecom/alarm/state"]
+    assert alarm_msgs[-1].retain is True
+    events = [m for m in mqtt.messages if m.topic == "texecom/blocked_arm/event"]
+    assert events
+    body = json.loads(
+        events[-1].payload if isinstance(events[-1].payload, str) else events[-1].payload.decode()
+    )
+    assert body["event_type"] == "away"
+    assert "reason" not in body

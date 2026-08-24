@@ -1416,7 +1416,7 @@ async def _boot_e2e_app(
 async def test_e2e_unready_arm_skips_panel_and_publishes_blocked_event(
     mode: str, arm_payload: str
 ) -> None:
-    """Matching ready switch OFF: FakePanel gets no arm, alarm state stays, event names mode."""
+    """Matching ready switch OFF: no panel arm, current state re-published, event names mode."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR")],
@@ -1465,7 +1465,9 @@ async def test_e2e_unready_arm_skips_panel_and_publishes_blocked_event(
 
         assert panel.last_arm_mode == arm_mode_before
         assert panel.last_arm_body == arm_body_before
-        assert mqtt.payloads_for("texecom/alarm/state") == alarm_before
+        alarm_after = mqtt.payloads_for("texecom/alarm/state")
+        assert alarm_after[-1] == alarm_before[-1]
+        assert len(alarm_after) > len(alarm_before)
         events = mqtt.payloads_for("texecom/blocked_arm/event")
         assert events
         body = json.loads(events[-1])
