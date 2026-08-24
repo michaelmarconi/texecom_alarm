@@ -1374,3 +1374,185 @@ async def test_e2e_ready_to_arm_switches_start_on_and_round_trip() -> None:
         await asyncio.wait_for(task, timeout=2.0)
     finally:
         await panel.stop()
+
+
+async def _boot_e2e_app(
+    panel: FakePanel,
+) -> tuple[RecordingMqttPublisher, asyncio.Task[None], asyncio.Event]:
+    mqtt = RecordingMqttPublisher()
+    settings = _settings(panel, mqtt_port=1883)
+    stop = asyncio.Event()
+    client = PanelClient(
+        panel.host,
+        panel.port,
+        udl_password="1234",
+        login_delay=0.0,
+        response_timeout=0.5,
+    )
+    await client.connect()
+    await client.login()
+    task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+    for _ in range(150):
+        if "texecom/alarm/command" in mqtt.subscribed:
+            break
+        if task.done():
+            exc = task.exception()
+            if exc is not None:
+                raise exc
+        await asyncio.sleep(0.02)
+    assert "texecom/alarm/command" in mqtt.subscribed
+    return mqtt, task, stop
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mode", "arm_payload"),
+    [
+        ("away", "ARM_AWAY"),
+        ("home", "ARM_HOME"),
+        ("night", "ARM_NIGHT"),
+    ],
+)
+async def test_e2e_unready_arm_skips_panel_and_publishes_blocked_event(
+    mode: str, arm_payload: str
+) -> None:
+    """Matching ready switch OFF: FakePanel gets no arm, alarm state stays, event names mode."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR")],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt, task, stop = await _boot_e2e_app(panel)
+        cfg_topic = "homeassistant/event/texecom_alarm_blocked_arm/config"
+        for _ in range(50):
+            if any(m.topic == cfg_topic for m in mqtt.messages):
+                break
+            await asyncio.sleep(0.02)
+        cfgs = [m for m in mqtt.messages if m.topic == cfg_topic]
+        assert cfgs, "blocked-arm event discovery missing"
+        assert cfgs[0].retain is True
+        discovery = json.loads(
+            cfgs[0].payload if isinstance(cfgs[0].payload, str) else cfgs[0].payload.decode()
+        )
+        assert discovery["unique_id"] == "texecom_alarm_blocked_arm"
+        assert discovery["object_id"] == "texecom_alarm_blocked_arm"
+        assert discovery["default_entity_id"] == "event.texecom_alarm_blocked_arm"
+        assert discovery["state_topic"] == "texecom/blocked_arm/event"
+        assert discovery["event_types"] == ["away", "home", "night"]
+        assert "reason" not in discovery
+        assert discovery["device"]["identifiers"] == ["texecom_alarm"]
+
+        await mqtt.push_inbound(f"texecom/ready/{mode}/command", "OFF")
+        for _ in range(50):
+            states = mqtt.payloads_for(f"texecom/ready/{mode}/state")
+            if states and states[-1] == "OFF":
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for(f"texecom/ready/{mode}/state")[-1] == "OFF"
+
+        alarm_before = list(mqtt.payloads_for("texecom/alarm/state"))
+        arm_mode_before = panel.last_arm_mode
+        arm_body_before = panel.last_arm_body
+        await mqtt.push_inbound("texecom/alarm/command", arm_payload)
+        for _ in range(50):
+            if mqtt.payloads_for("texecom/blocked_arm/event"):
+                break
+            if panel.last_arm_mode != arm_mode_before:
+                break
+            await asyncio.sleep(0.02)
+
+        assert panel.last_arm_mode == arm_mode_before
+        assert panel.last_arm_body == arm_body_before
+        assert mqtt.payloads_for("texecom/alarm/state") == alarm_before
+        events = mqtt.payloads_for("texecom/blocked_arm/event")
+        assert events
+        body = json.loads(events[-1])
+        assert body["event_type"] == mode
+        assert "reason" not in body
+        event_msgs = [m for m in mqtt.messages if m.topic == "texecom/blocked_arm/event"]
+        assert event_msgs[-1].retain is False
+
+        await mqtt.push_inbound(f"texecom/ready/{mode}/command", "ON")
+        for _ in range(50):
+            if mqtt.payloads_for(f"texecom/ready/{mode}/state")[-1] == "ON":
+                break
+            await asyncio.sleep(0.02)
+        await mqtt.push_inbound("texecom/alarm/command", arm_payload)
+        for _ in range(100):
+            if panel.last_arm_mode is not None and panel.last_arm_mode != arm_mode_before:
+                break
+            await asyncio.sleep(0.02)
+        assert panel.last_arm_mode is not None
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_disarm_still_sent_when_all_ready_switches_off() -> None:
+    """All three ready switches OFF: DISARM still reaches FakePanel."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR")],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt, task, stop = await _boot_e2e_app(panel)
+        for mode in ("away", "home", "night"):
+            await mqtt.push_inbound(f"texecom/ready/{mode}/command", "OFF")
+        for _ in range(50):
+            if all(
+                mqtt.payloads_for(f"texecom/ready/{m}/state")[-1:] == ["OFF"]
+                for m in ("away", "home", "night")
+            ):
+                break
+            await asyncio.sleep(0.02)
+        disarm_before = panel.disarm_calls
+        await mqtt.push_inbound("texecom/alarm/command", "DISARM")
+        for _ in range(100):
+            if panel.disarm_calls > disarm_before:
+                break
+            await asyncio.sleep(0.02)
+        assert panel.disarm_calls == disarm_before + 1
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_ready_switch_off_while_armed_does_not_disarm() -> None:
+    """Armed, then matching ready switch OFF: FakePanel receives no disarm."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR")],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt, task, stop = await _boot_e2e_app(panel)
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
+        for _ in range(100):
+            if panel.last_arm_mode == 0:
+                break
+            await asyncio.sleep(0.02)
+        assert panel.last_arm_mode == 0
+        disarm_before = panel.disarm_calls
+        await mqtt.push_inbound("texecom/ready/away/command", "OFF")
+        for _ in range(50):
+            if mqtt.payloads_for("texecom/ready/away/state")[-1:] == ["OFF"]:
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/ready/away/state")[-1] == "OFF"
+        await asyncio.sleep(0.1)
+        assert panel.disarm_calls == disarm_before
+        assert panel.last_arm_mode == 0
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()

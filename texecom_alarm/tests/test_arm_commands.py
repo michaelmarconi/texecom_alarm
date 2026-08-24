@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -467,3 +469,92 @@ async def test_disarm_forced_disconnect_records_trust_without_reraise() -> None:
     assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
     assert trust.live is False
     assert mqtt.payloads_for("texecom/alarm/state") == []
+
+
+def _ready(*, away: bool = True, home: bool = True, night: bool = True) -> SimpleNamespace:
+    return SimpleNamespace(away=away, home=home, night=night)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mode", "payload"),
+    [
+        ("away", "ARM_AWAY"),
+        ("home", "ARM_HOME"),
+        ("night", "ARM_NIGHT"),
+    ],
+)
+async def test_unready_arm_does_not_call_panel_or_change_alarm_state(
+    mode: str, payload: str
+) -> None:
+    """Matching ready flag off: no panel arm, alarm MQTT unchanged, blocked event."""
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    panel.set_area_disarm = AsyncMock()
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/alarm/state", "disarmed", retain=True)
+    flags = {m: m == mode for m in ("away", "home", "night")}
+    ready = _ready(**{k: not v for k, v in flags.items()})
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        payload,
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "disarmed",
+        ready_state=ready,
+    )
+
+    panel.set_area_arm.assert_not_awaited()
+    panel.set_area_disarm.assert_not_awaited()
+    assert result is None
+    assert mqtt.payloads_for("texecom/alarm/state") == ["disarmed"]
+    events = [m for m in mqtt.messages if m.topic == "texecom/blocked_arm/event"]
+    assert events
+    assert events[-1].retain is False
+    body = json.loads(
+        events[-1].payload if isinstance(events[-1].payload, str) else events[-1].payload.decode()
+    )
+    assert body["event_type"] == mode
+    assert "reason" not in body
+    assert "why" not in body
+
+
+@pytest.mark.asyncio
+async def test_disarm_ignores_ready_flags() -> None:
+    """DISARM must reach the panel even when every ready flag is off."""
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        ready_state=_ready(away=False, home=False, night=False),
+        zone_count=12,
+    )
+
+    panel.set_area_disarm.assert_awaited_once()
+    panel.set_area_arm.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ready_on_still_sends_arm() -> None:
+    """Matching ready flag on: existing arm path is unchanged."""
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    panel.set_area_disarm = AsyncMock()
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_AWAY",
+        ready_state=_ready(),
+    )
+
+    panel.set_area_arm.assert_awaited_once_with(0)
+    panel.set_area_disarm.assert_not_awaited()

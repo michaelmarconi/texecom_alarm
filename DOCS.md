@@ -129,6 +129,8 @@ You can leave the default unless live walks suggest a different window.
 ## What appears in Home Assistant
 
 - An **alarm control panel** (Away, Night, Home, and Disarm)
+- Three **ready-to-arm** switches (Away, Home, Night) that start **on**
+- A **Blocked arm** event when an arm is refused because the matching switch is off
 - A **sensor for each zone** the panel reports as in use
 - **Alarm Panel Connection** — shows whether the link to the panel is healthy
 - A short **last-trigger** summary of what happened just before an alarm
@@ -139,10 +141,20 @@ zone list by hand.
 If the panel link drops, alarm and zone entities stay available with their last
 known state. Use **Alarm Panel Connection** to tell live data from a stale link.
 
+If a ready-to-arm switch is **off**, that arm is not sent to the panel — even
+when Home Assistant itself requested it — and the alarm stays in the state it
+already was. **Disarm** always works. Turning a ready switch off while the
+house is already armed does not disarm. Household rules (open doors, guests,
+time of day) belong in your own automations that flip those switches.
+
+The **Blocked arm** event names the mode (`away`, `home`, or `night`) and does
+not include a reason, so a notify automation can speak for the household.
+
 ## Automations stay in Home Assistant
 
 Notifications, HomeKit, and household arming rules belong in your own Home
-Assistant setup — not inside this add-on.
+Assistant setup — not inside this add-on. Use the ready-to-arm switches and
+the blocked-arm event as the generic refuse mechanism.
 
 ## Further reading
 

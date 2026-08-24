@@ -14,6 +14,8 @@ open/closed status, and tell whether the panel link is healthy.
 ## What you get
 
 - An **alarm control panel** in Home Assistant (Away, Night, Home, disarm)
+- **Ready-to-arm** switches (Away, Home, Night) and a **Blocked arm** event when
+  an arm is refused because the matching switch is off
 - A **sensor per zone** reported by the panel (unused zones are skipped)
 - A **panel connection** sensor so you can tell live data from a dropped link
 - A short **last-trigger snapshot** of what happened just before an alarm
