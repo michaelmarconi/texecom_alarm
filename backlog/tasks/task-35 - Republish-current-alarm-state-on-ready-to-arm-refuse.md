@@ -4,7 +4,7 @@ title: Republish current alarm state on ready-to-arm refuse
 status: awaiting-review
 assignee: []
 created_date: '2026-08-24 13:32'
-updated_date: '2026-08-24 14:44'
+updated_date: '2026-08-24 15:05'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -56,5 +56,5 @@ Verification: named pytest GREEN; full pytest --cov 337 passed, 92%; ruff clean.
 Notes/assumptions: CHANGELOG/DOCS left unchanged. No add-on version bump.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
