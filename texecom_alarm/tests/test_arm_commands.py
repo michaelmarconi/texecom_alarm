@@ -487,7 +487,7 @@ def _ready(*, away: bool = True, home: bool = True, night: bool = True) -> Simpl
 async def test_unready_arm_does_not_call_panel_or_change_alarm_state(
     mode: str, payload: str
 ) -> None:
-    """Matching ready flag off: no panel arm, same payload re-published, blocked event."""
+    """Matching ready flag off: no panel arm; MQTT arming then current; blocked event."""
     panel = MagicMock()
     panel.set_area_arm = AsyncMock()
     panel.set_area_disarm = AsyncMock()
@@ -512,10 +512,11 @@ async def test_unready_arm_does_not_call_panel_or_change_alarm_state(
     panel.set_area_disarm.assert_not_awaited()
     assert result is None
     alarm_after = mqtt.payloads_for("texecom/alarm/state")
-    assert alarm_after[-1] == alarm_before[-1] == "disarmed"
-    assert len(alarm_after) > len(alarm_before)
+    assert alarm_after[len(alarm_before) :] == ["arming", "disarmed"]
     alarm_msgs = [m for m in mqtt.messages if m.topic == "texecom/alarm/state"]
     assert alarm_msgs[-1].retain is True
+    assert alarm_msgs[-2].retain is True
+    assert alarm_msgs[-2].payload == "arming"
     events = [m for m in mqtt.messages if m.topic == "texecom/blocked_arm/event"]
     assert events
     assert events[-1].retain is False
@@ -567,7 +568,7 @@ async def test_ready_on_still_sends_arm() -> None:
 
 @pytest.mark.asyncio
 async def test_unready_arm_while_armed_republishes_armed_state() -> None:
-    """Refuse while already armed: re-publish that armed payload; do not disarm."""
+    """Refuse while already armed: MQTT arming then that armed payload; do not disarm."""
     panel = MagicMock()
     panel.set_area_arm = AsyncMock()
     panel.set_area_disarm = AsyncMock()
@@ -589,11 +590,12 @@ async def test_unready_arm_while_armed_republishes_armed_state() -> None:
     panel.set_area_disarm.assert_not_awaited()
     assert result is None
     alarm_payloads = mqtt.payloads_for("texecom/alarm/state")
-    assert alarm_payloads[-1] == "armed_home"
-    assert len(alarm_payloads) > 1
+    assert alarm_payloads == ["armed_home", "arming", "armed_home"]
     assert "disarmed" not in alarm_payloads
     alarm_msgs = [m for m in mqtt.messages if m.topic == "texecom/alarm/state"]
     assert alarm_msgs[-1].retain is True
+    assert alarm_msgs[-2].payload == "arming"
+    assert alarm_msgs[-2].retain is True
     events = [m for m in mqtt.messages if m.topic == "texecom/blocked_arm/event"]
     assert events
     body = json.loads(
@@ -601,3 +603,35 @@ async def test_unready_arm_while_armed_republishes_armed_state() -> None:
     )
     assert body["event_type"] == "away"
     assert "reason" not in body
+
+
+@pytest.mark.asyncio
+async def test_unready_arm_when_already_arming_skips_extra_arming_publish() -> None:
+    """If MQTT is already arming, refuse still re-publishes current and does not arm."""
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    panel.set_area_disarm = AsyncMock()
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/alarm/state", "arming", retain=True)
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_HOME",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "arming",
+        ready_state=_ready(away=True, home=False, night=True),
+    )
+
+    panel.set_area_arm.assert_not_awaited()
+    panel.set_area_disarm.assert_not_awaited()
+    assert result is None
+    assert mqtt.payloads_for("texecom/alarm/state") == ["arming", "arming"]
+    events = [m for m in mqtt.messages if m.topic == "texecom/blocked_arm/event"]
+    assert events
+    body = json.loads(
+        events[-1].payload if isinstance(events[-1].payload, str) else events[-1].payload.decode()
+    )
+    assert body["event_type"] == "home"

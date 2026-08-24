@@ -11,8 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Ready-to-arm switches (Away, Home, Night) that start on. When a switch is
   off, that arm is not sent to the panel — including from Home Assistant —
-  and the alarm entity stays as it was. On refuse the app immediately
-  re-sends the current alarm state so the Home Assistant alarm card can
+  and the alarm entity stays as it was. On refuse the app briefly publishes
+  Arming, then the current alarm state, so the Home Assistant alarm card can
   drop an optimistic Away, Home, or Night tap. Disarm is never blocked;
   turning a switch off while already armed does not disarm.
 - A **Blocked arm** MQTT event that names the refused mode (`away`, `home`,

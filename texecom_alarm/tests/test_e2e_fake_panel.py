@@ -1416,7 +1416,7 @@ async def _boot_e2e_app(
 async def test_e2e_unready_arm_skips_panel_and_publishes_blocked_event(
     mode: str, arm_payload: str
 ) -> None:
-    """Matching ready switch OFF: no panel arm, current state re-published, event names mode."""
+    """Matching ready switch OFF: no panel arm; MQTT arming then current; event names mode."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR")],
@@ -1453,11 +1453,13 @@ async def test_e2e_unready_arm_skips_panel_and_publishes_blocked_event(
         assert mqtt.payloads_for(f"texecom/ready/{mode}/state")[-1] == "OFF"
 
         alarm_before = list(mqtt.payloads_for("texecom/alarm/state"))
+        current = alarm_before[-1]
         arm_mode_before = panel.last_arm_mode
         arm_body_before = panel.last_arm_body
         await mqtt.push_inbound("texecom/alarm/command", arm_payload)
         for _ in range(50):
-            if mqtt.payloads_for("texecom/blocked_arm/event"):
+            alarm_after = mqtt.payloads_for("texecom/alarm/state")
+            if alarm_after[len(alarm_before) :] == ["arming", current]:
                 break
             if panel.last_arm_mode != arm_mode_before:
                 break
@@ -1466,8 +1468,7 @@ async def test_e2e_unready_arm_skips_panel_and_publishes_blocked_event(
         assert panel.last_arm_mode == arm_mode_before
         assert panel.last_arm_body == arm_body_before
         alarm_after = mqtt.payloads_for("texecom/alarm/state")
-        assert alarm_after[-1] == alarm_before[-1]
-        assert len(alarm_after) > len(alarm_before)
+        assert alarm_after[len(alarm_before) :] == ["arming", current]
         events = mqtt.payloads_for("texecom/blocked_arm/event")
         assert events
         body = json.loads(events[-1])
