@@ -1,9 +1,10 @@
 ---
 id: TASK-36
 title: 'Checkpoint: texecom-alarm-app refuse-state-republish wave'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-24 13:33'
+updated_date: '2026-08-24 15:11'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
