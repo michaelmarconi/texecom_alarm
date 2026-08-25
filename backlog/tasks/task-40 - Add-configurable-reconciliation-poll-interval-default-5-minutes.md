@@ -1,9 +1,10 @@
 ---
 id: TASK-40
 title: 'Add configurable reconciliation poll interval, default 5 minutes'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-25 15:27'
+updated_date: '2026-08-25 19:54'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
