@@ -28,7 +28,9 @@ from texecom_alarm.reconnect import publish_panel_link_state
 
 logger = logging.getLogger(__name__)
 
-TRUST_POLL_INTERVAL_SECONDS = 30.0
+# Reconciliation poll no longer gates connectivity (ADR-016), so its default
+# cadence is slow and household-tunable (ADR-017) rather than a fast health check.
+TRUST_POLL_INTERVAL_SECONDS = 300.0
 RECOVER_WINDOW_SECONDS = 30.0
 # Plan default: 3× shipping trust-poll interval (ADR-011 — tunable, not final).
 STUCK_TRUST_FAIL_WINDOW_SECONDS = 90.0

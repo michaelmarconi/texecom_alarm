@@ -30,7 +30,6 @@ from texecom_alarm.mqtt.discovery import (
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
 from texecom_alarm.panel_trust import (
     RECOVER_WINDOW_SECONDS,
-    TRUST_POLL_INTERVAL_SECONDS,
     PanelTrust,
 )
 from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient, ProtocolError
@@ -204,7 +203,7 @@ async def run(
             poll_interval=(
                 trust_poll_interval
                 if trust_poll_interval is not None
-                else TRUST_POLL_INTERVAL_SECONDS
+                else cfg.reconciliation_poll_interval_seconds
             ),
             recover_window=(
                 trust_recover_window if trust_recover_window is not None else RECOVER_WINDOW_SECONDS

@@ -28,6 +28,9 @@ DEFAULT_RECONNECT_TRIGGER_ATTEMPTS = 18
 DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS = 5.0
 # Stuck-trust fail window before tear-down / re-login (ADR-011) — tunable, not final.
 DEFAULT_TRUST_FAIL_WINDOW_SECONDS = 90.0
+# Reconciliation poll no longer gates connectivity (ADR-016), so it can run this
+# infrequently by default; households can tune it via add-on settings (ADR-017).
+DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS = 300.0
 DEFAULT_LOG_LEVEL = "INFO"
 
 PartArmLabel = Literal["home", "night", "unused"]
@@ -54,6 +57,7 @@ _ENV_KEYS = {
     "reconnect_trigger_attempts": "TEXECOM_RECONNECT_TRIGGER_ATTEMPTS",
     "reconnect_trigger_interval_seconds": "TEXECOM_RECONNECT_TRIGGER_INTERVAL_SECONDS",
     "trust_fail_window_seconds": "TEXECOM_TRUST_FAIL_WINDOW_SECONDS",
+    "reconciliation_poll_interval_seconds": "TEXECOM_RECONCILIATION_POLL_INTERVAL_SECONDS",
     "log_level": "TEXECOM_LOG_LEVEL",
 }
 
@@ -82,6 +86,7 @@ class Settings:
     reconnect_trigger_attempts: int = DEFAULT_RECONNECT_TRIGGER_ATTEMPTS
     reconnect_trigger_interval_seconds: float = DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS
     trust_fail_window_seconds: float = DEFAULT_TRUST_FAIL_WINDOW_SECONDS
+    reconciliation_poll_interval_seconds: float = DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS
     log_level: LogLevel = DEFAULT_LOG_LEVEL
 
     def part_arm_labels(self) -> tuple[PartArmLabel, PartArmLabel, PartArmLabel]:
@@ -231,6 +236,12 @@ def _parse(raw: Mapping[str, Any]) -> Settings:
             raw,
             "trust_fail_window_seconds",
             DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
+            minimum=0.0,
+        ),
+        reconciliation_poll_interval_seconds=_optional_float(
+            raw,
+            "reconciliation_poll_interval_seconds",
+            DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS,
             minimum=0.0,
         ),
         log_level=_parse_log_level(raw),

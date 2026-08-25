@@ -235,6 +235,80 @@ async def test_quiet_house_stays_live_without_zone_pushes() -> None:
     assert panel.get_area_flags.await_count >= 1
 
 
+def test_poll_interval_is_configurable_and_does_not_affect_default() -> None:
+    """AC2: a household-configured interval changes poll cadence directly."""
+    mqtt = RecordingMqttPublisher()
+    clock = {"t": 0.0}
+    fast = _trust(mqtt, poll_interval=60.0, clock=lambda: clock["t"])
+    slow = _trust(mqtt, poll_interval=300.0, clock=lambda: clock["t"])
+
+    # Both are due on first check (no prior attempt recorded yet).
+    assert fast.poll_due() is True
+    assert slow.poll_due() is True
+
+
+@pytest.mark.asyncio
+async def test_configured_poll_interval_changes_cadence_not_connection() -> None:
+    """AC2/AC3: interval controls poll cadence only; Connection stays untouched."""
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+
+    clock = {"t": 0.0}
+    trust = _trust(mqtt, poll_interval=60.0, clock=lambda: clock["t"])
+    panel = MagicMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+
+    # First poll always runs (no prior attempt).
+    await trust.maybe_poll(panel)
+    assert panel.get_area_flags.await_count == 1
+
+    # Well inside the 60s interval: not due yet, poll does not fire again.
+    clock["t"] = 30.0
+    await trust.maybe_poll(panel)
+    assert panel.get_area_flags.await_count == 1
+
+    # Past the configured interval: due again.
+    clock["t"] = 61.0
+    await trust.maybe_poll(panel)
+    assert panel.get_area_flags.await_count == 2
+
+    # Cadence changes alone must never move Connection off ON.
+    assert trust.live is True
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+
+
+@pytest.mark.asyncio
+async def test_default_poll_interval_matches_five_minute_default() -> None:
+    """AC1: a trust built with the shipping default fires on a 5-minute cadence."""
+    from texecom_alarm.panel_trust import TRUST_POLL_INTERVAL_SECONDS
+
+    assert TRUST_POLL_INTERVAL_SECONDS == 300.0
+
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    clock = {"t": 0.0}
+    trust = PanelTrust(
+        mqtt,
+        topic_prefix="texecom",
+        zone_count=12,
+        clock=lambda: clock["t"],
+    )
+    panel = MagicMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+
+    await trust.maybe_poll(panel)
+    assert panel.get_area_flags.await_count == 1
+
+    clock["t"] = 299.0
+    await trust.maybe_poll(panel)
+    assert panel.get_area_flags.await_count == 1, "must not poll again before 300s elapse"
+
+    clock["t"] = 300.0
+    await trust.maybe_poll(panel)
+    assert panel.get_area_flags.await_count == 2
+
+
 @pytest.mark.asyncio
 async def test_trust_poll_publishes_when_area_flags_differ() -> None:
     """Successful poll updates alarm MQTT when decoded flags disagree with last HA state."""

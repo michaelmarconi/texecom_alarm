@@ -15,6 +15,7 @@ from texecom_alarm.config import (
     DEFAULT_PART_ARM_1,
     DEFAULT_PART_ARM_2,
     DEFAULT_PART_ARM_3,
+    DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS,
     DEFAULT_RECONNECT_NORMAL_ATTEMPTS,
     DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
     DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
@@ -46,6 +47,7 @@ def _valid_options(**overrides: object) -> dict[str, object]:
         "reconnect_trigger_attempts": DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
         "reconnect_trigger_interval_seconds": DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
         "trust_fail_window_seconds": DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
+        "reconciliation_poll_interval_seconds": DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS,
     }
     data.update(overrides)
     return data
@@ -75,6 +77,7 @@ def test_load_settings_applies_schema_defaults() -> None:
         reconnect_trigger_attempts=DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
         reconnect_trigger_interval_seconds=DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
         trust_fail_window_seconds=DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
+        reconciliation_poll_interval_seconds=DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS,
     )
 
 
@@ -139,6 +142,42 @@ def test_reconnect_settings_defaults_and_overrides() -> None:
     assert tuned.reconnect_trigger_attempts == 6
     assert tuned.reconnect_trigger_interval_seconds == 1.25
     assert tuned.trust_fail_window_seconds == 45.0
+
+
+def test_reconciliation_poll_interval_defaults_to_five_minutes() -> None:
+    """AC1: unset add-on option → 300s default (ADR-017)."""
+    defaults = load_settings(
+        {
+            "panel_host": "10.0.0.2",
+            "mqtt_host": "mqtt.local",
+        }
+    )
+    assert defaults.reconciliation_poll_interval_seconds == 300.0
+    assert DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS == 300.0
+
+
+def test_reconciliation_poll_interval_override_via_options() -> None:
+    """AC2: add-on option changes the parsed interval."""
+    tuned = load_settings(_valid_options(reconciliation_poll_interval_seconds=60.0))
+    assert tuned.reconciliation_poll_interval_seconds == 60.0
+
+
+def test_reconciliation_poll_interval_from_environ() -> None:
+    settings = load_settings(
+        environ={
+            "TEXECOM_PANEL_HOST": "panel.env",
+            "TEXECOM_UDL_PASSWORD": "udl",
+            "TEXECOM_MQTT_HOST": "broker.env",
+            "TEXECOM_RECONCILIATION_POLL_INTERVAL_SECONDS": "120",
+        },
+        options_path="/nonexistent/options.json",
+    )
+    assert settings.reconciliation_poll_interval_seconds == 120.0
+
+
+def test_invalid_reconciliation_poll_interval_raises_clear_error() -> None:
+    with pytest.raises(ConfigError, match="reconciliation_poll_interval_seconds"):
+        load_settings(_valid_options(reconciliation_poll_interval_seconds=-1))
 
 
 def test_invalid_trust_fail_window_raises_clear_error() -> None:
