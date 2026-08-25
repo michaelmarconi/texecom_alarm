@@ -27,6 +27,7 @@ options:
   reconnect_trigger_attempts: 18
   reconnect_trigger_interval_seconds: 5
   trust_fail_window_seconds: 90
+  reconciliation_poll_interval_seconds: 300
   log_level: INFO
 schema:
   panel_host: str
@@ -46,5 +47,6 @@ schema:
   reconnect_trigger_attempts: int(1,10000)
   reconnect_trigger_interval_seconds: float(0,)
   trust_fail_window_seconds: float(0,)
+  reconciliation_poll_interval_seconds: float(0,)
   # list(...) tokens are the Configuration radio labels (AC1).
   log_level: list(WARNING|INFO|DEBUG|TRACE)
