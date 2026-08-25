@@ -1,9 +1,10 @@
 ---
 id: TASK-41
 title: 'Checkpoint: texecom-alarm-app panel-connection-simplification wave'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-25 15:27'
+updated_date: '2026-08-25 21:08'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
