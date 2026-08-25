@@ -1,10 +1,10 @@
 ---
 id: TASK-39
 title: Decouple reconciliation poll from Alarm Panel Connection
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-25 15:27'
-updated_date: '2026-08-25 15:38'
+updated_date: '2026-08-25 16:16'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -46,6 +46,12 @@ Files likely affected: texecom_alarm/src/texecom_alarm/panel_trust.py (modify) �
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Reconciliation poll no longer feeds Alarm Panel Connection (ADR-016) — connectivity is now keepalive/command-only, with recovery driven by resumed keepalives instead of a successful poll.
+Changed files: texecom_alarm/src/texecom_alarm/panel_trust.py, texecom_alarm/src/texecom_alarm/app.py, texecom_alarm/tests/test_panel_trust.py, texecom_alarm/tests/test_session_heal.py, texecom_alarm/tests/test_e2e_fake_panel.py, texecom_alarm/tests/test_arm_commands.py
+Verification: unit+e2e: pytest tests/test_panel_trust.py tests/test_e2e_fake_panel.py tests/test_arm_commands.py — 70 passing; full suite: pytest tests — 338 passing; coverage: pytest --cov=texecom_alarm --cov-fail-under=90 — 92.44%; lint/format: ruff check and ruff format --check — clean.
+Notes/assumptions: Also fixed three tests not named in the plan (two in test_session_heal.py, one in test_e2e_fake_panel.py) that used repeated reconciliation-poll NAKs as their stimulus for the ADR-011 stuck-fail-window relogin path; swapped stimulus to a command reject (ADR-011 fail_window/recover_window mechanism itself untouched).
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
