@@ -1,10 +1,10 @@
 ---
 id: TASK-39
 title: Decouple reconciliation poll from Alarm Panel Connection
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-25 15:27'
-updated_date: '2026-08-25 19:52'
+updated_date: '2026-08-25 19:53'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -32,9 +32,9 @@ ordinal: 33000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A reconciliation-poll NAK or timeout, in isolation (keepalive healthy, no recent command failure), does not publish Alarm Panel Connection OFF
-- [ ] #2 A rejected/timed-out arm or disarm command still immediately publishes Alarm Panel Connection OFF, and recovers to ON once keepalives resume and the command-failure recover window has cleared — with no dependency on a poll succeeding
-- [ ] #3 Missed keepalives / disconnect still publish Alarm Panel Connection OFF and recover via the existing reconnect path, unchanged
+- [x] #1 A reconciliation-poll NAK or timeout, in isolation (keepalive healthy, no recent command failure), does not publish Alarm Panel Connection OFF
+- [x] #2 A rejected/timed-out arm or disarm command still immediately publishes Alarm Panel Connection OFF, and recovers to ON once keepalives resume and the command-failure recover window has cleared — with no dependency on a poll succeeding
+- [x] #3 Missed keepalives / disconnect still publish Alarm Panel Connection OFF and recover via the existing reconnect path, unchanged
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -53,5 +53,5 @@ Verification: unit+e2e: pytest tests/test_panel_trust.py tests/test_e2e_fake_pan
 Notes/assumptions: Also fixed three tests not named in the plan (two in test_session_heal.py, one in test_e2e_fake_panel.py) that used repeated reconciliation-poll NAKs as their stimulus for the ADR-011 stuck-fail-window relogin path; swapped stimulus to a command reject (ADR-011 fail_window/recover_window mechanism itself untouched).
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
