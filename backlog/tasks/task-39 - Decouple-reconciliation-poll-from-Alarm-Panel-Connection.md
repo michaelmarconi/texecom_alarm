@@ -42,3 +42,10 @@ ordinal: 33000
 <!-- SECTION:PLAN:BEGIN -->
 Files likely affected: texecom_alarm/src/texecom_alarm/panel_trust.py (modify) — stop _on_poll_failure from calling _mark_degraded(); move the _maybe_recover() trigger from poll() success to note_keepalive_ok(); update module docstring/log wording to cite ADR-016 instead of ADR-010. texecom_alarm/src/texecom_alarm/app.py (modify) — update _listen_panel_messages docstring/comments citing ADR-010 to ADR-016. texecom_alarm/tests/test_panel_trust.py (modify) — remove/rewrite test_trust_poll_nak_publishes_off_with_timing_context and test_trust_poll_timeout_reason (poll failure must no longer publish OFF); rework the recovery assertions in test_transient_command_reject_recovers_after_window, test_corroboration_within_fail_window_does_not_request_relogin, and test_e2e_trust_poll_fail_then_recover to be keepalive-driven; add a new test asserting an isolated poll NAK/timeout with keepalive healthy never publishes OFF (the SPIKE-011 S6 shape). texecom_alarm/tests/test_e2e_fake_panel.py (modify) — update ADR-010 docstring citations to ADR-016 (no behavior change). texecom_alarm/tests/test_arm_commands.py (modify) — same docstring citation update. Test strategy: how we'll know = unit tests in test_panel_trust.py (stand-ins: RecordingMqttPublisher + fake clock) plus the FakePanel end-to-end suite; run pytest texecom_alarm/tests/test_panel_trust.py texecom_alarm/tests/test_e2e_fake_panel.py texecom_alarm/tests/test_arm_commands.py.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
