@@ -22,6 +22,7 @@ from texecom_alarm.panel_trust import (
     REASON_DISARM_NAK,
     REASON_DISARM_TIMEOUT,
     REASON_KEEPALIVE_OK,
+    REASON_PANEL_TRAFFIC,
     REASON_TRUST_POLL_NAK,
     REASON_TRUST_POLL_TIMEOUT,
     PanelTrust,
@@ -457,6 +458,78 @@ async def test_transient_command_reject_recovers_after_window() -> None:
     assert recover[-1].reason == REASON_KEEPALIVE_OK
     msg = recover[-1].getMessage().lower()
     assert "live" in msg or "recover" in msg
+
+
+@pytest.mark.asyncio
+async def test_continuous_panel_traffic_still_recovers_connection() -> None:
+    """A busy panel that never goes idle must not stall Connection recovery.
+
+    If ordinary zone/area/log frames keep arriving faster than the idle
+    timeout, ``recv_message`` never raises ``TimeoutError`` and the
+    keepalive branch (the only place recovery used to be driven from) never
+    runs. Any well-formed frame is itself evidence the panel is alive, so it
+    must drive the same recovery as a successful keepalive.
+    """
+    from texecom_alarm.protocol.frame import MSG_ZONE
+
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+
+    clock = {"t": 0.0}
+    trust = _trust(mqtt, poll_interval=1000.0, recover_window=1.0, clock=lambda: clock["t"])
+    await trust.note_keepalive_ok()
+    await trust.record_command_failure(REASON_ARM_NAK, ha_mode="away")
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    capture = _attach_capture()
+
+    panel = MagicMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    panel.keepalive = AsyncMock()
+    zone_body = bytes([MSG_ZONE, 1, 0x01])
+
+    class _Frame:
+        body = zone_body
+
+    async def _recv(*, timeout: float = 1.0) -> object:
+        # Yield once so the test's watchdog loop below still gets scheduled,
+        # then advance the clock — frames keep arriving well inside the idle
+        # window, so recv_message must never time out.
+        await asyncio.sleep(0)
+        clock["t"] += 0.1
+        return _Frame()
+
+    panel.recv_message = _recv
+
+    task = asyncio.create_task(
+        _listen_panel_messages(
+            panel,
+            mqtt,
+            settings=_settings(),
+            topic_prefix="texecom",
+            in_use_zones={1},
+            alarm_state=_SharedAlarmState(payload="disarmed"),
+            idle_timeout=5.0,
+            trust=trust,
+        )
+    )
+    try:
+        for _ in range(500):
+            if trust.live:
+                break
+            await asyncio.sleep(0.01)
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    assert trust.live is True
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    # Recovered via the frame-received path, not the idle-timeout keepalive.
+    assert panel.keepalive.await_count == 0
+    infos = [r for r in capture.records if r.levelno == logging.INFO]
+    recover = [r for r in infos if getattr(r, "panel_link_payload", None) == "ON"]
+    assert recover
+    assert recover[-1].reason == REASON_PANEL_TRAFFIC
 
 
 @pytest.mark.asyncio

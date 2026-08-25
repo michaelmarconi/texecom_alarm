@@ -42,6 +42,7 @@ REASON_DISARM_DISCONNECT = "disarm_disconnect"
 REASON_TRUST_POLL_NAK = "trust_poll_nak"
 REASON_TRUST_POLL_TIMEOUT = "trust_poll_timeout"
 REASON_KEEPALIVE_OK = "keepalive_ok"
+REASON_PANEL_TRAFFIC = "panel_traffic"
 REASON_STUCK_FAIL_WINDOW = "stuck_trust_fail_window"
 
 
@@ -113,7 +114,19 @@ class PanelTrust:
         successful reconciliation poll (ADR-016).
         """
         self._last_keepalive_ok = True
-        await self._maybe_recover()
+        await self._maybe_recover(reason=REASON_KEEPALIVE_OK)
+
+    async def note_panel_traffic(self) -> None:
+        """Record that a well-formed frame arrived on the live socket.
+
+        A frame the panel pushes unprompted (zone/area/log) is itself evidence
+        the connection is alive, exactly like a successful keepalive — so this
+        also drives command-failure recovery. Without it, a busy panel that
+        keeps sending frames faster than the idle-timeout window would starve
+        the keepalive path (``note_keepalive_ok``) and stall recovery for as
+        long as that traffic kept arriving.
+        """
+        await self._maybe_recover(reason=REASON_PANEL_TRAFFIC)
 
     def note_keepalive_failed(self) -> None:
         self._last_keepalive_ok = False
@@ -318,7 +331,7 @@ class PanelTrust:
             return True
         return (self._clock() - self._last_command_fail_at) >= self._recover_window
 
-    async def _maybe_recover(self) -> None:
+    async def _maybe_recover(self, *, reason: str = REASON_KEEPALIVE_OK) -> None:
         if not self._command_failure_cleared():
             return
         if self._live:
@@ -330,11 +343,15 @@ class PanelTrust:
             topic_prefix=self._topic_prefix,
             live=True,
         )
+        if reason == REASON_PANEL_TRAFFIC:
+            cause = "receiving panel traffic"
+        else:
+            cause = "a successful keepalive"
         logger.info(
-            "Alarm Panel Connection recovered to live after a successful keepalive; "
-            "publishing Connection ON.",
+            "Alarm Panel Connection recovered to live after %s; publishing Connection ON.",
+            cause,
             extra=self._log_extra(
-                reason=REASON_KEEPALIVE_OK,
+                reason=reason,
                 ha_mode=self._last_failure_ha_mode,
                 panel_link_payload=PANEL_LINK_ON,
             ),

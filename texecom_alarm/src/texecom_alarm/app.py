@@ -601,6 +601,12 @@ async def _listen_panel_messages(
                     _raise_if_stuck_trust_relogin(trust)
                 continue
             if trust is not None:
+                # Any well-formed frame arriving on the live socket is itself
+                # proof the panel connection is alive, just like a successful
+                # keepalive — drive the same recovery so a busy panel (lots of
+                # zone/area/log traffic) can't starve the idle-timeout
+                # keepalive path and stall Connection recovery (ADR-016).
+                await trust.note_panel_traffic()
                 previous = alarm_state.payload
                 new_payload = await trust.maybe_poll(panel, current_alarm_payload=previous)
                 if new_payload is not None:
