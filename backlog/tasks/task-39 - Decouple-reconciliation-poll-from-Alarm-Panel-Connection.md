@@ -1,9 +1,10 @@
 ---
 id: TASK-39
 title: Decouple reconciliation poll from Alarm Panel Connection
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-25 15:27'
+updated_date: '2026-08-25 15:38'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
