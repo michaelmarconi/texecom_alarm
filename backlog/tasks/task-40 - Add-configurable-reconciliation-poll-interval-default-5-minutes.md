@@ -1,10 +1,10 @@
 ---
 id: TASK-40
 title: 'Add configurable reconciliation poll interval, default 5 minutes'
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-25 15:27'
-updated_date: '2026-08-25 19:55'
+updated_date: '2026-08-25 20:51'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -47,6 +47,12 @@ Files likely affected: texecom_alarm/src/texecom_alarm/config.py (modify) — ad
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Reconciliation poll interval is now a configurable add-on setting (reconciliation_poll_interval_seconds), defaulting to 300s (5 minutes), with no effect on Alarm Panel Connection.
+Changed files: texecom_alarm/config.yaml, texecom_alarm/src/texecom_alarm/app.py, texecom_alarm/src/texecom_alarm/config.py, texecom_alarm/src/texecom_alarm/panel_trust.py, texecom_alarm/tests/test_config.py, texecom_alarm/tests/test_panel_trust.py
+Verification: pytest tests — 346 passing; ruff check . — clean; ruff format --check . — clean; pytest --cov=texecom_alarm --cov-fail-under=90 — 92.48% coverage.
+Notes/assumptions: Mirrored the trust_fail_window_seconds pattern exactly in config.py (default constant, Settings field, env key, _optional_float parse call). No app.py-level wiring test added, consistent with the existing test depth for the sibling trust_fail_window_seconds setting; coverage comes via config.py parse tests plus panel_trust.py cadence tests.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
