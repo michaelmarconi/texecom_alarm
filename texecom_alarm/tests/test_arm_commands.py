@@ -361,7 +361,7 @@ async def test_snapshot_nak_after_disarm_records_trust_without_retry() -> None:
 
 @pytest.mark.asyncio
 async def test_arm_nak_records_trust_failure_and_publishes_panel_link_off() -> None:
-    """ADR-010: arm NAK flips Alarm Panel Connection OFF via PanelTrust."""
+    """ADR-016: arm NAK flips Alarm Panel Connection OFF via PanelTrust."""
     from texecom_alarm.panel_trust import PanelTrust
 
     panel = MagicMock()
@@ -370,7 +370,7 @@ async def test_arm_nak_records_trust_failure_and_publishes_panel_link_off() -> N
     await mqtt.connect()
     await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
     trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
-    trust.note_keepalive_ok()
+    await trust.note_keepalive_ok()
 
     await handle_alarm_command(
         panel,
@@ -389,7 +389,7 @@ async def test_arm_nak_records_trust_failure_and_publishes_panel_link_off() -> N
 
 @pytest.mark.asyncio
 async def test_disarm_nak_records_trust_failure() -> None:
-    """ADR-010: disarm NAK flips Alarm Panel Connection OFF."""
+    """ADR-016: disarm NAK flips Alarm Panel Connection OFF."""
     from texecom_alarm.panel_trust import PanelTrust
 
     panel = MagicMock()

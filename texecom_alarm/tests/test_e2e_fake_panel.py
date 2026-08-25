@@ -892,7 +892,7 @@ async def test_e2e_arm_nak_republishes_disarmed_state() -> None:
 
 @pytest.mark.asyncio
 async def test_e2e_quiet_house_panel_link_stays_on() -> None:
-    """ADR-010 / AC2: no zone pushes alone must not degrade Alarm Panel Connection."""
+    """ADR-016 / AC2: no zone pushes alone must not degrade Alarm Panel Connection."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
@@ -963,7 +963,7 @@ async def test_e2e_quiet_house_panel_link_stays_on() -> None:
 
 @pytest.mark.asyncio
 async def test_e2e_arm_nak_degrades_panel_link_keepalive_still_ok() -> None:
-    """ADR-010 / AC1: FakePanel arm NAK → panel_connection OFF; app availability stays online."""
+    """ADR-016 / AC1: FakePanel arm NAK → panel_connection OFF; app availability stays online."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
@@ -1150,7 +1150,12 @@ async def test_e2e_health_check_death_heals_without_restart() -> None:
 
 @pytest.mark.asyncio
 async def test_e2e_stuck_trust_fail_window_relogins_without_arm_retry() -> None:
-    """ADR-011 AC2/AC3: stuck trust past fail window → re-login; no arm auto-retry."""
+    """ADR-011 AC2/AC3: stuck trust past fail window → re-login; no arm auto-retry.
+
+    Recover window is deliberately longer than the fail window so the single
+    failed arm cannot self-heal via a resumed keepalive before the stuck path
+    fires — the reconciliation poll no longer has any bearing on this (ADR-016).
+    """
     from texecom_alarm.protocol.frame import (
         CMD_GET_ZONE_STATE,
         CMD_LOGIN,
@@ -1202,7 +1207,7 @@ async def test_e2e_stuck_trust_fail_window_relogins_without_arm_retry() -> None:
                 idle=stop.wait,
                 idle_timeout=0.05,
                 trust_poll_interval=0.05,
-                trust_recover_window=0.05,
+                trust_recover_window=5.0,
                 trust_fail_window=0.25,
             )
         )
@@ -1225,7 +1230,6 @@ async def test_e2e_stuck_trust_fail_window_relogins_without_arm_retry() -> None:
         setevent_before = panel.seteventmessages_calls
 
         panel.nak_next_arm = True
-        panel.nak_area_flags_until_relogin = True
         await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
         for _ in range(100):
             if mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["OFF"]:
