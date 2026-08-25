@@ -47,5 +47,5 @@ Files likely affected: texecom_alarm/src/texecom_alarm/panel_trust.py (modify) â
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
