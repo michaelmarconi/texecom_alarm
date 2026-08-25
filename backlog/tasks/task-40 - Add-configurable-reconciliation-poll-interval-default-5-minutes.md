@@ -4,7 +4,7 @@ title: 'Add configurable reconciliation poll interval, default 5 minutes'
 status: in-progress
 assignee: []
 created_date: '2026-08-25 15:27'
-updated_date: '2026-08-25 19:54'
+updated_date: '2026-08-25 19:55'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -43,3 +43,10 @@ ordinal: 34000
 <!-- SECTION:PLAN:BEGIN -->
 Files likely affected: texecom_alarm/src/texecom_alarm/config.py (modify) — add DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS = 300.0, a reconciliation_poll_interval_seconds Settings field + env key (TEXECOM_RECONCILIATION_POLL_INTERVAL_SECONDS) + _optional_float parse call, mirroring the existing trust_fail_window_seconds pattern. texecom_alarm/config.yaml (modify) — add reconciliation_poll_interval_seconds: 300 option + float(0,) schema entry (root config.yaml is a symlink to this file, no separate edit). texecom_alarm/src/texecom_alarm/app.py (modify) — wire cfg.reconciliation_poll_interval_seconds into PanelTrust(poll_interval=...) the same way trust_fail_window_seconds flows into fail_window, replacing the current TRUST_POLL_INTERVAL_SECONDS literal default. texecom_alarm/src/texecom_alarm/panel_trust.py (modify) — update the module-level default constant to 300.0 with a comment citing ADR-017. texecom_alarm/tests/test_config.py (modify) — add parse tests: default 300s when unset, override via options/env, rejects negative. texecom_alarm/tests/test_panel_trust.py (modify) — add/confirm a test that changing the interval changes poll cadence without touching the connection signal. Test strategy: how we'll know = unit tests in test_config.py (stand-in: raw options mapping) and test_panel_trust.py (stand-in: fake clock); run pytest texecom_alarm/tests/test_config.py texecom_alarm/tests/test_panel_trust.py.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
