@@ -1,4 +1,10 @@
-"""Panel-link trust detection: command rejects + house-state poll (ADR-010)."""
+"""Panel-link trust detection: keepalive failure + command rejects (ADR-016).
+
+The periodic house/arm reconciliation poll no longer feeds Alarm Panel
+Connection at all — it only corroborates the alarm entity against the panel's
+last-known state. An isolated poll NAK/timeout, with keepalives and commands
+otherwise healthy, must never flip Connection off.
+"""
 
 from __future__ import annotations
 
@@ -35,7 +41,8 @@ REASON_ARM_DISCONNECT = "arm_disconnect"
 REASON_DISARM_DISCONNECT = "disarm_disconnect"
 REASON_TRUST_POLL_NAK = "trust_poll_nak"
 REASON_TRUST_POLL_TIMEOUT = "trust_poll_timeout"
-REASON_TRUST_POLL_OK = "trust_poll_ok"
+REASON_KEEPALIVE_OK = "keepalive_ok"
+REASON_PANEL_TRAFFIC = "panel_traffic"
 REASON_STUCK_FAIL_WINDOW = "stuck_trust_fail_window"
 
 
@@ -51,12 +58,16 @@ class MqttPublisher(Protocol):
 
 
 class PanelTrust:
-    """Tracks command-path + trust-poll health for Alarm Panel Connection.
+    """Tracks keepalive + command-path health for Alarm Panel Connection.
 
-    Never marks zone/alarm entities unavailable (ADR-004). Never degrades solely
-    because zones are quiet. Prefers corroboration first; if Connection stays OFF
-    past the stuck-trust fail window, signals session tear-down / re-login
-    (ADR-011). Does not auto-retry arm/disarm commands.
+    Connection goes down only on a missed keepalive/disconnect or a rejected/
+    timed-out arm/disarm command; it recovers once keepalives resume and any
+    command-failure recover window has cleared (ADR-016). The reconciliation
+    poll (``poll``/``maybe_poll``) is not part of this signal at all — it only
+    corroborates the alarm entity. Never marks zone/alarm entities unavailable
+    (ADR-004). If Connection stays OFF past the stuck-trust fail window, signals
+    session tear-down / re-login (ADR-011). Does not auto-retry arm/disarm
+    commands.
     """
 
     def __init__(
@@ -96,8 +107,26 @@ class PanelTrust:
     def fail_window(self) -> float:
         return self._fail_window
 
-    def note_keepalive_ok(self) -> None:
+    async def note_keepalive_ok(self) -> None:
+        """Record a successful routine check-in and drive Connection recovery.
+
+        Recovery from a command-failure degrade is driven from here, not from a
+        successful reconciliation poll (ADR-016).
+        """
         self._last_keepalive_ok = True
+        await self._maybe_recover(reason=REASON_KEEPALIVE_OK)
+
+    async def note_panel_traffic(self) -> None:
+        """Record that a well-formed frame arrived on the live socket.
+
+        A frame the panel pushes unprompted (zone/area/log) is itself evidence
+        the connection is alive, exactly like a successful keepalive — so this
+        also drives command-failure recovery. Without it, a busy panel that
+        keeps sending frames faster than the idle-timeout window would starve
+        the keepalive path (``note_keepalive_ok``) and stall recovery for as
+        long as that traffic kept arriving.
+        """
+        await self._maybe_recover(reason=REASON_PANEL_TRAFFIC)
 
     def note_keepalive_failed(self) -> None:
         self._last_keepalive_ok = False
@@ -236,11 +265,15 @@ class PanelTrust:
         *,
         current_alarm_payload: str | None = None,
     ) -> str | None:
-        """Ask the panel for area flags as a trust corroboration (not keepalive).
+        """Ask the panel for area flags to reconcile the alarm entity only.
 
-        When ``settings`` is configured and the decoded HA payload differs from
-        ``current_alarm_payload``, publish the snapshot (covers omitted AREA pushes).
-        Returns the newly published payload, or None when unchanged / undecodable.
+        This reconciliation poll does not feed Alarm Panel Connection (ADR-016):
+        neither a failure nor a success here changes the connection signal —
+        recovery from a degrade is driven by resumed keepalives instead (see
+        ``note_keepalive_ok``). When ``settings`` is configured and the decoded
+        HA payload differs from ``current_alarm_payload``, publish the snapshot
+        (covers omitted AREA pushes). Returns the newly published payload, or
+        None when unchanged / undecodable.
         """
         now = self._clock()
         self._last_poll_attempt_at = now
@@ -255,7 +288,6 @@ class PanelTrust:
             return None
 
         self._last_successful_trust_poll_at = self._clock()
-        await self._maybe_recover()
 
         if self._settings is None or current_alarm_payload is None:
             return None
@@ -275,32 +307,22 @@ class PanelTrust:
         return decoded
 
     async def _on_poll_failure(self, reason: str) -> None:
-        self._mark_degraded()
-        self._last_failure_reason = reason
-        await publish_panel_link_state(
-            self._mqtt,
-            topic_prefix=self._topic_prefix,
-            live=False,
-        )
-        poll_age = self._seconds_since(self._last_successful_trust_poll_at)
-        poll_age_text = f"{poll_age:g}s ago" if poll_age is not None else "never"
-        mode_text = (
-            f" ha_mode={self._last_failure_ha_mode}"
-            if self._last_failure_ha_mode is not None
-            else ""
-        )
-        logger.warning(
-            "Alarm Panel Connection degraded (%s)%s; keepalive_still_ok=%s; "
-            "last successful trust poll %s; "
-            "publishing Connection OFF. Zone/alarm entities keep last-known state.",
+        """Log a lone reconciliation-poll failure; never touches Connection.
+
+        The poll no longer feeds Alarm Panel Connection (ADR-016) — an isolated
+        NAK/timeout here, with keepalives/commands otherwise healthy, must not
+        flip the signal OFF.
+        """
+        logger.debug(
+            "Reconciliation poll failed (%s); keepalive_still_ok=%s. Alarm Panel "
+            "Connection is unaffected — connectivity is governed only by "
+            "keepalive and command-reject/timeout signals.",
             reason,
-            mode_text,
             self._last_keepalive_ok,
-            poll_age_text,
             extra=self._log_extra(
                 reason=reason,
-                ha_mode=self._last_failure_ha_mode,
-                panel_link_payload=PANEL_LINK_OFF,
+                ha_mode=None,
+                panel_link_payload=PANEL_LINK_ON if self._live else PANEL_LINK_OFF,
             ),
         )
 
@@ -309,7 +331,7 @@ class PanelTrust:
             return True
         return (self._clock() - self._last_command_fail_at) >= self._recover_window
 
-    async def _maybe_recover(self) -> None:
+    async def _maybe_recover(self, *, reason: str = REASON_KEEPALIVE_OK) -> None:
         if not self._command_failure_cleared():
             return
         if self._live:
@@ -321,11 +343,15 @@ class PanelTrust:
             topic_prefix=self._topic_prefix,
             live=True,
         )
+        if reason == REASON_PANEL_TRAFFIC:
+            cause = "receiving panel traffic"
+        else:
+            cause = "a successful keepalive"
         logger.info(
-            "Alarm Panel Connection recovered to live after successful trust poll; "
-            "publishing Connection ON.",
+            "Alarm Panel Connection recovered to live after %s; publishing Connection ON.",
+            cause,
             extra=self._log_extra(
-                reason=REASON_TRUST_POLL_OK,
+                reason=reason,
                 ha_mode=self._last_failure_ha_mode,
                 panel_link_payload=PANEL_LINK_ON,
             ),

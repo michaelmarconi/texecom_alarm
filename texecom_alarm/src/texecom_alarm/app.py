@@ -537,8 +537,9 @@ async def _listen_panel_messages(
 ) -> None:
     """Steady-state loop until ForcedDisconnect.
 
-    Keepalive on idle timeout; periodic house/arm trust poll alongside (ADR-010).
-    Cancellation still propagates.
+    Keepalive on idle timeout, with a periodic house/arm reconciliation poll
+    alongside; the poll only corroborates the alarm entity and never feeds
+    Alarm Panel Connection (ADR-016). Cancellation still propagates.
     Updates ``alarm_state`` when HOUSE AREA pushes change the MQTT payload.
     """
     logger.debug("panel_listen_start")
@@ -555,11 +556,12 @@ async def _listen_panel_messages(
                 frame = await panel.recv_message(timeout=wait)
             except TimeoutError:
                 # Idle or trust-poll slice elapsed: keep session alive and
-                # corroborate house/arm state when due (ADR-010).
+                # corroborate house/arm state when due. The reconciliation poll
+                # below never feeds Alarm Panel Connection (ADR-016).
                 try:
                     await panel.keepalive()
                     if trust is not None:
-                        trust.note_keepalive_ok()
+                        await trust.note_keepalive_ok()
                 except ForcedDisconnect:
                     if trust is not None:
                         trust.note_keepalive_failed()
@@ -599,6 +601,12 @@ async def _listen_panel_messages(
                     _raise_if_stuck_trust_relogin(trust)
                 continue
             if trust is not None:
+                # Any well-formed frame arriving on the live socket is itself
+                # proof the panel connection is alive, just like a successful
+                # keepalive — drive the same recovery so a busy panel (lots of
+                # zone/area/log traffic) can't starve the idle-timeout
+                # keepalive path and stall Connection recovery (ADR-016).
+                await trust.note_panel_traffic()
                 previous = alarm_state.payload
                 new_payload = await trust.maybe_poll(panel, current_alarm_payload=previous)
                 if new_payload is not None:

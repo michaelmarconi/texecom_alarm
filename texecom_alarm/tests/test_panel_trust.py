@@ -1,4 +1,4 @@
-"""Silent panel-path death detection (ADR-010 / TASK-24)."""
+"""Silent panel-path death detection (ADR-016)."""
 
 from __future__ import annotations
 
@@ -21,8 +21,9 @@ from texecom_alarm.panel_trust import (
     REASON_ARM_TIMEOUT,
     REASON_DISARM_NAK,
     REASON_DISARM_TIMEOUT,
+    REASON_KEEPALIVE_OK,
+    REASON_PANEL_TRAFFIC,
     REASON_TRUST_POLL_NAK,
-    REASON_TRUST_POLL_OK,
     REASON_TRUST_POLL_TIMEOUT,
     PanelTrust,
 )
@@ -110,7 +111,7 @@ async def test_arm_nak_publishes_panel_link_off_while_keepalive_ok() -> None:
 
     clock = {"t": 100.0}
     trust = _trust(mqtt, clock=lambda: clock["t"])
-    trust.note_keepalive_ok()
+    await trust.note_keepalive_ok()
     capture = _attach_capture()
 
     panel = MagicMock()
@@ -157,7 +158,7 @@ async def test_disarm_timeout_publishes_panel_link_off() -> None:
     await mqtt.connect()
     await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
     trust = _trust(mqtt)
-    trust.note_keepalive_ok()
+    await trust.note_keepalive_ok()
     capture = _attach_capture()
 
     panel = MagicMock()
@@ -187,7 +188,7 @@ async def test_arm_timeout_and_disarm_nak_reasons() -> None:
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
     trust = _trust(mqtt)
-    trust.note_keepalive_ok()
+    await trust.note_keepalive_ok()
     capture = _attach_capture()
 
     panel = MagicMock()
@@ -227,7 +228,7 @@ async def test_quiet_house_stays_live_without_zone_pushes() -> None:
 
     for step in range(5):
         clock["t"] = float(step) * 1.0
-        trust.note_keepalive_ok()
+        await trust.note_keepalive_ok()
         await trust.maybe_poll(panel)
         assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
 
@@ -362,15 +363,16 @@ async def test_disarm_during_arming_coerces_lagging_armed_flags() -> None:
 
 
 @pytest.mark.asyncio
-async def test_trust_poll_nak_publishes_off_with_timing_context() -> None:
-    """AC2: failed trust poll → OFF with trust_poll_nak + timing fields."""
+async def test_isolated_trust_poll_nak_does_not_publish_off() -> None:
+    """ADR-016 / SPIKE-011 S6: a lone reconciliation-poll NAK, with keepalive
+    healthy and no command failure, must never flip Alarm Panel Connection OFF."""
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
     await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
 
     clock = {"t": 10.0}
     trust = _trust(mqtt, poll_interval=1.0, clock=lambda: clock["t"])
-    trust.note_keepalive_ok()
+    await trust.note_keepalive_ok()
     # Seed a prior successful poll so "seconds since" is defined.
     panel_ok = MagicMock()
     panel_ok.get_area_flags = AsyncMock(return_value=bytes(72))
@@ -382,72 +384,157 @@ async def test_trust_poll_nak_publishes_off_with_timing_context() -> None:
     panel_fail.get_area_flags = AsyncMock(side_effect=ProtocolError("GetAreaFlags NAK"))
     await trust.maybe_poll(panel_fail)
 
-    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    assert trust.live is True
     warnings = [r for r in capture.records if r.levelno == logging.WARNING]
-    assert warnings
-    extra = _extra(warnings[-1])
+    assert not warnings, "a lone poll NAK must never warn as a Connection degrade"
+    debugs = [r for r in capture.records if r.levelno == logging.DEBUG]
+    assert debugs
+    extra = _extra(debugs[-1])
     assert extra["reason"] == REASON_TRUST_POLL_NAK
     assert extra["keepalive_still_ok"] is True
-    assert extra["panel_link_payload"] == "OFF"
-    assert isinstance(extra["seconds_since_last_successful_trust_poll"], int | float)
+    assert extra["panel_link_payload"] == "ON"
 
 
 @pytest.mark.asyncio
-async def test_trust_poll_timeout_reason() -> None:
+async def test_isolated_trust_poll_timeout_does_not_publish_off() -> None:
+    """ADR-016 / SPIKE-011 S6: a lone reconciliation-poll timeout, with keepalive
+    healthy, must never flip Alarm Panel Connection OFF."""
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
     clock = {"t": 0.0}
     trust = _trust(mqtt, poll_interval=0.0, clock=lambda: clock["t"])
+    await trust.note_keepalive_ok()
     capture = _attach_capture()
     panel = MagicMock()
     panel.get_area_flags = AsyncMock(side_effect=TimeoutError("poll timed out"))
     await trust.maybe_poll(panel)
     warnings = [r for r in capture.records if r.levelno == logging.WARNING]
-    assert warnings
-    assert _extra(warnings[-1])["reason"] == REASON_TRUST_POLL_TIMEOUT
-    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    assert not warnings, "a lone poll timeout must never warn as a Connection degrade"
+    debugs = [r for r in capture.records if r.levelno == logging.DEBUG]
+    assert debugs
+    assert _extra(debugs[-1])["reason"] == REASON_TRUST_POLL_TIMEOUT
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    assert trust.live is True
 
 
 @pytest.mark.asyncio
 async def test_transient_command_reject_recovers_after_window() -> None:
-    """AC3: single NAK → OFF; after recover window + successful poll → ON without restart."""
+    """AC2: single NAK → OFF; recovers via resumed keepalives (not a poll) once
+    the command-failure recover window has cleared."""
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
     await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
 
     clock = {"t": 0.0}
     trust = _trust(mqtt, poll_interval=1.0, recover_window=30.0, clock=lambda: clock["t"])
-    trust.note_keepalive_ok()
+    await trust.note_keepalive_ok()
     capture = _attach_capture()
 
     await trust.record_command_failure(REASON_ARM_NAK, ha_mode="away")
     assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
 
+    # A poll failing while OFF changes nothing — recovery never depends on it.
     panel = MagicMock()
-    panel.get_area_flags = AsyncMock(return_value=bytes(72))
-
-    # Successful poll inside recover window must stay OFF.
+    panel.get_area_flags = AsyncMock(side_effect=ProtocolError("GetAreaFlags NAK"))
     clock["t"] = 10.0
     await trust.maybe_poll(panel)
     assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
 
-    # Past recover window: successful poll returns to live.
+    # Keepalive success inside the recover window must stay OFF.
+    await trust.note_keepalive_ok()
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+
+    # Past the recover window: a resumed keepalive returns to live.
     clock["t"] = 31.0
-    await trust.maybe_poll(panel)
+    await trust.note_keepalive_ok()
     assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
 
     infos = [r for r in capture.records if r.levelno == logging.INFO]
     assert infos
     recover = [r for r in infos if getattr(r, "panel_link_payload", None) == "ON"]
     assert recover
-    assert recover[-1].reason == REASON_TRUST_POLL_OK
+    assert recover[-1].reason == REASON_KEEPALIVE_OK
     msg = recover[-1].getMessage().lower()
     assert "live" in msg or "recover" in msg
 
 
 @pytest.mark.asyncio
+async def test_continuous_panel_traffic_still_recovers_connection() -> None:
+    """A busy panel that never goes idle must not stall Connection recovery.
+
+    If ordinary zone/area/log frames keep arriving faster than the idle
+    timeout, ``recv_message`` never raises ``TimeoutError`` and the
+    keepalive branch (the only place recovery used to be driven from) never
+    runs. Any well-formed frame is itself evidence the panel is alive, so it
+    must drive the same recovery as a successful keepalive.
+    """
+    from texecom_alarm.protocol.frame import MSG_ZONE
+
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+
+    clock = {"t": 0.0}
+    trust = _trust(mqtt, poll_interval=1000.0, recover_window=1.0, clock=lambda: clock["t"])
+    await trust.note_keepalive_ok()
+    await trust.record_command_failure(REASON_ARM_NAK, ha_mode="away")
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    capture = _attach_capture()
+
+    panel = MagicMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    panel.keepalive = AsyncMock()
+    zone_body = bytes([MSG_ZONE, 1, 0x01])
+
+    class _Frame:
+        body = zone_body
+
+    async def _recv(*, timeout: float = 1.0) -> object:
+        # Yield once so the test's watchdog loop below still gets scheduled,
+        # then advance the clock — frames keep arriving well inside the idle
+        # window, so recv_message must never time out.
+        await asyncio.sleep(0)
+        clock["t"] += 0.1
+        return _Frame()
+
+    panel.recv_message = _recv
+
+    task = asyncio.create_task(
+        _listen_panel_messages(
+            panel,
+            mqtt,
+            settings=_settings(),
+            topic_prefix="texecom",
+            in_use_zones={1},
+            alarm_state=_SharedAlarmState(payload="disarmed"),
+            idle_timeout=5.0,
+            trust=trust,
+        )
+    )
+    try:
+        for _ in range(500):
+            if trust.live:
+                break
+            await asyncio.sleep(0.01)
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    assert trust.live is True
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    # Recovered via the frame-received path, not the idle-timeout keepalive.
+    assert panel.keepalive.await_count == 0
+    infos = [r for r in capture.records if r.levelno == logging.INFO]
+    recover = [r for r in infos if getattr(r, "panel_link_payload", None) == "ON"]
+    assert recover
+    assert recover[-1].reason == REASON_PANEL_TRAFFIC
+
+
+@pytest.mark.asyncio
 async def test_corroboration_within_fail_window_does_not_request_relogin() -> None:
-    """AC1: successful trust poll inside fail window recovers without tear-down."""
+    """AC2: a resumed keepalive inside the fail window recovers without tear-down."""
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
     await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
@@ -460,15 +547,13 @@ async def test_corroboration_within_fail_window_does_not_request_relogin() -> No
         fail_window=90.0,
         clock=lambda: clock["t"],
     )
-    trust.note_keepalive_ok()
+    await trust.note_keepalive_ok()
     await trust.record_command_failure(REASON_ARM_NAK, ha_mode="away")
     assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
     assert trust.needs_session_relogin() is False
 
     clock["t"] = 2.0
-    panel = MagicMock()
-    panel.get_area_flags = AsyncMock(return_value=bytes(72))
-    await trust.maybe_poll(panel)
+    await trust.note_keepalive_ok()
 
     assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
     assert trust.live is True
@@ -486,12 +571,10 @@ async def test_stuck_past_fail_window_requests_session_relogin() -> None:
 
     clock = {"t": 10.0}
     trust = _trust(mqtt, poll_interval=1.0, fail_window=90.0, clock=lambda: clock["t"])
-    trust.note_keepalive_ok()
+    await trust.note_keepalive_ok()
     capture = _attach_capture()
 
-    panel_fail = MagicMock()
-    panel_fail.get_area_flags = AsyncMock(side_effect=ProtocolError("GetAreaFlags NAK"))
-    await trust.maybe_poll(panel_fail)
+    await trust.record_command_failure(REASON_ARM_NAK, ha_mode="away")
     assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
     assert trust.needs_session_relogin() is False
 
@@ -522,7 +605,7 @@ async def test_reset_after_reconnect_republishes_panel_link_on() -> None:
 
     clock = {"t": 0.0}
     trust = _trust(mqtt, poll_interval=1.0, recover_window=1.0, clock=lambda: clock["t"])
-    trust.note_keepalive_ok()
+    await trust.note_keepalive_ok()
 
     # Simulates MQTT command handler publishing OFF after reconnect already ON.
     await trust.record_command_failure(REASON_ARM_NAK, ha_mode="away")
@@ -671,7 +754,9 @@ async def test_e2e_arm_nak_while_keepalive_ok_marks_degraded() -> None:
 
 @pytest.mark.asyncio
 async def test_e2e_trust_poll_fail_then_recover() -> None:
-    """FakePanel: trust-poll NAK → OFF; later success past recover → ON."""
+    """FakePanel: command reject → OFF; recovers via resumed keepalives even
+    while the reconciliation poll keeps failing throughout (ADR-016 decouples
+    the two)."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
@@ -715,8 +800,10 @@ async def test_e2e_trust_poll_fail_then_recover() -> None:
             await asyncio.sleep(0.02)
         assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
 
-        # Fail the next trust poll only (startup snapshot already completed).
-        panel.nak_next_area_flags = 1
+        # Fail every reconciliation poll from here on — it must never block recovery.
+        panel.nak_next_area_flags = 1000
+        panel.nak_next_arm = True
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
         for _ in range(200):
             if "OFF" in mqtt.payloads_for("texecom/panel_connection/state"):
                 break
@@ -740,6 +827,10 @@ async def test_e2e_trust_poll_fail_then_recover() -> None:
         payloads = mqtt.payloads_for("texecom/panel_connection/state")
         assert "OFF" in payloads
         assert payloads[-1] == "ON"
+        # The reconciliation poll kept running (and kept failing) the whole time —
+        # it had no bearing on this recovery (ADR-016).
+        assert panel.area_flags_calls >= 1
+        assert panel.nak_next_area_flags > 0
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)

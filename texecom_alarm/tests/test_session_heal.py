@@ -237,7 +237,8 @@ async def test_failing_health_check_recovery_stays_off_and_logs(
 
 @pytest.mark.asyncio
 async def test_trust_fail_recovers_via_corroboration_without_relogin() -> None:
-    """AC2 soft path: trust-fail that clears on corroboration — no session tear-down."""
+    """AC2 soft path: trust-fail that clears once keepalives resume — no
+    session tear-down, and no dependency on the reconciliation poll (ADR-016)."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
@@ -279,7 +280,11 @@ async def test_trust_fail_recovers_via_corroboration_without_relogin() -> None:
         logins_before = panel.commands_seen.count(CMD_LOGIN)
         setevent_before = panel.seteventmessages_calls
 
-        panel.nak_next_area_flags = 1
+        # A rejected arm degrades Connection; the reconciliation poll fails
+        # throughout too, to prove recovery never depends on it succeeding.
+        panel.nak_next_area_flags = 1000
+        panel.nak_next_arm = True
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
         await _wait_until(
             lambda: "OFF" in mqtt.payloads_for("texecom/panel_connection/state"),
             task=task,
@@ -298,6 +303,7 @@ async def test_trust_fail_recovers_via_corroboration_without_relogin() -> None:
         assert panel.seteventmessages_calls == setevent_before
         assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
         assert mqtt.payloads_for(availability_topic("texecom"))[-1] == AVAILABILITY_ONLINE
+        assert panel.nak_next_area_flags > 0
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)
@@ -309,7 +315,13 @@ async def test_trust_fail_recovers_via_corroboration_without_relogin() -> None:
 async def test_trust_stuck_past_fail_window_tears_down_and_relogins(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """AC2 stuck path: OFF past fail window → tear-down + re-LOGIN + re-sync → ON."""
+    """AC2 stuck path: OFF past fail window → tear-down + re-LOGIN + re-sync → ON.
+
+    Recover window is deliberately longer than the fail window so a single
+    command reject cannot self-heal via a resumed keepalive before the stuck
+    path fires — isolating the tear-down/relogin mechanism itself, which stays
+    unaffected by the narrower set of degrade triggers (ADR-016).
+    """
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
@@ -339,12 +351,15 @@ async def test_trust_stuck_past_fail_window_tears_down_and_relogins(
                     idle=stop.wait,
                     idle_timeout=0.05,
                     trust_poll_interval=0.05,
-                    trust_recover_window=0.05,
+                    trust_recover_window=5.0,
                     trust_fail_window=0.25,
                 )
             )
             await _wait_until(
-                lambda: mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["ON"],
+                lambda: (
+                    mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["ON"]
+                    and "texecom/alarm/command" in mqtt.subscribed
+                ),
                 task=task,
             )
             zone_before = mqtt.payloads_for("texecom/zone/1/state")[-1]
@@ -354,7 +369,8 @@ async def test_trust_stuck_past_fail_window_tears_down_and_relogins(
             setevent_before = panel.seteventmessages_calls
             cmds_before = list(panel.commands_seen)
 
-            panel.nak_area_flags_until_relogin = True
+            panel.nak_next_arm = True
+            await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
 
             await _wait_until(
                 lambda: "OFF" in mqtt.payloads_for("texecom/panel_connection/state"),
@@ -409,7 +425,12 @@ async def test_trust_stuck_past_fail_window_tears_down_and_relogins(
 
 @pytest.mark.asyncio
 async def test_stuck_trust_heal_never_retries_failed_arm() -> None:
-    """AC3/AC4: heal must not re-fire the failed arm; zone/alarm stay available."""
+    """AC3/AC4: heal must not re-fire the failed arm; zone/alarm stay available.
+
+    Recover window is deliberately longer than the fail window so the single
+    failed arm cannot self-heal via a resumed keepalive before the stuck path
+    fires (see ``test_trust_stuck_past_fail_window_tears_down_and_relogins``).
+    """
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
@@ -438,7 +459,7 @@ async def test_stuck_trust_heal_never_retries_failed_arm() -> None:
                 idle=stop.wait,
                 idle_timeout=0.05,
                 trust_poll_interval=0.05,
-                trust_recover_window=0.05,
+                trust_recover_window=5.0,
                 trust_fail_window=0.25,
             )
         )
@@ -454,7 +475,6 @@ async def test_stuck_trust_heal_never_retries_failed_arm() -> None:
         status_before = list(mqtt.payloads_for(availability_topic("texecom")))
 
         panel.nak_next_arm = True
-        panel.nak_area_flags_until_relogin = True
         await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
         await _wait_until(
             lambda: mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["OFF"],
