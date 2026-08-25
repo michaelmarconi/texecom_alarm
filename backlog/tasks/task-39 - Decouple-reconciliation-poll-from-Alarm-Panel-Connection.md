@@ -4,7 +4,7 @@ title: Decouple reconciliation poll from Alarm Panel Connection
 status: awaiting-review
 assignee: []
 created_date: '2026-08-25 15:27'
-updated_date: '2026-08-25 16:16'
+updated_date: '2026-08-25 19:52'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -53,5 +53,5 @@ Verification: unit+e2e: pytest tests/test_panel_trust.py tests/test_e2e_fake_pan
 Notes/assumptions: Also fixed three tests not named in the plan (two in test_session_heal.py, one in test_e2e_fake_panel.py) that used repeated reconciliation-poll NAKs as their stimulus for the ADR-011 stuck-fail-window relogin path; swapped stimulus to a command reject (ADR-011 fail_window/recover_window mechanism itself untouched).
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
