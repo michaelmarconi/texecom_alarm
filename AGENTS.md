@@ -1,6 +1,6 @@
 # Agent Instructions
 
-<!-- Synthesised by /constitute on 2026-08-23 from: ADR-001, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-010, ADR-011, ADR-012, ADR-013, ADR-014, ADR-015 -->
+<!-- Synthesised by /constitute on 2026-08-25 from: ADR-001, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-011, ADR-012, ADR-013, ADR-014, ADR-015, ADR-016, ADR-017 -->
 <!-- Re-run /constitute after any new ADR is accepted. -->
 
 ## Project
@@ -80,19 +80,6 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - Client, FakePanel, and tests must implement this snapshot command family and flag decode (extra round-trip at startup is required).
 - Exit/entry transient states may still depend on live area pushes — the Disarmed-only spike run did not prove those appear in the flag block.
 
-### ADR-010: Use command-reject events and periodic house-state polling for silent panel-path death detection
-
-**Decision:** Treat a rejected or timed-out arm/disarm as an immediate signal that the panel link may be untrustworthy, and separately poll the panel for current house/arm state on a bounded interval as a trust check — alongside the existing idle heartbeat, not instead of it. Do not judge freshness from "zones went quiet" alone.
-
-**Constraints:**
-- The panel-connection freshness signal must go degraded on arm/disarm reject or timeout even when the idle heartbeat still succeeds.
-- The app must periodically ask the panel for current house/arm state as a corroboration poll; that poll must not replace the idle heartbeat.
-- Missing zone push traffic alone must not be the sole reason to mark the link degraded.
-- After a brief reject, the link may return to live automatically once corroboration succeeds and no recent command failure remains — without requiring a manual add-on restart.
-- Zone and alarm entities stay available with last-known state while the link is degraded (unchanged from ADR-004).
-- Exact poll interval, recover window, and "tens of seconds" bound are not fixed here — settle at plan time unless live walks force a change (30s is the current shipping/plan lock from product docs).
-- Session tear-down/re-login on stuck degrade is settled by ADR-011; in-tap auto-retry of a failed arm/disarm remains out of scope for ADR-010.
-
 ### ADR-011: Use automatic session recovery for mid-run panel path failures
 
 **Decision:** Use automatic session recovery after mid-run panel failure — reconnect when the health check dies, and open a fresh login only when trust stays broken after a short corroboration window.
@@ -150,6 +137,28 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - On refuse, the app must emit a first-class Home Assistant MQTT event that names the mode and does not include the household's reason — not a switch, a sensor, or an unspecified "signal".
 - This does not replace ADR-003: entities stay on MQTT discovery, and household-specific arming/notification *rules* stay out of the app; a generic refuse mechanism *does* live in the app.
 
+### ADR-016: Use keepalive failure and command-reject events for panel-connection detection
+
+**Decision:** The panel-connection signal goes down only when routine check-ins stop succeeding (or the connection drops outright), or when an arm/disarm command is rejected or times out. The periodic background reconciliation poll no longer feeds this signal at all — supersedes ADR-010.
+
+**Constraints:**
+- The connection signal must not depend on the background reconciliation poll's success or failure.
+- A rejected or timed-out arm/disarm command must still immediately mark the connection down.
+- Missed routine check-ins or an outright disconnect must still mark the connection down, and it must recover automatically once check-ins resume — no manual restart required.
+- The background reconciliation poll keeps running for its separate job of correcting the alarm entity if it disagrees with the panel's last-known state; that job is not removed by this decision.
+- The automatic "stayed down too long, log back in again" recovery path (ADR-011) should be re-checked against this narrower set of degrade triggers as ordinary follow-through, not re-decided here.
+- Live confirmation of quiet-house and command-rejection behaviour on this simplified design remains open — inherited from the original detection work (ADR-010/SPIKE-008), not newly resolved here.
+
+### ADR-017: Use a configurable 5-minute interval for the panel reconciliation poll
+
+**Decision:** The panel reconciliation poll (kept running by ADR-016 for its own job, no longer for connectivity) runs every 5 minutes by default; the interval is exposed as an add-on setting, not hardcoded.
+
+**Constraints:**
+- The reconciliation poll's timing must not be tied to any connectivity-detection bound.
+- The interval must be an add-on setting, shipping with 5 minutes as the default, not a fixed value.
+- A missed live update can now sit uncorrected for up to one full interval (5 minutes by default) instead of 30 seconds before the reconciliation poll catches it — not a safety-relevant delay, since no siren/lockout behaviour depends on this poll.
+- Whether the panel's audible pips are actually caused by this poll's prior cadence is unconfirmed; that open question does not change the correctness of this decision either way.
+
 ## Stop conditions
 
 - **[ADR-001]** Before implementing a hybrid or cached last-known-good zone list for when the panel can't be reached at startup: stop and ask a human — that path was left open and not validated by this ADR.
@@ -172,9 +181,6 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - **[ADR-009]** Before treating the area-flags snapshot as auto-detecting Night/Home role names, or hardcoding Part-Arm → HA mode mapping from snapshot bits alone, or treating Away as a Part-Arm slot label: stop and ask a human — Home/Night mapping remains install-time configuration (ADR-008); Away is full arm.
 - **[ADR-009]** Before treating exit/entry (arming/pending) as fully covered by the area-flags snapshot alone: stop and ask a human — the spike only observed Disarmed; live pushes may still be required for those transients.
 - **[ADR-009]** Before treating optional arm-then-re-poll corroboration or wider dual-request area-bitmap layouts as already proven by this ADR: stop and ask a human — those paths were not exercised in the Validated run.
-- **[ADR-010]** Before using missing zone push traffic alone as the sole reason to mark the panel-connection freshness signal degraded: stop and ask a human — that approach was rejected by this ADR.
-- **[ADR-010]** Before replacing the idle heartbeat with the house-state corroboration poll, or dropping either: stop and ask a human — this ADR requires both, with distinct roles.
-- **[ADR-010]** Before treating live quiet-house false-positive rate or live zombie reproduction as already proven by CI/FakePanel alone: stop and ask a human — those remain live-only corroboration.
 - **[ADR-011]** Before treating the household connection-entity rename (e.g. Alarm Panel Connection) as already decided by this ADR: stop and ask a human — recovery mechanism only; naming is a separate product rename.
 - **[ADR-011]** Before treating in-tap auto-retry of a failed arm/disarm as already decided: stop and ask a human — ADR-011 explicitly leaves that out of scope.
 - **[ADR-011]** Before hardcoding the trust-degrade "still stuck" fail window or mid-run heal retry cadence as final, unchangeable values: stop and ask a human — ADR-011 left those for plan time / live tuning.
@@ -192,8 +198,13 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - **[ADR-015]** Before gating disarm on the ready controls, or disarming because a ready control was turned off while already armed: stop and ask a human — both are forbidden.
 - **[ADR-015]** Before recording a refused arm as anything other than a Home Assistant MQTT event that names the mode and not the reason (for example a sensor, a switch, a notify from the app, or a vague "signal"): stop and ask a human — the kind is decided.
 - **[ADR-015]** Before treating FakePanel/CI as proof that a real Home Assistant shows the switches and can automate on the blocked-arm event: stop and ask a human — that remains live-only.
+- **[ADR-016]** Before making the connection signal depend on the background reconciliation poll's outcome again: stop and ask a human — this ADR requires connectivity to be governed only by check-in failure/disconnect and command-reject/timeout.
+- **[ADR-016]** Before treating live quiet-house false-positive rate or live command-rejection zombie reproduction under this simplified detector as already proven by CI/FakePanel alone: stop and ask a human — those remain live-only corroboration.
+- **[ADR-016]** Before changing or removing ADR-011's stuck-degrade re-login timing on the assumption it is unaffected by this narrower set of degrade triggers: stop and ask a human — this ADR flags that check as still open, not already done.
+- **[ADR-017]** Before hardcoding the reconciliation poll interval instead of exposing it as a configurable add-on setting: stop and ask a human — this ADR requires it be configurable.
+- **[ADR-017]** Before claiming the panel's audible pips are caused by (or fixed by changing) this poll's interval: stop and ask a human — this ADR leaves that cause unconfirmed.
 
 ## Testing stance
 
-- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping, silent-death / command-reject / quiet-house detector shapes, mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login per ADR-006, ADR-008, ADR-009, ADR-010, ADR-011 and architecture; forced-disconnect-at-trigger resync/reconnect regression per ADR-014; ready-to-arm refuse — matching switch off means no arm command and unchanged alarm state, including Home Assistant's command path; disarm still works; switch-off while armed does not disarm — per ADR-015) and a fake MQTT client (three ready switches that start on; blocked-arm MQTT event with mode and without reason — per ADR-015).
+- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping, silent-death / command-reject / quiet-house detector shapes, keepalive-failure and command-reject connection detection with an isolated reconciliation-poll timeout not falsely degrading connectivity, mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login per ADR-006, ADR-008, ADR-009, ADR-011, ADR-016 and architecture; forced-disconnect-at-trigger resync/reconnect regression per ADR-014; ready-to-arm refuse — matching switch off means no arm command and unchanged alarm state, including Home Assistant's command path; disarm still works; switch-off while armed does not disarm — per ADR-015) and a fake MQTT client (three ready switches that start on; blocked-arm MQTT event with mode and without reason — per ADR-015).
 - **Live:** `/accept` owns product validation on the real setup (full Away / Night / Home arm sequences, trigger reconnect, real ComIP, quiet-house and zombie corroboration, mid-run heal under contention, which network module the panel address actually points to per ADR-013, whether a correctly-configured install still forces a disconnect at trigger per ADR-014, and that a real Home Assistant shows the ready-to-arm switches and can automate on the blocked-arm event per ADR-015); `/ship` may smoke a real target. Green CI is not product accept.

@@ -1,6 +1,6 @@
 # ADR-010: Use Command-Reject Events and Periodic House-State Polling for Silent Panel-Path Death Detection
 
-**Status:** Accepted ✅  
+**Status:** ~~Accepted~~ Superseded by [ADR-016](adr-016-use-keepalive-failure-and-command-reject-events-for-panel-connection-detection.md)
 **Date:** 2026-08-08  
 **Spike:** [spike-008-silent-panel-path-death-detection/SPIKE.md](../spikes/spike-008-silent-panel-path-death-detection/SPIKE.md)
 
