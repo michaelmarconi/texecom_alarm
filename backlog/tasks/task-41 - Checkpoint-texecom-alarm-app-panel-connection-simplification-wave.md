@@ -1,10 +1,10 @@
 ---
 id: TASK-41
 title: 'Checkpoint: texecom-alarm-app panel-connection-simplification wave'
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-25 15:27'
-updated_date: '2026-08-25 21:49'
+updated_date: '2026-08-25 21:52'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
@@ -16,9 +16,9 @@ ordinal: 35000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 All tests pass (pytest exits 0)
-- [ ] #2 Build/lint clean
-- [ ] #3 FakePanel end-to-end suite (test_e2e_fake_panel.py, test_panel_trust.py) still green
+- [x] #1 All tests pass (pytest exits 0)
+- [x] #2 Build/lint clean
+- [x] #3 FakePanel end-to-end suite (test_e2e_fake_panel.py, test_panel_trust.py) still green
 <!-- AC:END -->
 
 ## Final Summary
@@ -35,12 +35,12 @@ verdict: pass
 Notes: TASK-39/40 both confirmed merged on main; a related follow-up commit (panel-traffic-driven recovery, c5ca23d) was also found merged and does not affect the fail-window mechanism.
 
 ## Build phase
-phase: awaiting-review
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 Neither task marks the alarm or any zone entity unavailable due to a panel-link issue (ADR-004)
-- [ ] #2 The ADR-011 mid-run heal path (TASK-27/TASK-28) is unchanged in behavior
-- [ ] #3 docs/architecture.md's ADR-016/017 description matches the shipped behavior
+- [x] #1 Neither task marks the alarm or any zone entity unavailable due to a panel-link issue (ADR-004)
+- [x] #2 The ADR-011 mid-run heal path (TASK-27/TASK-28) is unchanged in behavior
+- [x] #3 docs/architecture.md's ADR-016/017 description matches the shipped behavior
 <!-- DOD:END -->
