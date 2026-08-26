@@ -1,10 +1,10 @@
 ---
 id: TASK-43
 title: Collapse reconnect to one configured delay; drop attempts settings
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-26 17:19'
-updated_date: '2026-08-26 17:49'
+updated_date: '2026-08-26 17:50'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -37,9 +37,9 @@ Corrective for TASK-9, whose accepted work (the four reconnect settings and the 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Settings/config.yaml/translations expose exactly one reconnect-wait setting (reconnect_delay_seconds, default 5), with the four old attempts/interval settings fully removed from all three
-- [ ] #2 reconnect_after_disconnect uses the same configured delay for every disconnect regardless of the last decoded alarm payload, with no ReconnectProfile/normal-vs-trigger selection left in the code
-- [ ] #3 The reconnect loop still retries a dropped panel connection indefinitely (no attempt-count cap reintroduced), matching ADR-004/ADR-011/ADR-018
+- [x] #1 Settings/config.yaml/translations expose exactly one reconnect-wait setting (reconnect_delay_seconds, default 5), with the four old attempts/interval settings fully removed from all three
+- [x] #2 reconnect_after_disconnect uses the same configured delay for every disconnect regardless of the last decoded alarm payload, with no ReconnectProfile/normal-vs-trigger selection left in the code
+- [x] #3 The reconnect loop still retries a dropped panel connection indefinitely (no attempt-count cap reintroduced), matching ADR-004/ADR-011/ADR-018
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -70,5 +70,5 @@ Verification: unit+config+e2e: cd texecom_alarm && python -m pytest tests/test_r
 Notes/assumptions: test_session_heal.py was not in the task's named file list but constructed Settings directly with the old reconnect fields via a local helper -- updated mechanically to use reconnect_delay_seconds, no dual-profile assertions existed there.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
