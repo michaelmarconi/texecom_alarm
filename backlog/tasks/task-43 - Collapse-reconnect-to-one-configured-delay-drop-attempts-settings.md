@@ -1,9 +1,10 @@
 ---
 id: TASK-43
 title: Collapse reconnect to one configured delay; drop attempts settings
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-26 17:19'
+updated_date: '2026-08-26 17:27'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
