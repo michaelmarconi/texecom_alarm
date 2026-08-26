@@ -4,7 +4,7 @@ title: Retire frame-resync — treat unexpected panel bytes as a reconnect fault
 status: in-progress
 assignee: []
 created_date: '2026-08-26 17:19'
-updated_date: '2026-08-26 17:27'
+updated_date: '2026-08-26 17:28'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -53,3 +53,10 @@ Files affected: texecom_alarm/src/texecom_alarm/protocol/client.py (modify), tex
 
 Test strategy: how we'll know = unit + integration against FakePanel (stand-in); `cd texecom_alarm && python -m pytest tests/test_protocol_client.py tests/test_diagnostics_logging.py -q` — asserts injected garbage now faults the session and triggers reconnect, and that no resync-skip log line is emitted anywhere.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->

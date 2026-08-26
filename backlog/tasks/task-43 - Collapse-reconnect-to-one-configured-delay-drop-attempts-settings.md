@@ -4,7 +4,7 @@ title: Collapse reconnect to one configured delay; drop attempts settings
 status: in-progress
 assignee: []
 created_date: '2026-08-26 17:19'
-updated_date: '2026-08-26 17:27'
+updated_date: '2026-08-26 17:28'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -59,3 +59,10 @@ Files affected: texecom_alarm/src/texecom_alarm/config.py (modify), texecom_alar
 
 Test strategy: how we'll know = unit + config tests; `cd texecom_alarm && python -m pytest tests/test_reconnect.py tests/test_config.py tests/test_e2e_fake_panel.py -q` — asserts the four old settings are gone from Settings/config.yaml/translations, the new reconnect_delay_seconds defaults to 5.0 and is env-overridable, and reconnect timing no longer depends on the last alarm payload.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
