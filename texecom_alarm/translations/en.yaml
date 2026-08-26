@@ -48,19 +48,18 @@ configuration:
     description: >-
       Seconds to wait before retrying after any panel disconnect (default 5).
   trust_fail_window_seconds:
-    name: Trust fail window seconds
+    name: Force reconnect after
     description: >-
-      How long Alarm Panel Connection may stay off from a soft trust failure
-      before the add-on tears down and logs in again (default 90). Brief
-      glitches can clear earlier via a successful house-state check. Tunable
-      for live adjustment — not a fixed forever value.
+      How long Alarm Panel Connection can stay off before the add-on forces a
+      fresh reconnect instead of continuing to wait (default 90 seconds).
+      Short blips often clear on their own before this.
   reconciliation_poll_interval_seconds:
-    name: Reconciliation poll interval seconds
+    name: Recheck interval
     description: >-
-      How often the add-on rechecks the panel's alarm state as a safety net
-      and republishes if it disagrees (default 300 / 5 minutes). Not used for
-      Alarm Panel Connection health — that's driven by keepalives and command
-      results instead.
+      How often the add-on double-checks the alarm state against the panel
+      and corrects it if they disagree (default 300 seconds / 5 minutes).
+      Doesn't affect Alarm Panel Connection — that's driven by keepalives
+      instead.
   log_level:
     name: Log level
     description: >-
