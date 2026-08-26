@@ -1,4 +1,4 @@
-"""Asymmetric reconnect + panel-link connectivity sensor (ADR-002 / ADR-004)."""
+"""Single-delay panel reconnect + panel-link connectivity sensor (ADR-004 / ADR-018 / ADR-019)."""
 
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ from texecom_alarm.protocol.frame import (
     CMD_LOGIN,
     CMD_SETEVENTMESSAGES,
 )
-from texecom_alarm.reconnect import ReconnectProfile, select_reconnect_profile
 from texecom_alarm.zones import Zone
 
 
@@ -49,10 +48,7 @@ def _settings(panel: FakePanel, **overrides: object) -> Settings:
         "part_arm_1": "night",
         "part_arm_2": "home",
         "part_arm_3": "unused",
-        "reconnect_normal_attempts": 2,
-        "reconnect_normal_interval_seconds": 0.01,
-        "reconnect_trigger_attempts": 3,
-        "reconnect_trigger_interval_seconds": 0.02,
+        "reconnect_delay_seconds": 0.01,
     }
     base.update(overrides)
     return Settings(**base)  # type: ignore[arg-type]
@@ -71,31 +67,21 @@ def _static_settings(**overrides: object) -> Settings:
         "part_arm_1": "night",
         "part_arm_2": "home",
         "part_arm_3": "unused",
-        "reconnect_normal_attempts": 4,
-        "reconnect_normal_interval_seconds": 2.5,
-        "reconnect_trigger_attempts": 18,
-        "reconnect_trigger_interval_seconds": 5.0,
+        "reconnect_delay_seconds": 5.0,
     }
     base.update(overrides)
     return Settings(**base)  # type: ignore[arg-type]
 
 
-def test_select_reconnect_profile_normal_when_not_triggered() -> None:
+def test_reconnect_delay_seconds_is_the_single_configured_wait() -> None:
+    """One configured delay covers every disconnect — no trigger-specific interval (ADR-019)."""
     settings = _static_settings()
-    for payload in (None, "disarmed", "armed_away", "armed_home", "armed_night"):
-        profile = select_reconnect_profile(settings, last_alarm_payload=payload)
-        assert profile == ReconnectProfile(name="normal", attempts=4, interval_seconds=2.5)
-
-
-def test_select_reconnect_profile_trigger_when_triggered() -> None:
-    settings = _static_settings()
-    profile = select_reconnect_profile(settings, last_alarm_payload="triggered")
-    assert profile == ReconnectProfile(name="trigger", attempts=18, interval_seconds=5.0)
+    assert settings.reconnect_delay_seconds == 5.0
 
 
 @pytest.mark.asyncio
-async def test_reconnect_normal_budget_connectivity_and_resume_sequence() -> None:
-    """AC-1: ordinary disconnect → normal budget, OFF→ON, LOGIN+snapshots+events."""
+async def test_reconnect_connectivity_and_resume_sequence() -> None:
+    """Ordinary disconnect → OFF→ON, LOGIN+snapshots+events."""
     panel = FakePanel(
         udl_password="1234",
         zones=[
@@ -177,8 +163,8 @@ async def test_reconnect_normal_budget_connectivity_and_resume_sequence() -> Non
 
 
 @pytest.mark.asyncio
-async def test_reconnect_trigger_budget_after_triggered() -> None:
-    """AC-2: disconnect after triggered uses longer trigger profile (shortened)."""
+async def test_reconnect_uses_same_delay_after_triggered() -> None:
+    """Disconnect after a real trigger uses the same delay as any other drop (ADR-019)."""
     panel = FakePanel(
         udl_password="1234",
         zones=[
@@ -190,14 +176,7 @@ async def test_reconnect_trigger_budget_after_triggered() -> None:
     await panel.start()
     try:
         mqtt = RecordingMqttPublisher()
-        # Distinct interval so a sleep spy can prove trigger profile selection.
-        settings = _settings(
-            panel,
-            reconnect_normal_interval_seconds=0.01,
-            reconnect_trigger_interval_seconds=0.05,
-            reconnect_normal_attempts=2,
-            reconnect_trigger_attempts=3,
-        )
+        settings = _settings(panel, reconnect_delay_seconds=0.03)
         stop = asyncio.Event()
         client = PanelClient(
             panel.host,
@@ -253,12 +232,14 @@ async def test_reconnect_trigger_budget_after_triggered() -> None:
                 await asyncio.sleep(0.02)
 
             assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
-            assert any(
-                abs(s - 0.05) < 1e-9 for s in sleeps
-            ), f"expected trigger interval in {sleeps}"
-            assert not any(
-                abs(s - 0.01) < 1e-9 for s in sleeps
-            ), f"normal interval leaked: {sleeps}"
+            # The spy patches the shared asyncio.sleep, so it also catches this
+            # test's own 0.02s polling waits — filter those out to isolate the
+            # reconnect helper's own delay.
+            reconnect_sleeps = [s for s in sleeps if abs(s - 0.02) > 1e-9]
+            assert reconnect_sleeps, "expected at least one reconnect sleep"
+            assert all(
+                abs(s - 0.03) < 1e-9 for s in reconnect_sleeps
+            ), f"expected the single configured delay throughout, got {sleeps}"
 
             stop.set()
             await asyncio.wait_for(task, timeout=2.0)
@@ -304,12 +285,11 @@ async def test_reconnect_helper_uses_existing_zones_no_reenumeration() -> None:
             settings=settings,
             zones=zones,
             zone_count=12,
-            last_alarm_payload="disarmed",
             sleep=instant_sleep,
         )
 
         assert panel.zone_detail_queries == detail_before
-        assert sleeps == [settings.reconnect_normal_interval_seconds]
+        assert sleeps == [settings.reconnect_delay_seconds]
         assert mqtt.payloads_for("texecom/panel_connection/state")[0] == "OFF"
         assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
         assert CMD_LOGIN in panel.commands_seen
@@ -323,7 +303,7 @@ async def test_reconnect_helper_uses_existing_zones_no_reenumeration() -> None:
 
 @pytest.mark.asyncio
 async def test_reconnect_helper_retries_after_failed_attempt() -> None:
-    """Failed connect attempts keep retrying; named budget does not exit the process."""
+    """Failed connect attempts keep retrying indefinitely (no attempt cap, ADR-018)."""
     from texecom_alarm.reconnect import reconnect_after_disconnect
 
     panel = FakePanel(
@@ -366,7 +346,6 @@ async def test_reconnect_helper_retries_after_failed_attempt() -> None:
             settings=settings,
             zones=zones,
             zone_count=12,
-            last_alarm_payload="disarmed",
             sleep=instant_sleep,
         )
         assert payload == "disarmed"

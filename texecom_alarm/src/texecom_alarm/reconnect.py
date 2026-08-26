@@ -1,11 +1,10 @@
-"""Asymmetric panel reconnect after ForcedDisconnect (ADR-002 / ADR-004)."""
+"""Panel reconnect after ForcedDisconnect (ADR-004 / ADR-018 / ADR-019)."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from typing import Protocol
 
 from texecom_alarm.area_state import publish_area_state_snapshot
@@ -22,15 +21,6 @@ from texecom_alarm.zones import Zone
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True, slots=True)
-class ReconnectProfile:
-    """Tunable reconnect budget for one disconnect class (ADR-002)."""
-
-    name: str
-    attempts: int
-    interval_seconds: float
-
-
 class MqttPublisher(Protocol):
     async def publish(
         self,
@@ -40,25 +30,6 @@ class MqttPublisher(Protocol):
         retain: bool = False,
         qos: int = 0,
     ) -> None: ...
-
-
-def select_reconnect_profile(
-    settings: Settings,
-    *,
-    last_alarm_payload: str | None,
-) -> ReconnectProfile:
-    """Choose normal vs trigger budget from last HOUSE alarm MQTT payload."""
-    if last_alarm_payload == "triggered":
-        return ReconnectProfile(
-            name="trigger",
-            attempts=settings.reconnect_trigger_attempts,
-            interval_seconds=settings.reconnect_trigger_interval_seconds,
-        )
-    return ReconnectProfile(
-        name="normal",
-        attempts=settings.reconnect_normal_attempts,
-        interval_seconds=settings.reconnect_normal_interval_seconds,
-    )
 
 
 async def publish_panel_link_state(
@@ -81,39 +52,35 @@ async def reconnect_after_disconnect(
     settings: Settings,
     zones: list[Zone],
     zone_count: int,
-    last_alarm_payload: str | None,
     sleep: Callable[[float], Awaitable[None]] | None = None,
 ) -> str:
-    """Resume after ForcedDisconnect: OFF → budgeted retries → LOGIN+snapshots → ON.
+    """Resume after ForcedDisconnect: OFF → spaced retries → LOGIN+snapshots → ON.
 
-    Never exits the process after exhausting the named attempt budget — keeps
-    retrying at the selected interval so MQTT LWT does not blank alarm/zone
-    entities (ADR-004). Does not re-enumerate zones.
+    Keeps retrying at the one configured delay so MQTT LWT does not blank
+    alarm/zone entities (ADR-004) — there is no attempt cap (ADR-018) and no
+    separate interval for a trigger-caused drop (ADR-019). Does not
+    re-enumerate zones.
     """
     topic_prefix = settings.mqtt_topic_prefix
-    profile = select_reconnect_profile(settings, last_alarm_payload=last_alarm_payload)
+    delay = settings.reconnect_delay_seconds
     sleeper = sleep if sleep is not None else asyncio.sleep
 
     await publish_panel_link_state(mqtt, topic_prefix=topic_prefix, live=False)
     logger.info(
-        "Reconnecting to the panel (%s profile: up to %s spaced attempts, then keep trying).",
-        profile.name,
-        profile.attempts,
+        "Reconnecting to the panel (retrying every %s seconds until it answers).",
+        delay,
     )
 
     attempt = 0
     while True:
         attempt += 1
-        logger.debug(
-            "panel_reconnect_attempt",
-            extra={"profile": profile.name, "attempt": attempt, "budget": profile.attempts},
-        )
+        logger.debug("panel_reconnect_attempt", extra={"attempt": attempt, "delay": delay})
         try:
             await panel.close()
         except Exception:
             logger.exception("Could not close the panel connection before a reconnect attempt.")
 
-        await sleeper(profile.interval_seconds)
+        await sleeper(delay)
 
         try:
             await panel.connect()
@@ -135,18 +102,15 @@ async def reconnect_after_disconnect(
             await panel.set_event_messages()
             await publish_panel_link_state(mqtt, topic_prefix=topic_prefix, live=True)
             logger.info(
-                "Panel reconnect succeeded on attempt %s (%s profile); alarm state is %s.",
+                "Panel reconnect succeeded on attempt %s; alarm state is %s.",
                 attempt,
-                profile.name,
                 alarm_payload,
             )
             return alarm_payload
         except Exception:
             logger.exception(
-                "Reconnect attempt %s (%s profile) failed — will keep trying. "
+                "Reconnect attempt %s failed — will keep trying. "
                 "If this continues, stop other ComIP clients and check panel power/network.",
                 attempt,
-                profile.name,
             )
-            # Named budget is informational; keep retrying indefinitely (ADR-004).
             continue

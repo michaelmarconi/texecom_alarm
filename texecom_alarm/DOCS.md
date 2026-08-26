@@ -82,13 +82,12 @@ Do not assign the same Home Assistant mode (Home or Night) to more than one slot
 
 ### Reconnect behaviour
 
-If the panel connection drops, the add-on retries automatically. After a normal
-disconnect it retries more quickly; after a drop that follows a real alarm it
-waits longer and tries more times. That longer wait is a safety net for when
-Home Assistant still shares the panel’s alarm-reporting module. A dedicated
-ComIP used only for local control is not expected to drop at trigger.
+If the panel connection drops, the add-on retries automatically using the
+same wait interval no matter what caused the disconnect — an ordinary drop
+and a drop that follows a real alarm are treated the same way. It keeps
+retrying indefinitely until the panel answers again.
 
-You can leave the defaults unless you have a reason to change them.
+You can leave the default unless you have a reason to change it.
 
 If Home Assistant is locked out **only during a real alarm** (Disarm does
 nothing; the Texecom app and keypad still work), you may be talking to the
@@ -97,10 +96,7 @@ wrong network module — see
 
 | Option | Default | Meaning |
 |--------|---------|---------|
-| Reconnect attempts (normal) | `4` | How many quick retries after an ordinary drop |
-| Reconnect interval (normal) | `2.5` seconds | Wait between those retries |
-| Reconnect attempts (after trigger) | `18` | Longer retry budget after an alarm |
-| Reconnect interval (after trigger) | `5` seconds | Wait between those retries |
+| Reconnection delay | `5` seconds | Wait before retrying after any panel disconnect |
 
 ### Soft trust recovery
 
