@@ -44,7 +44,7 @@ _CMD_LABELS: dict[int, str] = {
 
 
 class ProtocolError(Exception):
-    """Raised for protocol-level failures that are not recoverable by resync."""
+    """Raised for protocol-level failures; the session ends and reconnects."""
 
 
 class ForcedDisconnect(Exception):
@@ -387,7 +387,7 @@ class PanelClient:
                 continue
             if frame.msg_type != TYPE_RESPONSE:
                 logger.debug(
-                    "panel_unexpected_type_resync_continue",
+                    "panel_unexpected_type_continue",
                     extra={"msg_type": frame.msg_type},
                 )
                 continue
