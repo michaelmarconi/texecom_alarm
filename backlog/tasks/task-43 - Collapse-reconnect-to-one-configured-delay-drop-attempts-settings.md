@@ -4,7 +4,7 @@ title: Collapse reconnect to one configured delay; drop attempts settings
 status: awaiting-review
 assignee: []
 created_date: '2026-08-26 17:19'
-updated_date: '2026-08-26 17:46'
+updated_date: '2026-08-26 17:49'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -70,5 +70,5 @@ Verification: unit+config+e2e: cd texecom_alarm && python -m pytest tests/test_r
 Notes/assumptions: test_session_heal.py was not in the task's named file list but constructed Settings directly with the old reconnect fields via a local helper -- updated mechanically to use reconnect_delay_seconds, no dual-profile assertions existed there.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
