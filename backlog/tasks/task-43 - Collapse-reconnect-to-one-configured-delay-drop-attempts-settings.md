@@ -4,7 +4,7 @@ title: Collapse reconnect to one configured delay; drop attempts settings
 status: in-progress
 assignee: []
 created_date: '2026-08-26 17:19'
-updated_date: '2026-08-26 17:28'
+updated_date: '2026-08-26 17:29'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -64,5 +64,5 @@ Test strategy: how we'll know = unit + config tests; `cd texecom_alarm && python
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
