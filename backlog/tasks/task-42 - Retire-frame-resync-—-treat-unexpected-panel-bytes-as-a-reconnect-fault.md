@@ -1,10 +1,10 @@
 ---
 id: TASK-42
 title: Retire frame-resync — treat unexpected panel bytes as a reconnect fault
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-26 17:19'
-updated_date: '2026-08-26 17:28'
+updated_date: '2026-08-26 17:36'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -57,6 +57,12 @@ Test strategy: how we'll know = unit + integration against FakePanel (stand-in);
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Retired frame-resync in the protocol client — unexpected/non-conforming bytes now raise ForcedDisconnect (session fault -> reconnect) instead of being silently skipped, per ADR-019.
+Changed files: texecom_alarm/src/texecom_alarm/protocol/client.py, texecom_alarm/src/texecom_alarm/protocol/frame.py, texecom_alarm/tests/fake_panel.py, texecom_alarm/tests/test_protocol_client.py, texecom_alarm/tests/test_diagnostics_logging.py
+Verification: unit+integration: cd texecom_alarm && python -m pytest tests/test_protocol_client.py tests/test_diagnostics_logging.py -q -- 36 passing; full suite: python -m pytest -q -- 342 passing; ruff check on all five changed files -- all checks passed.
+Notes/assumptions: Scope kept strictly to this task's named file list. ADR-019's reconnect-interval collapse is TASK-43's job, not touched here.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
