@@ -1,10 +1,10 @@
 ---
 id: TASK-42
 title: Retire frame-resync — treat unexpected panel bytes as a reconnect fault
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-26 17:19'
-updated_date: '2026-08-26 17:45'
+updated_date: '2026-08-26 17:46'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -34,9 +34,9 @@ Corrective for TASK-2 and TASK-19, whose accepted work (frame-resync skip path a
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Injecting non-protocol bytes into a FakePanel session raises ForcedDisconnect and ends the session instead of being silently skipped
-- [ ] #2 No log line anywhere reports a byte-skip/resync event, at any log level
-- [ ] #3 The steady-state listen loop's existing ForcedDisconnect handling reconnects normally after this fault, with no new exception-handling path added
+- [x] #1 Injecting non-protocol bytes into a FakePanel session raises ForcedDisconnect and ends the session instead of being silently skipped
+- [x] #2 No log line anywhere reports a byte-skip/resync event, at any log level
+- [x] #3 The steady-state listen loop's existing ForcedDisconnect handling reconnects normally after this fault, with no new exception-handling path added
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -64,5 +64,5 @@ Verification: unit+integration: cd texecom_alarm && python -m pytest tests/test_
 Notes/assumptions: Scope kept strictly to this task's named file list. ADR-019's reconnect-interval collapse is TASK-43's job, not touched here.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
