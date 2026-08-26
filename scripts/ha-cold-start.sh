@@ -238,6 +238,14 @@ ensure_texecom() {
   ha store reload >/dev/null 2>&1 || true
   ensure_app_installed local_texecom_alarm
 
+  # local_texecom_alarm is the bind-mounted dev copy — always rebuild it from
+  # current on-disk source so cold-start never shows a stale cached build.
+  # Never touch the store-installed GHCR copy (e.g. ebb3b885_texecom_alarm)
+  # here — that one must stay put for /ship update-rehearsal testing.
+  log "Rebuilding local_texecom_alarm from current source"
+  ha apps rebuild local_texecom_alarm --no-progress \
+    || log "WARNING: rebuild failed — continuing with whatever image is cached"
+
   local current_host
   current_host="$(ha apps info local_texecom_alarm --raw-json | jq -r '.data.options.panel_host // empty')"
   if [[ -z "$current_host" ]]; then
@@ -268,10 +276,7 @@ ensure_texecom() {
           part_arm_1: $pa1,
           part_arm_2: $pa2,
           part_arm_3: $pa3,
-          reconnect_normal_attempts: 4,
-          reconnect_normal_interval_seconds: 2.5,
-          reconnect_trigger_attempts: 18,
-          reconnect_trigger_interval_seconds: 5
+          reconnect_delay_seconds: 5
         }')"
       supervisor_set_options local_texecom_alarm "$opts" >/dev/null
     fi

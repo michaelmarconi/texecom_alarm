@@ -58,8 +58,10 @@ What it does:
 
 1. Bring up Supervisor/Core if needed; pin `http.server_port` to **8123**.
 2. Ensure **Mosquitto** (`core_mosquitto`) is installed, has the local-sim MQTT login, and is started.
-3. Ensure **Texecom Alarm** (`local_texecom_alarm`) is installed; if `panel_host` is empty, apply sim defaults from `TEXECOM_*` (or the script’s local placeholders): Part-Arm Night/Home/Unused, MQTT → `core-mosquitto`; start it.
+3. Ensure **Texecom Alarm** (`local_texecom_alarm`) is installed, then **always rebuild it from current source** (`ha apps rebuild`) before touching options/start — cold-start never shows you a stale cached build. If `panel_host` is empty, apply sim defaults from `TEXECOM_*` (or the script's local placeholders): Part-Arm Night/Home/Unused, MQTT → `core-mosquitto`; start it.
 4. Print UI URLs. Prefer **`http://localhost:7123/`**; if that fails, use **`http://localhost:8123/`**.
+
+The rebuild in step 3 only ever targets `local_texecom_alarm` (the bind-mounted dev copy). It never touches the store-installed GHCR copy (e.g. `ebb3b885_texecom_alarm`) — that one must stay exactly as a real household Update would leave it, for `/ship` update-rehearsal testing (see "Household Update rehearsal" below).
 
 Idempotent: re-run is safe (no DB/registry wipe). Override panel/MQTT via `TEXECOM_PANEL_HOST`, `TEXECOM_UDL_PASSWORD`, `TEXECOM_MQTT_*`, `TEXECOM_PART_ARM_{1,2,3}`.
 
@@ -101,6 +103,11 @@ This apps devcontainer shares a **Docker Desktop VM disk**. Reclaim stale host v
 
 ## Refresh local add-on (without a version bump)
 
+Cold-start (above) already rebuilds `local_texecom_alarm` from current source every
+run, so a fresh `./scripts/ha-cold-start.sh` is usually enough. Use the manual
+sequence below when you've changed code **after** cold-start already ran this
+session and don't want to re-run the whole script.
+
 **Do not bump `config.yaml` `version` to force a UI refresh.** Policy: [addon-versioning.md](addon-versioning.md).
 
 ```bash
@@ -127,6 +134,15 @@ After rebuild, Configuration Part-Arm radios should show **Home / Night / Unused
 only (Away excluded — ADR-008). If an older options file still has Away on a
 slot, the app coerces that slot to Unused at load and logs a warning; Away
 continues to arm via full-arm mode byte `0`.
+
+**Stale option keys survive a rebuild.** Rebuilding only refreshes the schema/code —
+it does not strip keys an install already had set that a newer `config.yaml` no
+longer declares (e.g. a setting an ADR removed). Supervisor keeps them in the
+add-on's persisted options untouched. `ha` has no CLI for editing options directly;
+POST the full replacement object to the Supervisor API instead (see
+`supervisor_set_options()` in `scripts/ha-cold-start.sh` for the exact call). Check
+current state with `ha apps info local_texecom_alarm --raw-json | jq .data.options`
+and compare against `texecom_alarm/config.yaml`'s `options:` block.
 
 ## Household Update rehearsal (not local rebuild)
 
