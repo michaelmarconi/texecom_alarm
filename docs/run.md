@@ -152,18 +152,46 @@ What a real HA OS host does on a version bump is Supervisor **Update** on the
 dev copy; it does not exercise missing GHCR tags, stale `#app`, or options
 persistence across a store Update.
 
+**Home Assistant has no add-on downgrade or version pin** — no UI, no CLI flag;
+the only supported rollback is a backup restore. So rehearsing a real FROM→TO
+Update needs a git ref we can legitimately control. This repo keeps a second,
+permanent branch, **`#app-previous`**, deliberately held one release behind
+`#app`, purely for rehearsal — it is never the branch real households point at.
+
+```mermaid
+flowchart LR
+    main["main"] -->|CI syncs on every push| app["#app\n(real households)"]
+    app -->|"ship: force-push app's tip\nonto app-previous"| prev["#app-previous\n(this sim only)"]
+    prev --> rehslug["rehearsal slug"]
+```
+
 Before `/ship` Accept, rehearse that path in this sim HA:
 
 ```bash
 ./scripts/ha-store-upgrade-smoke.sh
-# optional: --from X.Y.Z   --no-restart-local
+# optional: --no-restart-local
 ```
 
-The script stops `local_texecom_alarm`, installs a prior SemVer on the store
-slug, runs Update to the current version, asserts options survived, then stops
-the store copy. **Do not** run the store-installed copy and `local_*` together
-(single ComIP + MQTT discovery clash). Details: Ship skill “This repository”
-overlay; checklist row in [ship.md](ship.md).
+The script stops `local_texecom_alarm`, confirms the rehearsal slug (sourced
+from `#app-previous`) is sitting at the prior version, seeds it with the
+household's real panel/MQTT credentials (under a distinct topic prefix so it
+can't collide with `local_texecom_alarm`'s own MQTT discovery), confirms it
+actually logs into the real panel before touching anything, force-pushes
+`#app`'s current tip onto `#app-previous`, reloads, runs the real Update, and
+asserts options survived **and** it still logs in and publishes discovery
+afterwards — a functional proof the published artifact works, not just that
+version/options fields moved. It then stops the store copy and rebuilds +
+restarts `local_texecom_alarm`, which reclaims MQTT discovery back from the
+rehearsal slug. The branch is left at the new version — self-sustaining for
+next time. **Do not** run the store-installed copy and `local_*` together
+(single ComIP + MQTT discovery clash — the script already sequences this for
+you). Details: Ship skill "This repository" overlay; checklist row in
+[ship.md](ship.md).
+
+Do not repoint a repository's `origin` to fake an old version as a shortcut —
+Supervisor now actively corrects `origin` back to its stored canonical URL the
+moment it notices a mismatch, silently defeating that trick. Use
+`#app-previous` instead.
 
 ## Down
 
