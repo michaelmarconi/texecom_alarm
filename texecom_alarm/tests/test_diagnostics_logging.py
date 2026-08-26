@@ -1,10 +1,9 @@
-"""Integration tests for DEBUG handling and TRACE panel-session logging (AC4–AC6)."""
+"""Integration tests for DEBUG handling and TRACE panel-session logging (AC4–AC5)."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import re
 
 import pytest
 from tests.fake_panel import FakePanel, FakeZone
@@ -18,9 +17,6 @@ from texecom_alarm.protocol.client import PanelClient
 from texecom_alarm.protocol.frame import MSG_LOG, MSG_OUTPUT, MSG_ZONE
 from texecom_alarm.zone_state import handle_zone_message
 from texecom_alarm.zones import Zone
-
-# Modem-style piping observed in SPIKE-002 / ADR-002.
-_MODEM_JUNK = b"ATH0\rATZ\r"
 
 
 def _settings() -> Settings:
@@ -199,71 +195,6 @@ async def test_trace_logs_panel_tx_rx_for_command_and_unsolicited(
         assert any("seq=" in m for m in rx), rx
         assert any(r.levelno == TRACE_LEVEL for r in app_recs if "panel_tx" in r.getMessage())
         assert any(r.levelno == TRACE_LEVEL for r in app_recs if "panel_rx" in r.getMessage())
-        await client.close()
-    finally:
-        root.removeHandler(capture)
-        await panel.stop()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("level", ["WARNING", "INFO", "DEBUG"])
-async def test_modem_skip_does_not_dump_raw_piping_below_trace(
-    level: str,
-    restore_root_logging: None,
-) -> None:
-    """AC6: WARNING–DEBUG must not dump modem piping or flood with skip noise."""
-    configure_logging(level)
-    capture, root = _attach_capture()
-    panel = FakePanel(udl_password="1234")
-    await panel.start()
-    try:
-        client = await _logged_in_client(panel)
-        capture.records.clear()
-
-        panel.inject_before_next_response(_MODEM_JUNK)
-        await client.keepalive()
-
-        app_msgs = _messages(_app_records(capture.records))
-        joined = " ".join(app_msgs).lower()
-        assert "ath0" not in joined
-        assert "atz" not in joined
-        assert _MODEM_JUNK.hex() not in joined
-        # Modem/non-frame skips stay silent at WARNING–DEBUG (no skip flood).
-        assert not any("resync" in m.lower() for m in app_msgs)
-        assert not any(re.search(r"skipped\s+\d+\s+bytes", m) for m in app_msgs)
-        await client.close()
-    finally:
-        root.removeHandler(capture)
-        await panel.stop()
-
-
-@pytest.mark.asyncio
-async def test_trace_emits_compact_resync_skip_notice(
-    restore_root_logging: None,
-) -> None:
-    """AC6: TRACE shows one compact skip notice with hex, not a stream dump."""
-    configure_logging("TRACE")
-    capture, root = _attach_capture()
-    panel = FakePanel(udl_password="1234")
-    await panel.start()
-    try:
-        client = await _logged_in_client(panel)
-        capture.records.clear()
-
-        panel.inject_before_next_response(_MODEM_JUNK)
-        await client.keepalive()
-
-        app_recs = _app_records(capture.records)
-        app_msgs = _messages(app_recs)
-        skip_msgs = [
-            m for m in app_msgs if "panel_resync" in m or re.search(r"skipped\s+\d+\s+bytes", m)
-        ]
-        assert skip_msgs, f"expected compact resync notice at TRACE, got {app_msgs!r}"
-        assert any(r.levelno == TRACE_LEVEL for r in app_recs if r.getMessage() in skip_msgs)
-        # One notice: count + hex of the skipped slice (hunt aid); not per-byte spam.
-        assert len(skip_msgs) == 1, f"expected one compact skip notice, got {skip_msgs!r}"
-        assert any(re.search(r"skipped\s+\d+\s+bytes\s+hex=", m) for m in skip_msgs)
-        assert _MODEM_JUNK.hex() in " ".join(skip_msgs)
         await client.close()
     finally:
         root.removeHandler(capture)

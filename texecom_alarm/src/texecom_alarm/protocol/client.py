@@ -1,4 +1,4 @@
-"""Asyncio Texecom Connect protocol client: login, keepalive, frame resync."""
+"""Asyncio Texecom Connect protocol client: login, keepalive, session teardown."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ class ForcedDisconnect(Exception):
 
 
 class PanelClient:
-    """TCP Connect-protocol session with resync and same-sequence retries."""
+    """TCP Connect-protocol session with same-sequence retries; faults end the session."""
 
     def __init__(
         self,
@@ -401,14 +401,12 @@ class PanelClient:
             return frame.body[1:]
 
     async def _recv_frame(self, *, timeout: float) -> Frame:
-        """Read the next valid frame, skipping non-protocol bytes (ADR-002)."""
+        """Read the next valid frame; unexpected bytes end the session (ADR-019)."""
         reader = self._reader
         if reader is None:
             raise self._not_connected_error(action="read from the session")
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
-        skipped = 0
-        skipped_bytes = bytearray()
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
@@ -423,35 +421,23 @@ class PanelClient:
 
             frame, consumed = try_decode_frame(self._buf)
             if consumed > 0:
-                if frame is None and consumed == 3 and bytes(self._buf[:3]) == b"+++":
+                if frame is None:
+                    if consumed == 3 and bytes(self._buf[:3]) == b"+++":
+                        del self._buf[:consumed]
+                        raise ForcedDisconnect(
+                            f"Panel at {self.host}:{self.port} ended the session (sent +++). "
+                            "The add-on will reconnect. Session drops around arm/disarm or a "
+                            "real trigger are mainly expected when Home Assistant shares the "
+                            "alarm-reporting module — not on a dedicated local ComIP."
+                        )
                     del self._buf[:consumed]
                     raise ForcedDisconnect(
-                        f"Panel at {self.host}:{self.port} ended the session (sent +++). "
-                        "The add-on will reconnect. Session drops around arm/disarm or a "
-                        "real trigger are mainly expected when Home Assistant shares the "
-                        "alarm-reporting module — not on a dedicated local ComIP."
+                        f"Panel at {self.host}:{self.port} sent data outside the Connect "
+                        "protocol. Unexpected bytes now end the session so the add-on can "
+                        "reconnect cleanly, rather than silently tolerating line noise on "
+                        "the wire."
                     )
-                discarded = bytes(self._buf[:consumed])
                 del self._buf[:consumed]
-                if frame is None:
-                    # Non-frame bytes (modem piping, bad CRC lead-in, etc.): silent at
-                    # WARNING–DEBUG; one compact TRACE notice (count + hex) when a
-                    # valid frame follows — not a continuous stream dump.
-                    skipped += consumed
-                    skipped_bytes.extend(discarded)
-                    continue
-                if skipped:
-                    # Cap hex so a long skip stays one compact line (TRACE hunt aid).
-                    _hex_cap = 64
-                    hex_part = bytes(skipped_bytes[:_hex_cap]).hex()
-                    if len(skipped_bytes) > _hex_cap:
-                        hex_part = f"{hex_part}…(+{len(skipped_bytes) - _hex_cap}B)"
-                    logger.log(
-                        TRACE_LEVEL,
-                        "panel_resync skipped %s bytes hex=%s",
-                        skipped,
-                        hex_part,
-                    )
                 logger.log(
                     TRACE_LEVEL,
                     "panel_rx type=%r seq=%s %s bytes",
