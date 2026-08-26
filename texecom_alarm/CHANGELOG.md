@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-26
+
+### Changed
+
+- Reconnect settings simplified: the four separate reconnect-attempts/interval
+  settings (for ordinary vs. trigger disconnects) are replaced by a single
+  **Reconnection delay** (default 5 seconds), used for every disconnect.
+- **Alarm Panel Connection** health no longer depends on the background
+  recheck poll — only missed keepalives, a dropped connection, or a
+  rejected/timed-out arm/disarm command can turn it off.
+- The background recheck poll interval is now configurable (**Recheck
+  interval**, default 5 minutes) — was fixed at 30 seconds, which could cause
+  audible panel pips.
+- Clearer config labels: **Trust fail window seconds** → **Force reconnect
+  after**; **Reconciliation poll interval seconds** → **Recheck interval**.
+
+### Removed
+
+- The app no longer skips unexpected/garbage bytes on the panel connection.
+  Any unexpected data now ends the session and reconnects — this relies on
+  the panel's dedicated local-control module (already a documented install
+  requirement), not on the app tolerating a noisy shared line.
+
 ## [0.1.2] - 2026-08-24
 
 ### Added

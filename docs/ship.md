@@ -14,7 +14,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | Item | Status | Notes |
 |------|--------|-------|
 | Docs-ready Accepted | pass | `docs/docs-ready.md` Accepted 2026-08-24 |
-| Product accept | pass | `docs/acceptance.md` Accepted 2026-08-24 (ready-to-arm refuse walked on local rebuild) |
+| Product accept | pass | `docs/acceptance.md` Accepted, last updated 2026-08-26 (ready-to-arm refuse + simplified config panel walked live) |
 | Secrets in runtime config | pass | Unchanged: UDL / MQTT username+password are Supervisor options (`password` schema) |
 | Secrets hygiene (captures) | pass | `docs/captures/` gitignored; no pcaps in tree |
 | Support path | pass | GitHub issues (templates), `SECURITY.md`, `CONTRIBUTING.md` |
@@ -37,7 +37,13 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 
 ## Live smoke
 
-- `/run --target`: pending — after store Update rehearsal pass
+- `/run --target`: blocked — 2026-08-26: `main` has 40+ commits since `v0.1.2` was tagged
+  (the whole connection-simplification wave — ADR-016 through ADR-019, TASK-39–44 — plus
+  today's config label rewrites and run-recipe fix), none of it released.
+  `texecom_alarm/CHANGELOG.md` still has an empty `## [Unreleased]`. A smoke run against
+  the published `v0.1.2` GHCR image would only prove the *old* code works, not what we're
+  actually shipping. Cut a new release first (see `addon-versioning.md`), then redo Store
+  Update rehearsal and this smoke against the new tag.
 
 ## Review
 | # | Date | Verdict | Issues |
