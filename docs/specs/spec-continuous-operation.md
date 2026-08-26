@@ -116,10 +116,10 @@ that path (they must not exit the process).
 - Panel-link / freshness remains a **separate** signal from entity availability.
 - The panel accepts only one monitoring client connection at a time — retry cannot
   assume a second simultaneous session.
-- Reconnect patience after real alarm triggers vs ordinary disconnects remains
-  asymmetric for post-start recovery (longer/more patient after a trigger);
-  startup recovery must be at least as persistent (keep trying; do not give up and
-  exit).
+- Reconnect uses one configured wait interval for every disconnect regardless of
+  cause (retired 2026-08-26: no separate, longer patience after a real trigger
+  than after an ordinary drop); startup recovery must be at least as persistent
+  (keep trying; do not give up and exit).
 
 ## Review
 

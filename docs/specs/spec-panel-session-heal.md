@@ -166,8 +166,9 @@ Home Assistant, Then its friendly name is **Alarm Panel Connection** (not
 - The panel accepts only one monitoring client at a time — recovery cannot assume
   a second simultaneous session.
 - Patient retry cadence is required; exact intervals are plan/architecture
-  territory (may align with existing mid-run reconnect patience, including
-  asymmetric trigger budgets where those already apply).
+  territory (aligns with the single configured reconnect-wait interval used for
+  every disconnect — asymmetric trigger budgets were retired 2026-08-26 in favour
+  of one interval regardless of cause).
 - Fulfilling AC2 (heal while the path was untrustworthy but the process stayed up)
   may need a formal architecture decision before build if the mechanism is not
   already settled; this spec states the household outcome, not the wire mechanism.
