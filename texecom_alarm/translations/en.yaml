@@ -64,6 +64,13 @@ configuration:
       before the add-on tears down and logs in again (default 90). Brief
       glitches can clear earlier via a successful house-state check. Tunable
       for live adjustment — not a fixed forever value.
+  reconciliation_poll_interval_seconds:
+    name: Reconciliation poll interval seconds
+    description: >-
+      How often the add-on rechecks the panel's alarm state as a safety net
+      and republishes if it disagrees (default 300 / 5 minutes). Not used for
+      Alarm Panel Connection health — that's driven by keepalives and command
+      results instead.
   log_level:
     name: Log level
     description: >-
