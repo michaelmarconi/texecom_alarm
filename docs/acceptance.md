@@ -1,6 +1,6 @@
 # Acceptance
 
-**Date:** 2026-08-24
+**Date:** 2026-08-26
 **State:** Accepted ✅
 <!-- State is exactly one of: Draft 📝 | Accepted ✅ | Deferred ⏸️ -->
 
@@ -16,6 +16,7 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 | 2 | Ready-to-arm switches | ✅ pass | Away, Home, Night present |
 | 3 | Refused arm snaps back | ✅ pass | Away refused; card snapped back; logs showed blocked then MQTT arming |
 | 4 | Disarm still works | ✅ pass | Disarm not gated by ready switches |
+| 5 | Simplified config panel | ✅ pass | Reconnect settings collapsed to one; two labels rewritten in plain language during the walk |
 
 ## Scenario: Replacement still live
 
@@ -61,6 +62,17 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 - **How we know:** Pass if Disarm still works and switch-off did not disarm. Fail if Disarm is refused because a ready switch is off.
 - **Result:** pass — practitioner confirmed Disarm still works.
 
+## Scenario: Simplified config panel (connection-simplification wave)
+
+**Status:** Pass ✅
+
+- **What we're proving:** The connection-simplification wave (ADR-016–019) actually simplified what the household sees — one reconnect-wait setting instead of four, with plain-language labels and no jargon or units baked into titles.
+- **Examples:** Given an install still holding the four retired reconnect settings in its options, When the add-on is rebuilt from current source, Then the Configuration tab shows only Reconnection delay, Force reconnect after, and Recheck interval as the tunable knobs, with no attempts/normal/trigger fields left.
+- **You:** Opened the Texecom Alarm Configuration tab and reviewed the settings and their descriptions.
+- **I check:** Confirmed `config.yaml`'s schema declares only the three settings; cleaned stale option keys via the Supervisor API since a rebuild alone doesn't strip them; rewrote two labels (`trust_fail_window_seconds` → "Force reconnect after", `reconciliation_poll_interval_seconds` → "Recheck interval") that still read as jargon, moving units/defaults into their descriptions.
+- **How we know:** Pass if only the new settings show with clear plain-language labels. Fail if old settings persist or wording still reads as jargon.
+- **Result:** pass — practitioner confirmed the panel reads clearly after the label rewrite ("Much better, accepted").
+
 ## How it went
 
 - Home Assistant was already up; the add-on had just been rebuilt from the UI and was started.
@@ -68,6 +80,7 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 - Refused Away from the alarm card snapped back; add-on logs matched (blocked, then MQTT arming).
 - We did not re-walk Night ×3, every sensor class, TRACE log hunting, the household alarm wrapper, a crash-free month, or a second household install — those stayed accepted limitations from 21 Aug.
 - HomeKit/iOS refuse (button still offered when the matching ready switch is off; that mode still must not arm) cannot be walked until this add-on is on household Home Assistant.
+- 26 Aug: re-entered accept to cover the connection-simplification wave (ADR-016–019, TASK-39–44), which landed after the 24 Aug walk and changed the config panel. Walked the config panel live against the real household panel (`local_texecom_alarm`, `panel_host=192.168.1.51`); the live-reconnect scenario (physically interrupting the panel connection to watch Alarm Panel Connection recover) was deliberately left to the merged tasks' test suites rather than walked live this round.
 
 ## Still open
 
