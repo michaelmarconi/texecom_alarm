@@ -72,7 +72,6 @@ class FakePanel:
         # When True, accept GETDATETIME (count it) but never reply — mid-run
         # health-check death for session-heal tests (ADR-011). Clear to accept again.
         self.silence_keepalive = False
-        self.resync_survivals = 0
         self.interleave_message_before_response: bytes | None = None
         self.stale_sequence_before_response = False
         self.wrong_cmd_before_response = False
@@ -249,7 +248,6 @@ class FakePanel:
             self.inject_bytes = b""
             writer.write(junk)
             await writer.drain()
-            self.resync_survivals += 1
             logger.debug("fake_panel_injected_garbage", extra={"bytes": junk.hex()})
 
         if self.interleave_message_before_response is not None:

@@ -1,4 +1,4 @@
-"""Async client tests against FakePanel — login, resync, keepalive retry."""
+"""Async client tests against FakePanel — login, forced disconnect, keepalive retry."""
 
 from __future__ import annotations
 
@@ -84,13 +84,12 @@ async def test_send_command_requires_connection() -> None:
 
 
 @pytest.mark.asyncio
-async def test_resync_skips_injected_garbage_without_closing(panel: FakePanel) -> None:
+async def test_injected_garbage_raises_forced_disconnect(panel: FakePanel) -> None:
+    """ADR-019: unexpected bytes on the wire fault the session instead of being skipped."""
     client = await _logged_in_client(panel)
     panel.inject_before_next_response(b"ATH0\rATZ\r")
-    payload = await client.keepalive()
-    assert payload is not None
-    assert client.authenticated is True
-    assert panel.resync_survivals == 1
+    with pytest.raises(ForcedDisconnect):
+        await client.keepalive()
     await client.close()
 
 

@@ -1,4 +1,4 @@
-"""Connect-protocol frame encode/decode with single-byte resync helpers."""
+"""Connect-protocol frame encode/decode (ADR-019: unexpected bytes fault, not resync)."""
 
 from __future__ import annotations
 
@@ -72,8 +72,9 @@ def try_decode_frame(buf: bytearray | bytes) -> tuple[Frame | None, int]:
     Returns ``(frame, consumed)``:
     - valid frame → ``(Frame, frame_length)``
     - need more bytes → ``(None, 0)``
-    - non-conforming leading byte / bad length / bad CRC → ``(None, 1)``
-      so callers can discard exactly one byte and resync (ADR-002).
+    - non-conforming leading byte / bad length / bad CRC → ``(None, 1)``;
+      the caller treats this as a session fault and reconnects rather than
+      skipping past it (ADR-019).
     """
     if len(buf) < HEADER_LEN:
         return None, 0
