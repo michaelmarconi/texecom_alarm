@@ -25,10 +25,7 @@ options:
   part_arm_1: Unused
   part_arm_2: Unused
   part_arm_3: Unused
-  reconnect_normal_attempts: 4
-  reconnect_normal_interval_seconds: 2.5
-  reconnect_trigger_attempts: 18
-  reconnect_trigger_interval_seconds: 5
+  reconnect_delay_seconds: 5
   trust_fail_window_seconds: 90
   reconciliation_poll_interval_seconds: 300
   log_level: INFO
@@ -45,10 +42,7 @@ schema:
   part_arm_1: list(Home 🏠|Night 🌙|Unused)
   part_arm_2: list(Home 🏠|Night 🌙|Unused)
   part_arm_3: list(Home 🏠|Night 🌙|Unused)
-  reconnect_normal_attempts: int(1,10000)
-  reconnect_normal_interval_seconds: float(0,)
-  reconnect_trigger_attempts: int(1,10000)
-  reconnect_trigger_interval_seconds: float(0,)
+  reconnect_delay_seconds: float(0,)
   trust_fail_window_seconds: float(0,)
   reconciliation_poll_interval_seconds: float(0,)
   # list(...) tokens are the Configuration radio labels (AC1).

@@ -505,7 +505,6 @@ async def _listen_with_reconnect(
             settings=settings,
             zones=zones,
             zone_count=zone_count,
-            last_alarm_payload=last_alarm_payload,
         )
         alarm_state.payload = last_alarm_payload
         if trust is not None:

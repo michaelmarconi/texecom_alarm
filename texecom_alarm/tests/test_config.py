@@ -16,10 +16,7 @@ from texecom_alarm.config import (
     DEFAULT_PART_ARM_2,
     DEFAULT_PART_ARM_3,
     DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS,
-    DEFAULT_RECONNECT_NORMAL_ATTEMPTS,
-    DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
-    DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
-    DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
+    DEFAULT_RECONNECT_DELAY_SECONDS,
     DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
     DEFAULT_UDL_PASSWORD,
     FULL_ARM_AWAY_MODE_BYTE,
@@ -42,10 +39,7 @@ def _valid_options(**overrides: object) -> dict[str, object]:
         "part_arm_1": DEFAULT_PART_ARM_1,
         "part_arm_2": DEFAULT_PART_ARM_2,
         "part_arm_3": DEFAULT_PART_ARM_3,
-        "reconnect_normal_attempts": DEFAULT_RECONNECT_NORMAL_ATTEMPTS,
-        "reconnect_normal_interval_seconds": DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
-        "reconnect_trigger_attempts": DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
-        "reconnect_trigger_interval_seconds": DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
+        "reconnect_delay_seconds": DEFAULT_RECONNECT_DELAY_SECONDS,
         "trust_fail_window_seconds": DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
         "reconciliation_poll_interval_seconds": DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS,
     }
@@ -72,10 +66,7 @@ def test_load_settings_applies_schema_defaults() -> None:
         part_arm_1=DEFAULT_PART_ARM_1,
         part_arm_2=DEFAULT_PART_ARM_2,
         part_arm_3=DEFAULT_PART_ARM_3,
-        reconnect_normal_attempts=DEFAULT_RECONNECT_NORMAL_ATTEMPTS,
-        reconnect_normal_interval_seconds=DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
-        reconnect_trigger_attempts=DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
-        reconnect_trigger_interval_seconds=DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
+        reconnect_delay_seconds=DEFAULT_RECONNECT_DELAY_SECONDS,
         trust_fail_window_seconds=DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
         reconciliation_poll_interval_seconds=DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS,
     )
@@ -115,32 +106,23 @@ def test_factory_udl_warns_without_logging_password(caplog: pytest.LogCaptureFix
     assert not any("factory-default UDL" in r.message for r in caplog.records)
 
 
-def test_reconnect_settings_defaults_and_overrides() -> None:
+def test_reconnect_delay_defaults_and_overrides() -> None:
     defaults = load_settings(
         {
             "panel_host": "10.0.0.2",
             "mqtt_host": "mqtt.local",
         }
     )
-    assert defaults.reconnect_normal_attempts == 4
-    assert defaults.reconnect_normal_interval_seconds == 2.5
-    assert defaults.reconnect_trigger_attempts == 18
-    assert defaults.reconnect_trigger_interval_seconds == 5.0
+    assert defaults.reconnect_delay_seconds == 5.0
     assert defaults.trust_fail_window_seconds == 90.0
 
     tuned = load_settings(
         _valid_options(
-            reconnect_normal_attempts=2,
-            reconnect_normal_interval_seconds=0.5,
-            reconnect_trigger_attempts=6,
-            reconnect_trigger_interval_seconds=1.25,
+            reconnect_delay_seconds=0.5,
             trust_fail_window_seconds=45.0,
         )
     )
-    assert tuned.reconnect_normal_attempts == 2
-    assert tuned.reconnect_normal_interval_seconds == 0.5
-    assert tuned.reconnect_trigger_attempts == 6
-    assert tuned.reconnect_trigger_interval_seconds == 1.25
+    assert tuned.reconnect_delay_seconds == 0.5
     assert tuned.trust_fail_window_seconds == 45.0
 
 
@@ -185,34 +167,28 @@ def test_invalid_trust_fail_window_raises_clear_error() -> None:
         load_settings(_valid_options(trust_fail_window_seconds=-1))
 
 
-def test_invalid_reconnect_interval_raises_clear_error() -> None:
-    with pytest.raises(ConfigError, match="reconnect_normal_interval_seconds"):
-        load_settings(_valid_options(reconnect_normal_interval_seconds=-1))
+def test_invalid_reconnect_delay_raises_clear_error() -> None:
+    with pytest.raises(ConfigError, match="reconnect_delay_seconds"):
+        load_settings(_valid_options(reconnect_delay_seconds=-1))
 
 
-def test_invalid_reconnect_interval_string_raises_clear_error() -> None:
-    with pytest.raises(ConfigError, match="reconnect_trigger_interval_seconds"):
-        load_settings(_valid_options(reconnect_trigger_interval_seconds="nope"))
+def test_invalid_reconnect_delay_string_raises_clear_error() -> None:
+    with pytest.raises(ConfigError, match="reconnect_delay_seconds"):
+        load_settings(_valid_options(reconnect_delay_seconds="nope"))
 
 
-def test_reconnect_settings_from_environ() -> None:
+def test_reconnect_delay_from_environ() -> None:
     settings = load_settings(
         environ={
             "TEXECOM_PANEL_HOST": "panel.env",
             "TEXECOM_UDL_PASSWORD": "udl",
             "TEXECOM_MQTT_HOST": "broker.env",
-            "TEXECOM_RECONNECT_NORMAL_ATTEMPTS": "3",
-            "TEXECOM_RECONNECT_NORMAL_INTERVAL_SECONDS": "1.5",
-            "TEXECOM_RECONNECT_TRIGGER_ATTEMPTS": "9",
-            "TEXECOM_RECONNECT_TRIGGER_INTERVAL_SECONDS": "3.0",
+            "TEXECOM_RECONNECT_DELAY_SECONDS": "1.5",
             "TEXECOM_TRUST_FAIL_WINDOW_SECONDS": "120",
         },
         options_path="/nonexistent/options.json",
     )
-    assert settings.reconnect_normal_attempts == 3
-    assert settings.reconnect_normal_interval_seconds == 1.5
-    assert settings.reconnect_trigger_attempts == 9
-    assert settings.reconnect_trigger_interval_seconds == 3.0
+    assert settings.reconnect_delay_seconds == 1.5
     assert settings.trust_fail_window_seconds == 120.0
 
 

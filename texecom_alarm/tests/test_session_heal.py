@@ -35,10 +35,7 @@ def _settings(panel: FakePanel, **overrides: object) -> Settings:
         "part_arm_1": "night",
         "part_arm_2": "home",
         "part_arm_3": "unused",
-        "reconnect_normal_attempts": 2,
-        "reconnect_normal_interval_seconds": 0.01,
-        "reconnect_trigger_attempts": 3,
-        "reconnect_trigger_interval_seconds": 0.02,
+        "reconnect_delay_seconds": 0.01,
     }
     base.update(overrides)
     return Settings(**base)  # type: ignore[arg-type]

@@ -1068,10 +1068,7 @@ async def test_e2e_health_check_death_heals_without_restart() -> None:
             part_arm_1="night",
             part_arm_2="home",
             part_arm_3="unused",
-            reconnect_normal_attempts=2,
-            reconnect_normal_interval_seconds=0.01,
-            reconnect_trigger_attempts=3,
-            reconnect_trigger_interval_seconds=0.02,
+            reconnect_delay_seconds=0.01,
         )
         stop = asyncio.Event()
         client = PanelClient(
@@ -1183,10 +1180,7 @@ async def test_e2e_stuck_trust_fail_window_relogins_without_arm_retry() -> None:
             part_arm_1="night",
             part_arm_2="home",
             part_arm_3="unused",
-            reconnect_normal_attempts=2,
-            reconnect_normal_interval_seconds=0.01,
-            reconnect_trigger_attempts=3,
-            reconnect_trigger_interval_seconds=0.02,
+            reconnect_delay_seconds=0.01,
         )
         stop = asyncio.Event()
         client = PanelClient(

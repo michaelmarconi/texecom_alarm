@@ -21,11 +21,9 @@ DEFAULT_PART_ARM_2 = "unused"
 DEFAULT_PART_ARM_3 = "unused"
 # Confirmed SPIKE-005 full-arm Away mode byte (ADR-008: Away is never a Part-Arm slot).
 FULL_ARM_AWAY_MODE_BYTE = 0
-# Tunable reconnect budgets (ADR-002) — not final hardcodes; SPIKE-002 one data point.
-DEFAULT_RECONNECT_NORMAL_ATTEMPTS = 4
-DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS = 2.5
-DEFAULT_RECONNECT_TRIGGER_ATTEMPTS = 18
-DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS = 5.0
+# One reconnect wait interval covers every disconnect cause (ADR-018 / ADR-019)
+# — no attempts cap (the app always keeps retrying) and no normal/trigger split.
+DEFAULT_RECONNECT_DELAY_SECONDS = 5.0
 # Stuck-trust fail window before tear-down / re-login (ADR-011) — tunable, not final.
 DEFAULT_TRUST_FAIL_WINDOW_SECONDS = 90.0
 # Reconciliation poll no longer gates connectivity (ADR-016), so it can run this
@@ -52,10 +50,7 @@ _ENV_KEYS = {
     "part_arm_1": "TEXECOM_PART_ARM_1",
     "part_arm_2": "TEXECOM_PART_ARM_2",
     "part_arm_3": "TEXECOM_PART_ARM_3",
-    "reconnect_normal_attempts": "TEXECOM_RECONNECT_NORMAL_ATTEMPTS",
-    "reconnect_normal_interval_seconds": "TEXECOM_RECONNECT_NORMAL_INTERVAL_SECONDS",
-    "reconnect_trigger_attempts": "TEXECOM_RECONNECT_TRIGGER_ATTEMPTS",
-    "reconnect_trigger_interval_seconds": "TEXECOM_RECONNECT_TRIGGER_INTERVAL_SECONDS",
+    "reconnect_delay_seconds": "TEXECOM_RECONNECT_DELAY_SECONDS",
     "trust_fail_window_seconds": "TEXECOM_TRUST_FAIL_WINDOW_SECONDS",
     "reconciliation_poll_interval_seconds": "TEXECOM_RECONCILIATION_POLL_INTERVAL_SECONDS",
     "log_level": "TEXECOM_LOG_LEVEL",
@@ -81,10 +76,7 @@ class Settings:
     part_arm_1: PartArmLabel
     part_arm_2: PartArmLabel
     part_arm_3: PartArmLabel
-    reconnect_normal_attempts: int = DEFAULT_RECONNECT_NORMAL_ATTEMPTS
-    reconnect_normal_interval_seconds: float = DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS
-    reconnect_trigger_attempts: int = DEFAULT_RECONNECT_TRIGGER_ATTEMPTS
-    reconnect_trigger_interval_seconds: float = DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS
+    reconnect_delay_seconds: float = DEFAULT_RECONNECT_DELAY_SECONDS
     trust_fail_window_seconds: float = DEFAULT_TRUST_FAIL_WINDOW_SECONDS
     reconciliation_poll_interval_seconds: float = DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS
     log_level: LogLevel = DEFAULT_LOG_LEVEL
@@ -206,30 +198,10 @@ def _parse(raw: Mapping[str, Any]) -> Settings:
         part_arm_1=part_arm_1,
         part_arm_2=part_arm_2,
         part_arm_3=part_arm_3,
-        reconnect_normal_attempts=_optional_int(
+        reconnect_delay_seconds=_optional_float(
             raw,
-            "reconnect_normal_attempts",
-            DEFAULT_RECONNECT_NORMAL_ATTEMPTS,
-            minimum=1,
-            maximum=10_000,
-        ),
-        reconnect_normal_interval_seconds=_optional_float(
-            raw,
-            "reconnect_normal_interval_seconds",
-            DEFAULT_RECONNECT_NORMAL_INTERVAL_SECONDS,
-            minimum=0.0,
-        ),
-        reconnect_trigger_attempts=_optional_int(
-            raw,
-            "reconnect_trigger_attempts",
-            DEFAULT_RECONNECT_TRIGGER_ATTEMPTS,
-            minimum=1,
-            maximum=10_000,
-        ),
-        reconnect_trigger_interval_seconds=_optional_float(
-            raw,
-            "reconnect_trigger_interval_seconds",
-            DEFAULT_RECONNECT_TRIGGER_INTERVAL_SECONDS,
+            "reconnect_delay_seconds",
+            DEFAULT_RECONNECT_DELAY_SECONDS,
             minimum=0.0,
         ),
         trust_fail_window_seconds=_optional_float(
