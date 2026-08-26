@@ -1,10 +1,10 @@
 ---
 id: TASK-43
 title: Collapse reconnect to one configured delay; drop attempts settings
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-26 17:19'
-updated_date: '2026-08-26 17:29'
+updated_date: '2026-08-26 17:46'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -63,6 +63,12 @@ Test strategy: how we'll know = unit + config tests; `cd texecom_alarm && python
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Collapsed the four reconnect attempts/interval settings into a single reconnect_delay_seconds (default 5s, "Reconnection delay") used for every disconnect, per ADR-018/ADR-019.
+Changed files: texecom_alarm/src/texecom_alarm/config.py, texecom_alarm/config.yaml, texecom_alarm/translations/en.yaml, texecom_alarm/src/texecom_alarm/reconnect.py, texecom_alarm/src/texecom_alarm/app.py, texecom_alarm/tests/test_reconnect.py, texecom_alarm/tests/test_config.py, texecom_alarm/tests/test_e2e_fake_panel.py, texecom_alarm/tests/test_session_heal.py, texecom_alarm/DOCS.md
+Verification: unit+config+e2e: cd texecom_alarm && python -m pytest tests/test_reconnect.py tests/test_config.py tests/test_e2e_fake_panel.py tests/test_session_heal.py -q -- 71 passing; full suite: python -m pytest -q -- 345 passing; ruff check -- all checks passed.
+Notes/assumptions: test_session_heal.py was not in the task's named file list but constructed Settings directly with the old reconnect fields via a local helper -- updated mechanically to use reconnect_delay_seconds, no dual-profile assertions existed there.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
