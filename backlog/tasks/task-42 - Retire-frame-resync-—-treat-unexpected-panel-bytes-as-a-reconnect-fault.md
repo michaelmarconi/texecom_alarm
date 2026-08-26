@@ -4,7 +4,7 @@ title: Retire frame-resync — treat unexpected panel bytes as a reconnect fault
 status: awaiting-review
 assignee: []
 created_date: '2026-08-26 17:19'
-updated_date: '2026-08-26 17:36'
+updated_date: '2026-08-26 17:45'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -64,5 +64,5 @@ Verification: unit+integration: cd texecom_alarm && python -m pytest tests/test_
 Notes/assumptions: Scope kept strictly to this task's named file list. ADR-019's reconnect-interval collapse is TASK-43's job, not touched here.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
