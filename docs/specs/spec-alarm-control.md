@@ -127,8 +127,11 @@ normal arm/disarm cycles or an actual alarm trigger.
 - Integration restart while the panel is armed or triggered — must re-sync to the
   panel's actual current state on startup, not default to disarmed or another
   incorrect value.
-- Rapid successive arm/disarm commands (e.g. an accidental double-tap) — must not
-  induce the suspected TX/RX collision crash pattern described in the brief.
+- Rapid successive arm/disarm commands (e.g. an accidental double-tap) — the
+  TX/RX collision crash pattern described in the brief is no longer defended
+  against in code; avoiding it depends on the panel being reached over its
+  dedicated local-control module (an install requirement), not on client-side
+  handling.
 
 ## Constraints
 
@@ -178,9 +181,12 @@ normal arm/disarm cycles or an actual alarm trigger.
   keeping the current two-layer (raw entity + template wrapper) architecture.
   (Raised during the spec interview — architectural/technical choice, needs
   `/analyse` investigation.)
-- The exact byte-level command framing for `arm_home` (`part_arm_2`) and for
+- ~~The exact byte-level command framing for `arm_home` (`part_arm_2`) and for
   reliably surviving/reporting a triggered event without inducing the suspected
-  TX/RX collision crash — needs Phase 1 protocol research before this can be built.
+  TX/RX collision crash~~ — **resolved 2026-08-04, superseded 2026-08-26:**
+  `arm_home` framing is settled and covered; the TX/RX collision survival
+  mechanism this originally called for has since been retired from the app
+  in favour of a dedicated-module install requirement.
 - Whether isolating the panel's Com Port from ARC/remote-reporting traffic (see
   `docs/protocol-reference.md`) also shortens or eliminates the trigger-time forced
   disconnect itself, distinct from the ordinary arm/disarm collision noise SPIKE-002

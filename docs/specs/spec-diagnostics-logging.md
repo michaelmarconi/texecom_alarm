@@ -32,9 +32,6 @@ with a known household event timestamp without a separate sniffer.
   panel session traffic at TRACE).
 - Instrumentation so those events actually appear at the stated levels (not only
   a config knob with empty DEBUG/TRACE).
-- Modem / non-frame piping: suppressed at WARNING, INFO, and DEBUG; at TRACE,
-  one compact skip notice per resync burst (byte count + hex of the skipped
-  slice, truncated if long — not a continuous stream dump).
 - Ability to leave TRACE on while hunting a fault and find matching lines around a
   known event time (e.g. a PIR in Home Assistant Activity).
 
@@ -55,7 +52,7 @@ with a known household event timestamp without a separate sniffer.
 | **WARNING** | Quietest production | Arm rejected; command failure | `alarm_command_arm_rejected` · `alarm_command_failed: … NAK` · other warnings/errors only |
 | **INFO** | Day-to-day (default) | Start, enumerate, reconnect, connectivity | Start line · `enumerated_zones` · reconnect ok/degraded · connectivity live/degraded · plus all WARNING+ |
 | **DEBUG** | Did we handle that? | Study PIR open/clear; arm command | Zone name + Secure/Active → MQTT · AREA in exit → arming · named LOG (Alarm Active) · arm/disarm outcomes · snapshot summaries · plus INFO+ |
-| **TRACE** | Hunt wire/session truth | Zombie hunt; quiet keepalives | DEBUG+ · panel tx/rx with command labels and seq · keepalive pairs · compact `panel_resync skipped N bytes hex=…` for non-frames |
+| **TRACE** | Hunt wire/session truth | Zombie hunt; quiet keepalives | DEBUG+ · panel tx/rx with command labels and seq · keepalive pairs |
 
 **Severity rule:** choosing a level includes that level and all more severe
 messages (e.g. INFO includes WARNING and ERROR; TRACE includes everything).
@@ -102,15 +99,13 @@ so an operator can see what hit the session.
 
 - **How we'll know:** integration test (stand-in: FakePanel + captured logs)
 
-### AC6: Modem noise stays out of the way
+### ~~AC6: Modem noise stays out of the way~~ — removed 2026-08-26
 
-Given WARNING, INFO, or DEBUG, When non-frame / modem-style piping is skipped,
-Then logs do not dump that raw piping. Given TRACE, When the same skip happens,
-Then one compact skip notice appears with the skipped byte count and hex of that
-slice (truncated if long) — not a continuous modem stream dump.
-
-- **How we'll know:** unit or integration test (stand-in: bytes that force resync /
-  skip + captured logs)
+**Removed:** the app no longer skips/resyncs past non-frame line noise at all —
+that defense is retired in favour of requiring the panel's dedicated
+local-control module at install time. There is no modem-style piping left for
+any log level to suppress or note, so this AC no longer applies. Number kept
+unused (not reassigned) so AC7 below stays stable against prior build history.
 
 ### AC7: Live hunt without a separate sniffer
 
@@ -147,8 +142,6 @@ without stopping the add-on to run a separate panel listener.
 
 - Default log level is **INFO**.
 - Config dropdown values are exactly **WARNING**, **INFO**, **DEBUG**, **TRACE**.
-- Modem / non-frame piping must not flood WARNING–DEBUG; TRACE may only note
-  compact skips.
 - Logging must not require marking zone/alarm entities unavailable or taking the
   ComIP session down for a second client.
 - Cross-link: connectivity truthfulness / zombie auto-recover remain

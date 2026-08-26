@@ -35,10 +35,13 @@ align Connected→Connection wording via `/correction`. Scope remains **Medium**
 
 Originally the highest-stakes protocol unknown: no public code issued arm/disarm, and
 naive attempts crashed the current add-on. That gap is closed. Build work must honour
-ADR-002 (frame resync + asymmetric reconnect) and ADR-008 (shared commands; Away =
-full arm; Home/Night→Part-Arm configurable). Residual protocol fidelity is covered in
-CI by FakePanel; live-panel accept-walk remains the knowing path for real-panel edge
-cases.
+ADR-008 (shared commands; Away = full arm; Home/Night→Part-Arm configurable).
+**Resolution update (2026-08-26):** ADR-002's frame-resync/asymmetric-reconnect
+portion of this risk's original closure is retired — the app no longer defends
+against TX/RX collision noise in code; that's now a dedicated-module install
+requirement instead. The `arm_home`/trigger framing portion (ADR-008) is
+unaffected. Residual protocol fidelity is covered in CI by FakePanel; live-panel
+accept-walk remains the knowing path for real-panel edge cases.
 
 ### RISK-002: Two-layer vs. collapsed HA entity architecture is undecided
 
@@ -171,16 +174,17 @@ behaviour is live-only knowledge; FakePanel provides a login stand-in in CI.
 | Source | spec-alarm-control.md § Spike Candidates |
 | Category | Technology unknowns |
 | Severity | Low |
-| Severity rationale | ADR-002 already requires the client to survive protocol collisions and asymmetric reconnect after a forced disconnect; whether installer-level Com Port / reporting isolation also shortens that outage is an optional secondary mitigation, not a correctness dependency. |
+| Severity rationale | **Updated 2026-08-26:** the app no longer carries client-side protocol-collision resilience (ADR-002's resync/reconnect defense is retired) — using the panel's dedicated local-control module is now the sole mitigation for Com Port/reporting-traffic collisions, not an optional secondary alongside client-side survival. Still Low: this is a documented install requirement (ADR-013), not an open code gap. |
 | Spike required | No |
 
 SPIKE-002 confirmed the panel force-closes the TCP session on a real trigger and that
-recovery is substantially longer than ordinary arm/disarm disruption. Isolating ARC
-or remote-reporting traffic from the Com Port used by this app might reduce how often
-or how long that happens — or might not. The app must not assume isolation eliminates
-the outage (ADR-004 stop condition). Investigate only if residual household pain after
-shipping resilient reconnect warrants an installer-level experiment — that experiment
-remains live-only; FakePanel/CI may stand in for reconnect-client behaviour only.
+recovery is substantially longer than ordinary arm/disarm disruption — but that finding
+was later shown (SPIKE-010, ADR-014) to be specific to sharing a module with alarm
+reporting, not universal. The app no longer resyncs past collision noise or defends
+against it in any way; isolating ARC/remote-reporting traffic onto the dedicated
+local-control module is now a hard install requirement, not an optional mitigation.
+A household still sharing a module accepts that risk; this app does not detect or warn
+about that misconfiguration today.
 
 ### RISK-012: Silent panel-path death detection mechanism is unproven
 

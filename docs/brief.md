@@ -123,8 +123,10 @@ documented add-on configuration, not hardcoded to this household's own panel.
   integration) equivalent to today's — but there's no dependency anywhere in the HA
   config on today's exact MQTT topic structure, so the wire/topic schema is
   otherwise free.
-- No control over the panel firmware — crash-avoidance has to be handled at the
-  protocol/timing level in this app.
+- No control over the panel firmware — crash-avoidance depends on installing
+  against the panel's dedicated local-control module rather than a module
+  shared with alarm reporting; this app does not defend against noise from a
+  shared module in code.
 - Distributed as a public GitHub Add-on repository (added via the HA Supervisor's
   Add-on Store) — not
   through HACS, and not as a natively-registered `custom_components` integration.

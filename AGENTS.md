@@ -1,6 +1,6 @@
 # Agent Instructions
 
-<!-- Synthesised by /constitute on 2026-08-25 from: ADR-001, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-011, ADR-012, ADR-013, ADR-014, ADR-015, ADR-016, ADR-017 -->
+<!-- Synthesised by /constitute on 2026-08-26 from: ADR-001, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-011, ADR-012, ADR-013, ADR-015, ADR-016, ADR-017, ADR-018, ADR-019 -->
 <!-- Re-run /constitute after any new ADR is accepted. -->
 
 ## Project
@@ -108,20 +108,9 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 **Constraints:**
 - The panel address in add-on configuration is the local module, not the installer signalling module.
 - Do not treat "the panel always kicks Home Assistant off when sirens start" as true for a correctly pointed local module.
-- Frame skipping and reconnect-when-the-socket-dies remain; they are not a licence to target the signalling module on purpose.
+- This ADR's own text notes that reconnect-when-the-socket-dies and frame skipping "remain" as general robustness — ADR-019 has since retired frame skipping (and the asymmetric reconnect interval) entirely, so treat ADR-019 as the current word on that point; ADR-013's own decision (which module to use) is otherwise unaffected.
 - Disarm from Home Assistant during a live alarm is expected to work when the local module is the one in use — not when Home Assistant is still on the signalling module.
 - This does not prove every Premier Elite installation has two separate modules — treat as one household's evidence, not a universal layout.
-
-### ADR-014: Use host-scoped trigger-disconnect assumptions for panel reconnect design
-
-**Decision:** Treat the forced disconnect and wire noise around arm/disarm/trigger as expected mainly when Home Assistant shares a module with the panel's alarm-reporting path, not as universal panel behaviour. Keep every resilience mechanism in place unconditionally, but stop presenting the long, patient post-trigger reconnect wait as the normal, expected outcome for a correctly set-up install.
-
-**Constraints:**
-- Documentation and product messaging must not claim every alarm trigger disconnects Home Assistant from the panel; that is only expected when Home Assistant shares the module used for alarm reporting, or the panel is configured to signal out through every fitted module.
-- The app must keep its "skip unexpected data and reconnect" resilience unconditionally — it costs little and still protects installs that are on the wrong module or have not been checked.
-- The long, patient post-trigger reconnect wait must remain available as a fallback, but must no longer be documented or coded as the expected outcome for someone who has followed the module-selection guidance.
-- Any future claim that a correctly-configured install still drops at trigger needs its own new evidence — it cannot be inherited from the original spike, which ran on the wrong module.
-- The specific reconnect wait times and retry counts remain unset by this ADR — only the expected frequency of exercising that budget has changed.
 
 ### ADR-015: Use ready-to-arm switches and an MQTT blocked-arm event for refusing unready arm commands
 
@@ -159,6 +148,27 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - A missed live update can now sit uncorrected for up to one full interval (5 minutes by default) instead of 30 seconds before the reconciliation poll catches it — not a safety-relevant delay, since no siren/lockout behaviour depends on this poll.
 - Whether the panel's audible pips are actually caused by this poll's prior cadence is unconfirmed; that open question does not change the correctness of this decision either way.
 
+### ADR-018: Use interval-only reconnect budgets for panel disconnects
+
+**Decision:** Drop the attempts settings for panel reconnect entirely; the app always keeps retrying regardless of disconnect type. (Note: ADR-018's own framing of "the wait interval still varies between an ordinary disconnect and a real-trigger disconnect" is narrowed by ADR-019 — one interval now covers every disconnect. ADR-018's removal of the attempts settings and its indefinite-retry requirement stand unchanged.)
+
+**Constraints:**
+- The add-on's config schema must not expose settings that look like they bound behaviour but don't — a genuinely advisory/log-only setting must not be schema-validated.
+- Reconnection after any panel disconnect keeps retrying indefinitely — never a stop condition, regardless of disconnect type.
+- Anyone who previously set the attempts options (via add-on options or their environment-variable equivalents) will need those removed — they are dropped from the schema, not silently ignored.
+
+### ADR-019: Use a single reconnect interval and no line-noise defense for panel disconnects
+
+**Decision:** Retire frame-resync (skipping unexpected/non-protocol bytes) and the asymmetric reconnect interval entirely — supersedes ADR-014. The app assumes it is always reached over the panel's dedicated local-control module (ADR-013) and treats any unexpected data on the connection as a fault to reconnect from, using one configured wait interval regardless of what caused the disconnect.
+
+**Constraints:**
+- Unexpected or non-conforming data on the panel connection must be treated as a fault that triggers a reconnect — not skipped past and parsing resumed.
+- Reconnecting after any panel disconnect uses one configured wait interval; the disconnect's cause (everyday drop vs. one following a real trigger) no longer selects a different interval.
+- Add-on configuration must expose a single reconnect-wait setting, not separate "everyday" and "trigger" interval settings.
+- Product documentation must not describe the app as tolerating a shared or misconfigured module — that stays an install prerequisite (ADR-013), not a runtime accommodation.
+- The app must keep retrying a dropped panel connection indefinitely regardless of this change (ADR-004 / ADR-011 / ADR-018 unaffected).
+- A household still sharing a module with alarm reporting (against the ADR-013 install requirement) gets no code-level protection from this app any more — that risk is knowingly accepted, not detected or warned about.
+
 ## Stop conditions
 
 - **[ADR-001]** Before implementing a hybrid or cached last-known-good zone list for when the panel can't be reached at startup: stop and ask a human — that path was left open and not validated by this ADR.
@@ -189,10 +199,6 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - **[ADR-012]** Before rewriting the Texecom Alarm App peer in a language other than Python 3: stop and ask a human — that requires a superseding ADR.
 - **[ADR-013]** Before assuming every Premier Elite installation has two separate IP modules, or skipping the module-identification step for a new install because this one had two: stop and ask a human — this ADR's evidence is from one household's Elite 88, not a universal layout.
 - **[ADR-013]** Before treating a live survive-trigger or HA-Disarm-during-alarm outcome as something FakePanel/CI can prove: stop and ask a human — this ADR's Confirmation keeps those live-only.
-- **[ADR-014]** Before claiming, in documentation or code, that a correctly-configured install still drops the panel connection at every real trigger: stop and ask a human — this ADR requires its own new evidence for that claim; it cannot be inherited from the original (wrong-module) spike.
-- **[ADR-014]** Before removing, disabling, or making the frame-resync or reconnect-on-drop mechanisms conditional on which module is configured: stop and ask a human — this ADR requires them to stay unconditional.
-- **[ADR-014]** Before hardcoding the reconnect wait times or retry counts as final, unchangeable values: stop and ask a human — this ADR leaves them unset; only the expected frequency of exercising that budget has changed.
-- **[ADR-014]** Before documenting or coding the long post-trigger reconnect wait as the expected outcome for a correctly set-up install: stop and ask a human — this ADR treats it as a safety net for misconfiguration, not the normal path.
 - **[ADR-015]** Before encoding household rules (which doors, guests, time of day, notify wording) in the app: stop and ask a human — those stay in Home Assistant automations; this app only honours the three ready controls and emits the blocked-arm event.
 - **[ADR-015]** Before sending an arm to the panel when the matching ready control is off, including when Home Assistant requested it: stop and ask a human — that would violate this decision.
 - **[ADR-015]** Before gating disarm on the ready controls, or disarming because a ready control was turned off while already armed: stop and ask a human — both are forbidden.
@@ -203,8 +209,12 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - **[ADR-016]** Before changing or removing ADR-011's stuck-degrade re-login timing on the assumption it is unaffected by this narrower set of degrade triggers: stop and ask a human — this ADR flags that check as still open, not already done.
 - **[ADR-017]** Before hardcoding the reconciliation poll interval instead of exposing it as a configurable add-on setting: stop and ask a human — this ADR requires it be configurable.
 - **[ADR-017]** Before claiming the panel's audible pips are caused by (or fixed by changing) this poll's interval: stop and ask a human — this ADR leaves that cause unconfirmed.
+- **[ADR-018]** Before reintroducing an attempt-count cap that stops the reconnect loop after N tries: stop and ask a human — this ADR requires reconnection to retry indefinitely regardless of disconnect type.
+- **[ADR-019]** Before reintroducing a byte-skip/resync path that treats unexpected panel data as recoverable rather than as a reconnect-triggering fault: stop and ask a human — this ADR requires unexpected data to end the session and trigger reconnect.
+- **[ADR-019]** Before reintroducing separate reconnect-wait-interval settings for an everyday disconnect vs. a trigger disconnect: stop and ask a human — this ADR requires one configured interval used for every disconnect cause.
+- **[ADR-019]** Before documenting or coding this app as tolerating a household sharing a module with alarm reporting: stop and ask a human — that protection is retired; the dedicated module (ADR-013) is a hard install prerequisite, not something this app defends around.
 
 ## Testing stance
 
-- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping, silent-death / command-reject / quiet-house detector shapes, keepalive-failure and command-reject connection detection with an isolated reconciliation-poll timeout not falsely degrading connectivity, mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login per ADR-006, ADR-008, ADR-009, ADR-011, ADR-016 and architecture; forced-disconnect-at-trigger resync/reconnect regression per ADR-014; ready-to-arm refuse — matching switch off means no arm command and unchanged alarm state, including Home Assistant's command path; disarm still works; switch-off while armed does not disarm — per ADR-015) and a fake MQTT client (three ready switches that start on; blocked-arm MQTT event with mode and without reason — per ADR-015).
-- **Live:** `/accept` owns product validation on the real setup (full Away / Night / Home arm sequences, trigger reconnect, real ComIP, quiet-house and zombie corroboration, mid-run heal under contention, which network module the panel address actually points to per ADR-013, whether a correctly-configured install still forces a disconnect at trigger per ADR-014, and that a real Home Assistant shows the ready-to-arm switches and can automate on the blocked-arm event per ADR-015); `/ship` may smoke a real target. Green CI is not product accept.
+- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping, silent-death / command-reject / quiet-house detector shapes, keepalive-failure and command-reject connection detection with an isolated reconciliation-poll timeout not falsely degrading connectivity, mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login per ADR-006, ADR-008, ADR-009, ADR-011, ADR-016 and architecture; single-interval reconnect-after-disconnect regression with no resync/skip path per ADR-019; ready-to-arm refuse — matching switch off means no arm command and unchanged alarm state, including Home Assistant's command path; disarm still works; switch-off while armed does not disarm — per ADR-015) and a fake MQTT client (three ready switches that start on; blocked-arm MQTT event with mode and without reason — per ADR-015).
+- **Live:** `/accept` owns product validation on the real setup (full Away / Night / Home arm sequences, trigger reconnect, real ComIP, quiet-house and zombie corroboration, mid-run heal under contention, which network module the panel address actually points to per ADR-013, and that a real Home Assistant shows the ready-to-arm switches and can automate on the blocked-arm event per ADR-015); `/ship` may smoke a real target. Green CI is not product accept.

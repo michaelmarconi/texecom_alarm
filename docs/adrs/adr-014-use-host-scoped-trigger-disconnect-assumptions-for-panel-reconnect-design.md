@@ -1,6 +1,6 @@
 # ADR-014: Use Host-Scoped Trigger-Disconnect Assumptions for Panel Reconnect Design
 
-**Status:** Accepted ✅
+**Status:** ~~Accepted~~ Superseded by [ADR-019](adr-019-use-a-single-reconnect-interval-and-no-line-noise-defense-for-panel-disconnects.md)
 **Date:** 2026-08-21
 **Spike:** [spike-010-comip-stays-online/SPIKE.md](../spikes/spike-010-comip-stays-online/SPIKE.md)
 **Supersedes:** ADR-002

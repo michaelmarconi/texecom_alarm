@@ -4,7 +4,7 @@
 **Date:** 2026-08-01
 **Type:** Feasibility
 **State:** Validated ✅
-**Disposition:** Partially superseded (2026-08-21) — this run was on the installer SmartCom, not the dedicated ComIP. The framing/resync findings still stand as captured. The forced-disconnect-at-trigger and modem-noise findings no longer hold as universal panel behaviour: ADR-014 / SPIKE-010 show the dedicated ComIP stays connected and HA Disarm during a live alarm works. Treat this spike's disconnect finding as scoped to installs sharing a module with alarm reporting, not as an inherent protocol limitation.
+**Disposition:** Partially superseded (2026-08-21), further superseded (2026-08-26) — this run was on the installer SmartCom, not the dedicated ComIP. The framing findings (arm_home byte sequence, trigger event decode) still stand as captured and remain the production behaviour. The forced-disconnect-at-trigger and modem-noise findings no longer hold as universal panel behaviour: ADR-014 / SPIKE-010 show the dedicated ComIP stays connected and HA Disarm during a live alarm works. As of 2026-08-26 the app no longer implements the frame-resync/asymmetric-reconnect mechanism this spike's noise finding originally motivated (ADR-002) — the panel's dedicated local-control module is now a documented install requirement instead, and a household sharing a module accepts the crash/collision risk this spike observed rather than the app defending against it in code. No ADR should be written from the noise/resync portion of this spike going forward.
 
 ## Overview
 
