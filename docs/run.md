@@ -35,6 +35,15 @@ to `/mnt/supervisor/apps/local/texecom_alarm` so Supervisor still sees
 `local_texecom_alarm`. Cold-start and other scripts still run from the **repo
 root** (`./scripts/…`).
 
+The source `texecom_alarm/config.yaml` on `main` has no `image:` key, so
+`local_texecom_alarm` stays buildable from the local Dockerfile. The `#app`
+branch sync (`scripts/build-app-branch-tree.sh`) injects `image:
+ghcr.io/michaelmarconi/texecom-alarm` into the copy it publishes, so the
+store install (`…#app`, e.g. slug `ebb3b885_texecom_alarm`) pulls the
+prebuilt GHCR image instead. Same source, two installs, two different
+`config.yaml`s on disk — see "Refresh local add-on" below if rebuild ever
+breaks.
+
 ## Cold start (deterministic)
 
 From the repo root in the apps devcontainer:
@@ -101,6 +110,18 @@ ha apps info local_texecom_alarm | grep -E '^(version|version_latest):'
 ha apps rebuild local_texecom_alarm
 # or: ha apps update local_texecom_alarm
 ```
+
+`ha apps rebuild` only works while `texecom_alarm/config.yaml` on `main` has
+**no** `image:` key — presence of `image:` makes Supervisor treat an install
+as pull-only, even a `repository: local` bind mount. The GHCR `image:` line
+is injected only into the published `#app` branch, by
+`scripts/build-app-branch-tree.sh` (see Catalogue layout above). If
+`ha apps rebuild local_texecom_alarm` ever fails with "it is image-based",
+check that no one re-added `image:` to the source `config.yaml`, then
+`ha store reload` — if that alone doesn't clear the cached flag, uninstall
+and reinstall `local_texecom_alarm` (options aren't preserved across
+uninstall, so capture `ha apps info local_texecom_alarm --raw-json | jq
+.data.options` first).
 
 After rebuild, Configuration Part-Arm radios should show **Home / Night / Unused**
 only (Away excluded — ADR-008). If an older options file still has Away on a

@@ -7,8 +7,11 @@ url: "https://github.com/michaelmarconi/texecom_alarm"
 arch:
   - aarch64
   - amd64
-# Pre-built images (Track 5). Supervisor substitutes nothing — multi-arch manifest.
-image: "ghcr.io/michaelmarconi/texecom-alarm"
+# No `image:` here on purpose — this file is bind-mounted straight into the
+# local dev install (local_texecom_alarm), so an `image:` key here would make
+# Supervisor treat that dev copy as pull-only and block `ha apps rebuild`.
+# The published `#app` branch gets `image:` injected by
+# scripts/build-app-branch-tree.sh so the store install still pulls GHCR.
 init: false
 options:
   panel_host: ""

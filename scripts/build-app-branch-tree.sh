@@ -60,4 +60,16 @@ for required in texecom_alarm/config.yaml texecom_alarm/DOCS.md; do
   fi
 done
 
+# The store install (#app branch) must pull the published GHCR image rather
+# than build on-device. The source config.yaml intentionally omits `image:`
+# so the local bind-mount dev install (local_texecom_alarm) stays rebuildable
+# — inject it here, only in the published copy.
+IMAGE_REF='ghcr.io/michaelmarconi/texecom-alarm'
+CONFIG="$DEST/texecom_alarm/config.yaml"
+if grep -q '^image:' "$CONFIG"; then
+  echo "source config.yaml already declares image: — remove it, injection happens here" >&2
+  exit 1
+fi
+printf 'image: "%s"\n' "$IMAGE_REF" >> "$CONFIG"
+
 echo "app branch tree OK at $DEST"
