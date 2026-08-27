@@ -29,6 +29,11 @@ from texecom_alarm.protocol.frame import (
 
 logger = logging.getLogger(__name__)
 
+# GETDATETIME's real reply is a fixed 6-byte datetime payload (see FakePanel's
+# _handle_getdatetime and docs/protocol-reference.md); anything else — in
+# particular a 1-byte NAK — means the panel rejected the keepalive check-in.
+_GETDATETIME_REPLY_LENGTH = 6
+
 # Human labels for panel commands that appear in operator-facing errors.
 _CMD_LABELS: dict[int, str] = {
     CMD_LOGIN: "LOGIN",
@@ -182,10 +187,21 @@ class PanelClient:
     async def keepalive(self) -> bytes:
         """Send GETDATETIME; on short timeout retry once with the same sequence."""
         logger.debug("panel_keepalive")
-        return await self.send_command(
+        payload = await self.send_command(
             CMD_GETDATETIME,
             retries=self.keepalive_retries,
         )
+        if len(payload) != _GETDATETIME_REPLY_LENGTH:
+            if len(payload) == 1 and payload[0] == NAK:
+                raise ProtocolError(
+                    "Panel rejected the keepalive check-in (GETDATETIME NAK). "
+                    "Treating the session as dead so the add-on can reconnect."
+                )
+            raise ProtocolError(
+                f"Panel returned an unexpected keepalive reply "
+                f"(wanted {_GETDATETIME_REPLY_LENGTH} datetime bytes, got {len(payload)})."
+            )
+        return payload
 
     async def get_zone_state(self, start: int, count: int) -> bytes:
         """GetZoneState (cmd 2): return exactly ``count`` status bytes.

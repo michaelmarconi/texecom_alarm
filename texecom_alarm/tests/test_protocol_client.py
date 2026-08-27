@@ -116,6 +116,16 @@ async def test_keepalive_timeout_exhausted(panel: FakePanel) -> None:
 
 
 @pytest.mark.asyncio
+async def test_keepalive_nak_raises_protocol_error(panel: FakePanel) -> None:
+    """TASK-45: a rejected (NAK'd) keepalive reply must raise, not succeed silently."""
+    client = await _logged_in_client(panel)
+    panel.nak_keepalive = True
+    with pytest.raises(ProtocolError, match="GETDATETIME|NAK|keepalive"):
+        await client.keepalive()
+    await client.close()
+
+
+@pytest.mark.asyncio
 async def test_interleaved_message_then_response(panel: FakePanel) -> None:
     client = await _logged_in_client(panel)
     panel.interleave_message_before_response = b"\x01\x02\x01"

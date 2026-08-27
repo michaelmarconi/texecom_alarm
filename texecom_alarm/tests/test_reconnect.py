@@ -570,6 +570,78 @@ async def test_keepalive_timeout_enters_reconnect_path() -> None:
 
 
 @pytest.mark.asyncio
+async def test_keepalive_nak_enters_reconnect_path() -> None:
+    """TASK-45/ADR-016: a rejected mid-run keepalive must reconnect, not abort listen."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.2,
+            keepalive_retries=0,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(
+            run(
+                settings,
+                panel=client,
+                mqtt=mqtt,
+                idle=stop.wait,
+                idle_timeout=0.05,
+                trust_poll_interval=60.0,
+            )
+        )
+        for _ in range(150):
+            if mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["ON"]:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        setevent_before = panel.seteventmessages_calls
+        panel.nak_keepalive = True
+
+        for _ in range(300):
+            link = mqtt.payloads_for("texecom/panel_connection/state")
+            resumed = (
+                link.count("OFF") >= 1
+                and link[-1] == "ON"
+                and panel.seteventmessages_calls > setevent_before
+            )
+            if resumed:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        link = mqtt.payloads_for("texecom/panel_connection/state")
+        assert "OFF" in link
+        assert link[-1] == "ON"
+        assert task.done() is False
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
 async def test_non_recoverable_listen_failure_publishes_panel_link_off() -> None:
     """Listen crash must flip panel-link OFF; must not touch alarm/zone availability."""
     mqtt = RecordingMqttPublisher()
