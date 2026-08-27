@@ -12,6 +12,7 @@
 <!-- Update 2026-08-25: /architecture Update — fold ADR-016 (keepalive + command-reject connection detection, superseding ADR-010) and ADR-017 (configurable 5-minute reconciliation poll interval). -->
 <!-- Update 2026-08-26: /architecture Update — fold ADR-019 (retires frame-resync and the asymmetric reconnect interval, supersedes ADR-014; dedicated module is now a hard prerequisite with no client-side line-noise defense). -->
 <!-- Update 2026-08-27: /architecture Update — tighten keepalive-failure wording (ADR-016) so an explicit reject (NAK) of the check-in command itself is stated as a failed check-in alongside timeout, not implied only by "missed"/"unanswered" phrasing (live incident: GETDATETIME NAK'd while TCP stayed open). -->
+<!-- Update 2026-08-27: /architecture Update — keepalive check-in gets a small bounded retry (same command, same sequence) on a wrong-shaped reply or a retry eaten by interleaved `M` traffic, before counting as a failed check-in, matching the panel's documented tendency to defer/shortcut a reply while busy with recent zone traffic (ADR-016/ADR-011 tuning, no new ADR; live incident: 0.2.1 keepalive-NAK fix over-corrected into a same-day reconnect storm, six PIR-burst-correlated drops). -->
 
 ## Overview
 
@@ -325,25 +326,33 @@ Key behaviours:
   (e.g. `GETDATETIME`) periodically; on a 2–3s timeout, resends with the same sequence
   number, matching the panel's own documented and empirically-confirmed recovery
   behaviour (ADR-014). A check-in only counts as successful when the panel returns
-  the expected reply payload (e.g. the 6-byte datetime for `GETDATETIME`) — a timeout
-  *or* an explicit reject (NAK) of the check-in command itself are both a failed
-  check-in, one of the two direct triggers for marking **Alarm Panel Connection**
-  degraded (ADR-016); keepalive success alone does not prove a command will be
-  honoured, which is why command-reject/timeout on arm/disarm is the other trigger.
+  the expected reply payload (e.g. the 6-byte datetime for `GETDATETIME`). A timeout,
+  a reply that arrives but is the wrong shape (e.g. a short/empty-ACK-shaped reply),
+  or a retry attempt entirely eaten by interleaved unsolicited `M` traffic, is retried
+  the same way — same command, same sequence — for a small bounded number of attempts
+  before it counts as a failed check-in: the panel is documented to sometimes defer or
+  shortcut a reply while still busy with recent zone/area traffic, and a single such
+  reply must not be read as a dead session (live incident 2026-08-27; corroborated by
+  external prior art citing the panel's own protocol spec — see
+  `docs/protocol-reference.md`). Only once that retry budget is exhausted is it one of
+  the two direct triggers for marking **Alarm Panel Connection** degraded (ADR-016);
+  keepalive success alone does not prove a command will be honoured, which is why
+  command-reject/timeout on arm/disarm is the other trigger.
 - **Panel-connection detection** (ADR-016, supersedes ADR-010): **Alarm Panel
-  Connection** goes degraded only on (a) missed or rejected routine check-ins
-  (timeout, or the panel replying but with something other than the expected
-  payload — e.g. a NAK to `GETDATETIME`) or an outright disconnect, or (b) an
-  arm/disarm command that is rejected or times out — even
+  Connection** goes degraded only on (a) a routine check-in still missed or rejected
+  after its retry budget above (timeout, or the panel replying but with something
+  other than the expected payload — e.g. a NAK to `GETDATETIME`) or an outright
+  disconnect, or (b) an arm/disarm command that is rejected or times out — even
   while check-ins still succeed. It recovers automatically once check-ins resume
   and no recent command failure remains, without a manual add-on restart. The panel
   reconciliation poll (ADR-017) does **not** feed this signal at all — a poll
   timeout in isolation, with check-ins and commands otherwise healthy, must not
   degrade it. FakePanel must exercise the SPIKE-011 detector shapes for CI,
   including that isolated-poll-timeout non-degrade case.
-- **Mid-run session heal** (ADR-011 / `spec-panel-session-heal`): a failed mid-run
-  health-check — no reply (timeout) or an explicit reject of the check-in itself
-  (e.g. keepalive NAK) — must **not** abort the listen loop — enter the
+- **Mid-run session heal** (ADR-011 / `spec-panel-session-heal`): a mid-run
+  health-check still failed after its retry budget above — no reply (timeout) or an
+  explicit reject of the check-in itself (e.g. keepalive NAK) — must **not** abort
+  the listen loop — enter the
   same keep-trying reconnect path as a clean panel drop (Connection off while
   recovering; re-LOGIN + ADR-006/ADR-009 snapshots + resubscribe when the panel
   accepts). Soft trust-degrade: corroborate first; if still stuck after a bounded fail
