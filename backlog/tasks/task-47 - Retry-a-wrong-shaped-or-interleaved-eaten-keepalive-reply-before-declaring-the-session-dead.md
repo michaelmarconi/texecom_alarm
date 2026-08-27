@@ -3,10 +3,10 @@ id: TASK-47
 title: >-
   Retry a wrong-shaped or interleaved-eaten keepalive reply before declaring the
   session dead
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-27 19:35'
-updated_date: '2026-08-27 22:07'
+updated_date: '2026-08-27 22:08'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -35,9 +35,9 @@ ordinal: 41000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A wrong-shaped or interleaved-M-eaten keepalive reply within the retry budget does not flip Alarm Panel Connection or reconnect the session - verified end-to-end against FakePanel's new transient-burst scenario (mirrors the 2026-08-27 'near miss' cases)
-- [ ] #2 Once the retry budget is genuinely exhausted (every attempt still bad, no M traffic), keepalive() still raises and the app still degrades Connection and reconnects - verified end-to-end, preserving TASK-45's zombie-session fix with no regression
-- [ ] #3 A unit test proves PanelClient.keepalive() retries the same command/sequence on a wrong-shaped reply before raising, and the full existing test suite stays green
+- [x] #1 A wrong-shaped or interleaved-M-eaten keepalive reply within the retry budget does not flip Alarm Panel Connection or reconnect the session - verified end-to-end against FakePanel's new transient-burst scenario (mirrors the 2026-08-27 'near miss' cases)
+- [x] #2 Once the retry budget is genuinely exhausted (every attempt still bad, no M traffic), keepalive() still raises and the app still degrades Connection and reconnects - verified end-to-end, preserving TASK-45's zombie-session fix with no regression
+- [x] #3 A unit test proves PanelClient.keepalive() retries the same command/sequence on a wrong-shaped reply before raising, and the full existing test suite stays green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -80,5 +80,5 @@ Action taken: recorded the decision as code comments at both the keepalive_retri
 Re-review verdict on final HEAD: clean.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
