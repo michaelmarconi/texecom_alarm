@@ -4,7 +4,7 @@ title: Treat a rejected keepalive the same as a timed-out one
 status: in-progress
 assignee: []
 created_date: '2026-08-27 08:59'
-updated_date: '2026-08-27 09:45'
+updated_date: '2026-08-27 09:46'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -57,3 +57,10 @@ ordinal: 39000
 
 How we'll know = unit test (client-level NAK rejection) + end-to-end test against the FakePanel stand-in (full degrade → reconnect → re-sync cycle), run alongside the existing timeout-path tests to confirm no regression there. Command: `cd texecom_alarm && python -m pytest tests/test_protocol_client.py tests/test_reconnect.py tests/test_app_mqtt.py -q`.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
