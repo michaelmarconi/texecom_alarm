@@ -3,10 +3,10 @@ id: TASK-47
 title: >-
   Retry a wrong-shaped or interleaved-eaten keepalive reply before declaring the
   session dead
-status: attention
+status: awaiting-review
 assignee: []
 created_date: '2026-08-27 19:35'
-updated_date: '2026-08-27 21:51'
+updated_date: '2026-08-27 22:06'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -70,8 +70,14 @@ Decision needed: Should login() be decoupled onto its own login_retries knob (le
 ## Build result
 Summary: PanelClient.keepalive() now retries a wrong-shaped keepalive reply (same command/sequence) up to a 3-attempt budget before raising, matching the tightened architecture wording and the 2026-08-27 incident fix.
 Changed files: texecom_alarm/src/texecom_alarm/protocol/client.py, texecom_alarm/tests/fake_panel.py, texecom_alarm/tests/test_protocol_client.py, texecom_alarm/tests/test_reconnect.py, texecom_alarm/CHANGELOG.md
-Verification: unit test (client-level bounded retry + budget-exhausted-still-fails) + end-to-end test against FakePanel (transient-burst no-disconnect + sustained-failure still-disconnects). Ran cd texecom_alarm && python -m pytest tests/test_protocol_client.py tests/test_reconnect.py tests/test_app_mqtt.py -q -> 68 passed. Full repo suite (pytest -q) -> 348 passed, no regressions. ruff check / ruff format --check clean. pytest --cov=texecom_alarm --cov-fail-under=90 -> 92.61%.
-Notes/assumptions: send_command() gained an optional retry_if predicate reusing the existing timeout-retry loop; only keepalive() passes it. Bumped PanelClient.__init__'s keepalive_retries default from 1 to 2 (3 total attempts) per task's documented prior art; this default is also reused by login()'s retry budget (no separate knob existed), raising login's own attempt count from 2 to 3 as a side effect -- no ADR/test constrains login's attempt count separately and all login-focused tests pin keepalive_retries=0 explicitly, so not flagged as a stop condition. Added two new FakePanel scenario controls: wrong_shape_keepalive_replies and eat_keepalive_attempts_with_message, both cleared on successful re-LOGIN mirroring the existing nak_keepalive/silence_keepalive convention. Added a new [Unreleased] section to CHANGELOG.md (none existed previously).
+Verification: unit test (client-level bounded retry + budget-exhausted-still-fails) + end-to-end test against FakePanel (transient-burst no-disconnect + sustained-failure still-disconnects). cd texecom_alarm && python -m pytest tests/test_protocol_client.py tests/test_reconnect.py tests/test_app_mqtt.py -q -> 68 passed. Full repo suite (pytest -q) -> 348 passed. ruff check / ruff format --check clean. pytest --cov=texecom_alarm --cov-fail-under=90 -> ~92.6%.
+Notes/assumptions: send_command() gained an optional retry_if predicate reusing the existing timeout-retry loop; only keepalive() passes it.
+
+## Attention resolution (human decision, 2026-08-27)
+Required review flagged one attention item: bumping PanelClient's shared keepalive_retries default (1->2) also silently raises login()'s own retry budget (2->3 attempts), since login() reuses the same field with no dedicated knob.
+Decision: keep it coupled. One shared "retry attempts" setting covering both keepalive() and login() is intentional -- a user configuring retries wants one dial, not two separate settings for two commands. A dedicated login_retries knob was judged not worth the added config surface.
+Action taken: recorded the decision as code comments at both the keepalive_retries constructor parameter and the login() call site (doc-only commit, no behavior change). Re-verified: 68/68 targeted tests still pass, ruff clean.
+Re-review verdict on final HEAD: clean.
 
 ## Build phase
 phase: awaiting-review
