@@ -1,10 +1,10 @@
 ---
 id: TASK-48
 title: 'Checkpoint: texecom-alarm-app keepalive-retry-budget wave'
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-27 19:36'
-updated_date: '2026-08-27 22:10'
+updated_date: '2026-08-27 22:16'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
@@ -15,9 +15,9 @@ ordinal: 42000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 All tests pass (cd texecom_alarm && python -m pytest -q exits 0)
-- [ ] #2 Build/lint clean (ruff check / ruff format --check, as configured, exit 0)
-- [ ] #3 Reconnect end-to-end suite covers the existing keepalive-timeout/NAK-immediate zombie case and the new bounded-retry transient-burst case, both green
+- [x] #1 All tests pass (cd texecom_alarm && python -m pytest -q exits 0)
+- [x] #2 Build/lint clean (ruff check / ruff format --check, as configured, exit 0)
+- [x] #3 Reconnect end-to-end suite covers the existing keepalive-timeout/NAK-immediate zombie case and the new bounded-retry transient-burst case, both green
 <!-- AC:END -->
 
 ## Final Summary
@@ -31,11 +31,11 @@ verdict: pass
 Notes: PanelClient.keepalive()/send_command() retry the same command+sequence via a shared retries=self.keepalive_retries budget with retry_if gating on reply shape, only raising once exhausted — matches the tightened architecture wording and protocol-reference rows. The shared-knob decision (keepalive_retries used by both keepalive() and login()) is visible as inline code comments at both sites, not merely claimed.
 
 ## Build phase
-phase: awaiting-review
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 Bounded keepalive retry matches docs/architecture.md's tightened Idle keepalive / Panel-connection detection / Mid-run session heal wording, and docs/protocol-reference.md's documented behavioural constraint
-- [ ] #2 TASK-45's zombie-session fix (sustained bad keepalive still degrades Connection and reconnects) has no regression
+- [x] #1 Bounded keepalive retry matches docs/architecture.md's tightened Idle keepalive / Panel-connection detection / Mid-run session heal wording, and docs/protocol-reference.md's documented behavioural constraint
+- [x] #2 TASK-45's zombie-session fix (sustained bad keepalive still degrades Connection and reconnects) has no regression
 <!-- DOD:END -->
