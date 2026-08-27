@@ -76,6 +76,18 @@ class FakePanel:
         # 6-byte datetime payload — rejected (not just unanswered) mid-run
         # health-check for TASK-45 (ADR-016). Cleared on successful re-LOGIN.
         self.nak_keepalive = False
+        # Counts down: while > 0, reply to GETDATETIME with a short/empty-ACK-shaped
+        # reply (not a NAK) instead of the real 6-byte datetime payload — the
+        # 2026-08-27 "wrong-shaped reply" incident (TASK-47 / ADR-016 retry budget).
+        # Decrements once per GETDATETIME regardless of outcome. Cleared on
+        # successful re-LOGIN, same as the other sticky keepalive-fault flags.
+        self.wrong_shape_keepalive_replies = 0
+        # Counts down: while > 0, answer a GETDATETIME attempt with only an
+        # interleaved unsolicited 'M' push and no response at all — the attempt
+        # is entirely "eaten" by collision traffic and the client must time out
+        # and retry with the same sequence (TASK-47 / 2026-08-27 near-miss shape).
+        # Cleared on successful re-LOGIN.
+        self.eat_keepalive_attempts_with_message = 0
         self.interleave_message_before_response: bytes | None = None
         self.stale_sequence_before_response = False
         self.wrong_cmd_before_response = False
@@ -216,6 +228,12 @@ class FakePanel:
         if cmd == CMD_GETDATETIME:
             self.keepalive_attempts += 1
             self.keepalive_sequences.append(frame.sequence)
+            if self.eat_keepalive_attempts_with_message > 0:
+                self.eat_keepalive_attempts_with_message -= 1
+                logger.debug("fake_panel_ate_keepalive_attempt_with_message")
+                writer.write(encode_frame(TYPE_MESSAGE, 0, bytes([MSG_ZONE, 1, 0x01])))
+                await writer.drain()
+                return
 
         handler = self._handlers.get(cmd)
         if handler is None:
@@ -290,12 +308,18 @@ class FakePanel:
             # New session after mid-run health-check death: answer keepalive again.
             self.silence_keepalive = False
             self.nak_keepalive = False
+            self.wrong_shape_keepalive_replies = 0
+            self.eat_keepalive_attempts_with_message = 0
             # Fresh login clears soft-zombie trust-poll NAK (ADR-011 bounded re-login).
             self.nak_area_flags_until_relogin = False
             return bytes([CMD_LOGIN, ACK])
         return bytes([CMD_LOGIN, 0x15])
 
     def _handle_getdatetime(self, frame: Frame) -> bytes:
+        if self.wrong_shape_keepalive_replies > 0:
+            self.wrong_shape_keepalive_replies -= 1
+            # Short/empty-ACK-shaped reply — not a NAK, just the wrong length.
+            return bytes([CMD_GETDATETIME, ACK])
         if self.nak_keepalive:
             return bytes([CMD_GETDATETIME, NAK])
         # Minimal opaque datetime payload after the command echo byte.

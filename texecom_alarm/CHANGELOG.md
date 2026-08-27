@@ -5,6 +5,20 @@ All notable changes to this Add-on are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Keepalive check-ins now retry a wrong-shaped reply (e.g. a short/empty-ACK-shaped
+  reply instead of the real 6-byte datetime payload) with the same command and
+  sequence, the same as a timeout — up to 3 attempts before the check-in counts as
+  failed. Previously any wrong-shaped reply raised immediately with zero retry,
+  which is what caused the 0.2.1 reconnect-storm incident (2026-08-27): the panel
+  legitimately answering late or short right after a burst of sensor activity was
+  being misread as a dead session and forced unnecessary reconnects during ordinary
+  occupancy. The real dead-session case is still caught just as fast once the
+  (now slightly larger) retry budget is genuinely exhausted.
+
 ## [0.2.1] - 2026-08-27
 
 ### Fixed
