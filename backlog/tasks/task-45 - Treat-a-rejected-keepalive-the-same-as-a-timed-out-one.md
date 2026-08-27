@@ -1,9 +1,10 @@
 ---
 id: TASK-45
 title: Treat a rejected keepalive the same as a timed-out one
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-27 08:59'
+updated_date: '2026-08-27 09:45'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
