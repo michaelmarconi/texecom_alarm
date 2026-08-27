@@ -3,9 +3,10 @@ id: TASK-47
 title: >-
   Retry a wrong-shaped or interleaved-eaten keepalive reply before declaring the
   session dead
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-27 19:35'
+updated_date: '2026-08-27 19:40'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
