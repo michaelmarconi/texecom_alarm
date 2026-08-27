@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A rejected keepalive reply (panel answers but refuses the health check) now
+  degrades **Alarm Panel Connection** and triggers reconnect + re-sync, the
+  same as an unanswered one. Previously only a silent/unanswered keepalive
+  was treated as a dead session, so a panel that kept rejecting check-ins
+  while the TCP connection stayed open could leave Connection stuck showing
+  online with live monitoring silently stopped.
+
 ## [0.2.0] - 2026-08-26
 
 ### Changed

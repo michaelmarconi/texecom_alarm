@@ -72,6 +72,10 @@ class FakePanel:
         # When True, accept GETDATETIME (count it) but never reply — mid-run
         # health-check death for session-heal tests (ADR-011). Clear to accept again.
         self.silence_keepalive = False
+        # When True, reply to GETDATETIME with a 1-byte NAK instead of the normal
+        # 6-byte datetime payload — rejected (not just unanswered) mid-run
+        # health-check for TASK-45 (ADR-016). Cleared on successful re-LOGIN.
+        self.nak_keepalive = False
         self.interleave_message_before_response: bytes | None = None
         self.stale_sequence_before_response = False
         self.wrong_cmd_before_response = False
@@ -285,12 +289,15 @@ class FakePanel:
             self.authenticated = True
             # New session after mid-run health-check death: answer keepalive again.
             self.silence_keepalive = False
+            self.nak_keepalive = False
             # Fresh login clears soft-zombie trust-poll NAK (ADR-011 bounded re-login).
             self.nak_area_flags_until_relogin = False
             return bytes([CMD_LOGIN, ACK])
         return bytes([CMD_LOGIN, 0x15])
 
     def _handle_getdatetime(self, frame: Frame) -> bytes:
+        if self.nak_keepalive:
+            return bytes([CMD_GETDATETIME, NAK])
         # Minimal opaque datetime payload after the command echo byte.
         return bytes([CMD_GETDATETIME, 0x18, 0x08, 0x04, 0x0E, 0x25, 0x00])
 

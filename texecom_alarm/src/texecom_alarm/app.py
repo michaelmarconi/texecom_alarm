@@ -573,6 +573,16 @@ async def _listen_panel_messages(
                         f"Panel health check went unanswered — treating the session as dead "
                         f"and reconnecting. {exc}"
                     ) from exc
+                except ProtocolError as exc:
+                    # A rejected (NAK'd) mid-run health check is just as dead a
+                    # session as an unanswered one (ADR-016): same keep-trying
+                    # reconnect path, not the generic except-Exception fallthrough.
+                    if trust is not None:
+                        trust.note_keepalive_failed()
+                    raise ForcedDisconnect(
+                        "Panel rejected the keepalive check-in — treating the session as dead "
+                        f"and reconnecting. {exc}"
+                    ) from exc
                 except Exception:
                     if trust is not None:
                         trust.note_keepalive_failed()
