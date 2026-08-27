@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 
 from texecom_alarm.logging_setup import TRACE_LEVEL
 from texecom_alarm.protocol.frame import (
@@ -67,7 +68,11 @@ class PanelClient:
         *,
         login_delay: float = 0.5,
         response_timeout: float = 2.0,
-        keepalive_retries: int = 1,
+        keepalive_retries: int = 2,
+        # `keepalive_retries` is deliberately one shared "retry attempts" dial for
+        # both keepalive() and login() rather than two separate settings — a user
+        # configuring this only wants "how many times do you retry", not a choice
+        # between two knobs for two commands (decision: 2026-08-27, TASK-47 review).
     ) -> None:
         self.host = host
         self.port = port
@@ -173,6 +178,11 @@ class PanelClient:
 
     async def login(self) -> None:
         logger.debug("panel_login")
+        # Deliberately reuses keepalive_retries as login's own retry budget too —
+        # one shared "retry attempts" setting for the whole session, not a second
+        # knob (decision: 2026-08-27, TASK-47 review). Raising keepalive_retries
+        # for the keepalive bounded-retry fix therefore also raises login's own
+        # attempt count; that's accepted, not a bug.
         payload = await self.send_command(
             CMD_LOGIN,
             self.udl_password.encode("ascii"),
@@ -185,20 +195,30 @@ class PanelClient:
         raise ProtocolError(self.login_failure_message(payload))
 
     async def keepalive(self) -> bytes:
-        """Send GETDATETIME; on short timeout retry once with the same sequence."""
+        """Send GETDATETIME; retry same command/sequence on timeout, an attempt eaten
+        by interleaved 'M' traffic, or a reply that arrives but is the wrong shape
+        (e.g. a short/empty-ACK-shaped reply) — the panel is documented to sometimes
+        defer or shortcut a reply while still busy with recent zone/area traffic, and
+        a single such reply must not be read as a dead session (2026-08-27 incident;
+        see docs/protocol-reference.md). Only once the bounded retry budget
+        (``keepalive_retries``) is exhausted does this raise.
+        """
         logger.debug("panel_keepalive")
         payload = await self.send_command(
             CMD_GETDATETIME,
             retries=self.keepalive_retries,
+            retry_if=lambda reply: len(reply) != _GETDATETIME_REPLY_LENGTH,
         )
         if len(payload) != _GETDATETIME_REPLY_LENGTH:
+            attempts = self.keepalive_retries + 1
             if len(payload) == 1 and payload[0] == NAK:
                 raise ProtocolError(
-                    "Panel rejected the keepalive check-in (GETDATETIME NAK). "
+                    f"Panel rejected the keepalive check-in (GETDATETIME NAK) after "
+                    f"{attempts} attempt(s). "
                     "Treating the session as dead so the add-on can reconnect."
                 )
             raise ProtocolError(
-                f"Panel returned an unexpected keepalive reply "
+                f"Panel returned an unexpected keepalive reply after {attempts} attempt(s) "
                 f"(wanted {_GETDATETIME_REPLY_LENGTH} datetime bytes, got {len(payload)})."
             )
         return payload
@@ -340,7 +360,17 @@ class PanelClient:
         body: bytes = b"",
         *,
         retries: int = 1,
+        retry_if: Callable[[bytes], bool] | None = None,
     ) -> bytes:
+        """Send ``cmd`` and return its reply, retrying with the same sequence on:
+
+        - a timeout (no reply within ``response_timeout``, including an attempt
+          entirely eaten by interleaved unsolicited ``'M'`` traffic), or
+        - a reply that arrives but fails ``retry_if`` (e.g. the wrong shape) —
+          when ``retry_if`` is given, it shares the same ``retries`` budget as
+          timeouts. If the budget is exhausted, the last (still-invalid) reply
+          is returned as-is so the caller can decide how to fail.
+        """
         async with self._io_lock:
             if self._writer is None or self._reader is None:
                 raise self._not_connected_error(action="send commands")
@@ -366,7 +396,7 @@ class PanelClient:
                         len(frame),
                     )
                     try:
-                        return await self._await_response(cmd, seq)
+                        payload = await self._await_response(cmd, seq)
                     except TimeoutError:
                         attempt += 1
                         if attempt > retries:
@@ -377,6 +407,17 @@ class PanelClient:
                             "panel_command_retry",
                             extra={"cmd": cmd, "seq": seq, "attempt": attempt},
                         )
+                        continue
+                    if retry_if is not None and retry_if(payload):
+                        attempt += 1
+                        if attempt > retries:
+                            return payload
+                        logger.debug(
+                            "panel_command_retry_invalid_reply",
+                            extra={"cmd": cmd, "seq": seq, "attempt": attempt},
+                        )
+                        continue
+                    return payload
             finally:
                 self._pending_cmd = None
 

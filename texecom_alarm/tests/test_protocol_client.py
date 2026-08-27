@@ -116,6 +116,49 @@ async def test_keepalive_timeout_exhausted(panel: FakePanel) -> None:
 
 
 @pytest.mark.asyncio
+async def test_keepalive_retries_wrong_shaped_reply_within_budget(panel: FakePanel) -> None:
+    """TASK-47: a wrong-shaped (not-NAK) reply within the retry budget must not raise —
+    same command/sequence retried until the real 6-byte datetime payload comes back."""
+    client = await _logged_in_client(panel)
+    panel.wrong_shape_keepalive_replies = client.keepalive_retries  # recovers on final attempt
+    payload = await client.keepalive()
+    assert len(payload) == 6
+    assert panel.keepalive_attempts == client.keepalive_retries + 1
+    # Every attempt for this keepalive() call reused the same sequence number.
+    attempts = panel.keepalive_sequences[-(client.keepalive_retries + 1) :]
+    assert len(set(attempts)) == 1
+    assert client.authenticated is True
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_keepalive_wrong_shaped_reply_budget_exhausted_raises(panel: FakePanel) -> None:
+    """TASK-47: once every attempt in the budget is still wrong-shaped, keepalive() must
+    still raise — preserving TASK-45's zombie-session fix with no regression."""
+    client = await _logged_in_client(panel)
+    panel.wrong_shape_keepalive_replies = 1000  # never recovers within the budget
+    with pytest.raises(ProtocolError, match="unexpected keepalive reply"):
+        await client.keepalive()
+    assert panel.keepalive_attempts == client.keepalive_retries + 1
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_keepalive_survives_interleaved_message_eating_one_attempt(
+    panel: FakePanel,
+) -> None:
+    """TASK-47: an attempt entirely eaten by interleaved 'M' traffic (no response at all)
+    must be retried the same way as a wrong-shaped reply, within the same budget."""
+    client = await _logged_in_client(panel, response_timeout=0.15)
+    panel.eat_keepalive_attempts_with_message = 1
+    payload = await client.keepalive()
+    assert len(payload) == 6
+    assert panel.keepalive_attempts == 2
+    assert panel.keepalive_sequences[-2] == panel.keepalive_sequences[-1]
+    await client.close()
+
+
+@pytest.mark.asyncio
 async def test_keepalive_nak_raises_protocol_error(panel: FakePanel) -> None:
     """TASK-45: a rejected (NAK'd) keepalive reply must raise, not succeed silently."""
     client = await _logged_in_client(panel)

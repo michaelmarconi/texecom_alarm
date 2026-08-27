@@ -642,6 +642,153 @@ async def test_keepalive_nak_enters_reconnect_path() -> None:
 
 
 @pytest.mark.asyncio
+async def test_keepalive_wrong_shape_transient_burst_does_not_flip_connection() -> None:
+    """TASK-47: a transient burst of wrong-shaped keepalive replies within the retry
+    budget must not flip Alarm Panel Connection or tear down the session — mirrors
+    the 2026-08-27 'near miss' incident (docs/protocol-reference.md)."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.2,
+            keepalive_retries=2,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(
+            run(
+                settings,
+                panel=client,
+                mqtt=mqtt,
+                idle=stop.wait,
+                idle_timeout=0.05,
+                trust_poll_interval=60.0,
+            )
+        )
+        for _ in range(150):
+            if mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["ON"]:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        attempts_before = panel.keepalive_attempts
+        panel.wrong_shape_keepalive_replies = 2  # recovers on the final (3rd) attempt
+
+        for _ in range(200):
+            if (
+                panel.wrong_shape_keepalive_replies == 0
+                and panel.keepalive_attempts > attempts_before
+            ):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        # Give a further beat to prove Connection never degraded afterward either.
+        await asyncio.sleep(0.3)
+        link = mqtt.payloads_for("texecom/panel_connection/state")
+        assert "OFF" not in link
+        assert link[-1] == "ON"
+        assert task.done() is False
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_keepalive_wrong_shape_sustained_failure_still_reconnects() -> None:
+    """TASK-47: once the retry budget is genuinely exhausted (every attempt still
+    wrong-shaped, no M traffic), keepalive() still raises and the app still degrades
+    Connection and reconnects — preserving TASK-45's zombie-session fix, no regression."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.2,
+            keepalive_retries=1,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(
+            run(
+                settings,
+                panel=client,
+                mqtt=mqtt,
+                idle=stop.wait,
+                idle_timeout=0.05,
+                trust_poll_interval=60.0,
+            )
+        )
+        for _ in range(150):
+            if mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["ON"]:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        setevent_before = panel.seteventmessages_calls
+        panel.wrong_shape_keepalive_replies = 1000  # never recovers within the budget
+
+        for _ in range(300):
+            link = mqtt.payloads_for("texecom/panel_connection/state")
+            resumed = (
+                link.count("OFF") >= 1
+                and link[-1] == "ON"
+                and panel.seteventmessages_calls > setevent_before
+            )
+            if resumed:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        link = mqtt.payloads_for("texecom/panel_connection/state")
+        assert "OFF" in link
+        assert link[-1] == "ON"
+        assert task.done() is False
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
 async def test_non_recoverable_listen_failure_publishes_panel_link_off() -> None:
     """Listen crash must flip panel-link OFF; must not touch alarm/zone availability."""
     mqtt = RecordingMqttPublisher()
