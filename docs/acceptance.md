@@ -18,6 +18,7 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 | 4 | Disarm still works | ✅ pass | Disarm not gated by ready switches |
 | 5 | Simplified config panel | ✅ pass | Reconnect settings collapsed to one; two labels rewritten in plain language during the walk |
 | 6 | Rejected keepalive heals like a timeout | ✅ pass | Verified via merged automated end-to-end test; live corroboration skipped this round (practitioner's call) |
+| 7 | Transient keepalive hiccup no longer forces an unnecessary reconnect | ✅ pass | Verified via merged automated end-to-end test (executor + independent review re-run + checkpoint verifier); live corroboration skipped (practitioner's call — not reliably triggerable on demand) |
 
 ## Scenario: Replacement still live
 
@@ -85,6 +86,17 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 - **How we know:** Pass if a NAK'd keepalive drives the same `ForcedDisconnect` → reconnect → re-sync path as a timeout. Fail if a NAK is silently treated as a healthy check-in (the original incident).
 - **Result:** pass — this AC's spec `how we'll know` is already automated end-to-end (live corroboration is called out as optional). Real household panel wasn't configured this session (`panel_host` empty), so no live NAK reproduction was attempted; the merged test evidence plus the TASK-46 checkpoint stand in, same as the 26 Aug round left the general live-reconnect check to the merged suites.
 
+## Scenario: Transient keepalive hiccup no longer forces an unnecessary reconnect
+
+**Status:** Pass ✅
+
+- **What we're proving:** A single odd routine keepalive reply right after a burst of sensor activity no longer tears down and reconnects the panel session — the app quietly retries the same check a couple of times first — while a genuinely dead session (every attempt still bad) is still caught and reconnected just as fast as before (no regression to the prior NAK-heals-like-a-timeout fix).
+- **Examples:** Given the panel answers `GETDATETIME` with a short/wrong-shaped reply (or the reply is eaten by an interleaved zone-event push) shortly after zone activity, When that happens within the retry budget, Then the app retries the same command/sequence and Alarm Panel Connection never flips off. Given every attempt in the budget still comes back bad, When the budget is exhausted, Then Alarm Panel Connection degrades and the app reconnects and re-syncs, same as an unanswered keepalive.
+- **You:** Reviewed the fix, the review findings (and how the one flagged item — a shared retry-count setting also nudging `login()`'s own attempt count — was explicitly decided rather than silently shipped), and the test coverage; chose to accept on merged evidence rather than reconfigure for a live PIR-timed reproduction.
+- **I check:** `test_keepalive_wrong_shape_transient_burst_does_not_flip_connection` (transient burst within budget → `Connection` never goes off) and `test_keepalive_wrong_shape_sustained_failure_still_reconnects` (budget exhausted → still reconnects, no `TASK-45` regression) both green in the merged suite; TASK-48 checkpoint independently re-verified the same before this walk.
+- **How we know:** Pass if a within-budget bad reply never flips Connection, and a budget-exhausted run still reconnects. Fail if either a harmless hiccup forces a reconnect, or a real dead session goes undetected.
+- **Result:** pass — this scenario's `how we'll know` is automated end-to-end only (no manual reproduction step); the real household panel wasn't reachable from this session (a precisely PIR-timed keepalive collision against live hardware "isn't reliably triggerable on demand anyway" — same call as the 27 Aug entry above), so the merged test evidence plus the TASK-48 checkpoint stand in.
+
 ## How it went
 
 - Home Assistant was already up; the add-on had just been rebuilt from the UI and was started.
@@ -94,6 +106,7 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 - HomeKit/iOS refuse (button still offered when the matching ready switch is off; that mode still must not arm) cannot be walked until this add-on is on household Home Assistant.
 - 26 Aug: re-entered accept to cover the connection-simplification wave (ADR-016–019, TASK-39–44), which landed after the 24 Aug walk and changed the config panel. Walked the config panel live against the real household panel (`local_texecom_alarm`, `panel_host=192.168.1.51`); the live-reconnect scenario (physically interrupting the panel connection to watch Alarm Panel Connection recover) was deliberately left to the merged tasks' test suites rather than walked live this round.
 - 27 Aug: re-entered accept to cover the keepalive-NAK reconnect fix (TASK-45/46) that closed out a real household incident (a rejected `GETDATETIME` was miscounted as a healthy check-in, freezing motion detection behind an "ON" connection signal). Booted the sim (`local_texecom_alarm` started, `panel_host` empty this session — no `TEXECOM_PANEL_HOST` set), then accepted on the merged automated evidence rather than reconfiguring for a live NAK reproduction, which isn't reliably triggerable on demand anyway.
+- 27 Aug (later): re-entered accept again to cover the keepalive-retry-budget fix (TASK-47/48) — a same-day follow-up incident where the TASK-45/46 NAK fix over-corrected into a reconnect storm on ordinary PIR bursts. Rebuilt and started `local_texecom_alarm` (0.2.0 → 0.2.1, `panel_host` still empty this session), confirmed it starts clean and only refuses to run for the expected missing-panel-target reason, then accepted on the merged automated evidence (executor + independent review re-run + checkpoint verifier) rather than a live reproduction, for the same reason as the entry above.
 
 ## Still open
 
@@ -105,3 +118,4 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 |---|------|---------|--------|
 | 1 | 2026-08-24 | Issues found | 1 |
 | 2 | 2026-08-24 | Clear | — |
+| 3 | 2026-08-27 | Clear | — |
