@@ -3,10 +3,10 @@ id: TASK-47
 title: >-
   Retry a wrong-shaped or interleaved-eaten keepalive reply before declaring the
   session dead
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-27 19:35'
-updated_date: '2026-08-27 19:42'
+updated_date: '2026-08-27 20:46'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -56,6 +56,12 @@ Test strategy: how we'll know = unit test (client-level bounded retry + budget-e
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: PanelClient.keepalive() now retries a wrong-shaped keepalive reply (same command/sequence) up to a 3-attempt budget before raising, matching the tightened architecture wording and the 2026-08-27 incident fix.
+Changed files: texecom_alarm/src/texecom_alarm/protocol/client.py, texecom_alarm/tests/fake_panel.py, texecom_alarm/tests/test_protocol_client.py, texecom_alarm/tests/test_reconnect.py, texecom_alarm/CHANGELOG.md
+Verification: unit test (client-level bounded retry + budget-exhausted-still-fails) + end-to-end test against FakePanel (transient-burst no-disconnect + sustained-failure still-disconnects). Ran cd texecom_alarm && python -m pytest tests/test_protocol_client.py tests/test_reconnect.py tests/test_app_mqtt.py -q -> 68 passed. Full repo suite (pytest -q) -> 348 passed, no regressions. ruff check / ruff format --check clean. pytest --cov=texecom_alarm --cov-fail-under=90 -> 92.61%.
+Notes/assumptions: send_command() gained an optional retry_if predicate reusing the existing timeout-retry loop; only keepalive() passes it. Bumped PanelClient.__init__'s keepalive_retries default from 1 to 2 (3 total attempts) per task's documented prior art; this default is also reused by login()'s retry budget (no separate knob existed), raising login's own attempt count from 2 to 3 as a side effect -- no ADR/test constrains login's attempt count separately and all login-focused tests pin keepalive_retries=0 explicitly, so not flagged as a stop condition. Added two new FakePanel scenario controls: wrong_shape_keepalive_replies and eat_keepalive_attempts_with_message, both cleared on successful re-LOGIN mirroring the existing nak_keepalive/silence_keepalive convention. Added a new [Unreleased] section to CHANGELOG.md (none existed previously).
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
