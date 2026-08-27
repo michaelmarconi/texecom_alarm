@@ -1,7 +1,7 @@
 ---
 id: TASK-45
 title: Treat a rejected keepalive the same as a timed-out one
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-27 08:59'
 updated_date: '2026-08-27 09:57'
@@ -35,9 +35,9 @@ ordinal: 39000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A NAK'd keepalive reply now degrades Alarm Panel Connection and drives the same keep-trying reconnect + re-sync path as an unanswered keepalive (no manual restart), verified end-to-end against the FakePanel stand-in
-- [ ] #2 A unit test proves PanelClient.keepalive() raises a failure when the panel's reply is a NAK instead of the expected datetime payload
-- [ ] #3 Existing behaviour for a healthy keepalive and for a timed-out keepalive is unchanged — the full existing test suite stays green
+- [x] #1 A NAK'd keepalive reply now degrades Alarm Panel Connection and drives the same keep-trying reconnect + re-sync path as an unanswered keepalive (no manual restart), verified end-to-end against the FakePanel stand-in
+- [x] #2 A unit test proves PanelClient.keepalive() raises a failure when the panel's reply is a NAK instead of the expected datetime payload
+- [x] #3 Existing behaviour for a healthy keepalive and for a timed-out keepalive is unchanged — the full existing test suite stays green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -68,5 +68,5 @@ Verification: TDD RED->GREEN confirmed by temporarily reverting the client.py fi
 Notes/assumptions: Treated the GETDATETIME success-reply length as a fixed 6 bytes (matches FakePanel's existing handler and the task description); no formal byte-for-byte spec exists in docs/protocol-reference.md beyond "Confirmed". Added a short CHANGELOG Fixed entry under [Unreleased].
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
