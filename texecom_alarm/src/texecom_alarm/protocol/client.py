@@ -69,6 +69,10 @@ class PanelClient:
         login_delay: float = 0.5,
         response_timeout: float = 2.0,
         keepalive_retries: int = 2,
+        # `keepalive_retries` is deliberately one shared "retry attempts" dial for
+        # both keepalive() and login() rather than two separate settings — a user
+        # configuring this only wants "how many times do you retry", not a choice
+        # between two knobs for two commands (decision: 2026-08-27, TASK-47 review).
     ) -> None:
         self.host = host
         self.port = port
@@ -174,6 +178,11 @@ class PanelClient:
 
     async def login(self) -> None:
         logger.debug("panel_login")
+        # Deliberately reuses keepalive_retries as login's own retry budget too —
+        # one shared "retry attempts" setting for the whole session, not a second
+        # knob (decision: 2026-08-27, TASK-47 review). Raising keepalive_retries
+        # for the keepalive bounded-retry fix therefore also raises login's own
+        # attempt count; that's accepted, not a bug.
         payload = await self.send_command(
             CMD_LOGIN,
             self.udl_password.encode("ascii"),
