@@ -100,19 +100,33 @@ wrong network module — see
 
 ### Soft trust recovery
 
-If the panel path looks connected but is untrustworthy (for example an arm
-command is rejected, or a periodic house-state check fails), **Alarm Panel
-Connection** goes off while zone and alarm entities keep their last-known state.
-A successful house-state check can restore the link. If it stays off longer than
-the trust fail window, the add-on tears down the session and logs in again
-(without restarting the add-on, and without silently re-trying the failed
-arm/disarm).
+If the panel path looks connected but is untrustworthy (for example a routine
+keepalive check-in fails, or an arm/disarm command is rejected or times out),
+**Alarm Panel Connection** goes off while zone and alarm entities keep their
+last-known state. A successful keepalive can restore the link. If it stays off
+longer than the window below, the add-on tears down the session and logs in
+again (without restarting the add-on, and without silently re-trying the
+failed arm/disarm).
 
 | Option | Default | Meaning |
 |--------|---------|---------|
-| Trust fail window | `90` seconds | How long Connection may stay off before tear-down / re-login |
+| Force reconnect after | `90` seconds | How long Connection may stay off before tear-down / re-login |
 
 You can leave the default unless live walks suggest a different window.
+
+### Reconciliation poll
+
+Separately from Connection, the add-on periodically double-checks the alarm
+state against the panel and corrects it if they disagree — this is a
+belt-and-braces check, not a connectivity signal. A slow or failed
+reconciliation check does **not** affect Alarm Panel Connection; that stays
+driven only by keepalives and arm/disarm outcomes above.
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| Recheck interval | `300` seconds (5 minutes) | How often the add-on re-checks alarm state against the panel |
+
+You can leave the default unless you have a reason to change it.
 
 ### Logging
 

@@ -24,7 +24,7 @@ Three ideas that unlock everything else:
 
 1. **One shared socket** carries commands, replies, and unsolicited events — interleaved.
 2. **Arm modes share one command**; Home/Night are Part-Arm slots configured per install (Away is full arm).
-3. **Skip unexpected bytes; reconnect if the socket dies** — do not crash. Hayes modem noise (`ATH0` / `ATZ`) is the installer **SmartCom** (or any module bound to alarm reporting) talking on the same serial port — not normal dedicated-ComIP behaviour.
+3. **Any unexpected byte or dead socket is a fault — reconnect, don't parse through it.** Hayes modem noise (`ATH0` / `ATZ`) is the installer **SmartCom** (or any module bound to alarm reporting) talking on the same serial port — not normal dedicated-ComIP behaviour, and on a correctly-pointed dedicated ComIP (ADR-013) this app assumes it won't see line noise to begin with.
 
 ---
 
@@ -40,7 +40,7 @@ flowchart TD
   D --> E[Snapshot area / arm flags]
   E --> F[Subscribe to events]
   F --> G[Steady state: listen + keepalive]
-  G -->|socket dies or forced drop| H[Reconnect with budget]
+  G -->|socket dies, forced drop, or unexpected bytes| H[Reconnect — one wait interval, retries indefinitely]
   H --> B
 ```
 
@@ -69,7 +69,7 @@ sequenceDiagram
   Panel-->>App: Response for sequence N (ACK / NAK / data)
 ```
 
-If a response is late, retry **the same sequence**. Ordinary timing collisions are fine. Treat unexpected bytes as skippable, not fatal — including Hayes modem text if Home Assistant is accidentally on the signalling module (see below).
+If a response is late, retry **the same sequence** (a small bounded number of times for the keepalive check-in, since the panel is documented to sometimes defer or shortcut a reply while busy with recent zone traffic). Ordinary timing collisions are fine. Unexpected bytes are a different matter — treat them as a session fault and reconnect, don't parse past them (see below) — including Hayes modem text if Home Assistant is accidentally on the signalling module.
 
 ---
 
@@ -124,18 +124,17 @@ Zone pushes are **sensor-class agnostic**: a door and a PIR look the same on the
 
 ## When the line misbehaves
 
-### Junk on the wire (resync)
+### Junk on the wire (reconnect, don't resync)
 
-**Required behaviour:** skip forward until the next valid Connect frame rather than crashing (ADR-002, kept unconditionally by ADR-014). Garbage still happens — truncated frames, bad CRC lead-in, other clients colliding. Treating it as fatal is what used to kill naive clients.
+**Current behaviour (ADR-019, supersedes ADR-002/ADR-014's skip-and-resync):** unexpected or non-conforming bytes on the panel connection end the session and trigger a reconnect — the add-on does not skip forward looking for the next valid frame. This app assumes it is always reached over the panel's dedicated local-control module (ADR-013); a shared or misconfigured module gets no client-side line-noise defense any more, by design.
 
-**Hayes modem commands (`ATH0`, `ATZ`) are not normal ComIP traffic.** They were captured on an installer **SmartCom** whose job is alarm reporting / dialer work: it multiplexes AT commands onto the same TCP session around arm, disarm, and trigger. If you see that text on the Home Assistant session, you are almost certainly pointed at the signalling module, not the dedicated ComIP — see [Home Assistant loses the panel during an alarm](ha-loses-panel-during-alarm.md). On a dedicated ComIP used only for local control, live walks stayed Connect-clean through Home arm/disarm and through a real alarm plus HA Disarm.
+**Hayes modem commands (`ATH0`, `ATZ`) are not normal ComIP traffic.** They were captured on an installer **SmartCom** whose job is alarm reporting / dialer work: it multiplexes AT commands onto the same TCP session around arm, disarm, and trigger. If you see that text on the Home Assistant session, you are almost certainly pointed at the signalling module, not the dedicated ComIP — see [Home Assistant loses the panel during an alarm](ha-loses-panel-during-alarm.md). On a dedicated ComIP used only for local control, live walks stayed Connect-clean through Home arm/disarm and through a real alarm plus HA Disarm — pointing at the right module is the fix, not a client-side tolerance feature.
 
 ```mermaid
 flowchart TD
   R[Read bytes] --> V{Valid Connect frame?}
   V -->|yes| H[Handle command / event]
-  V -->|no| S[Discard one byte and retry]
-  S --> R
+  V -->|no| D[Treat as a fault: close session, reconnect]
   H --> R
 ```
 
@@ -143,7 +142,7 @@ flowchart TD
 
 A full alarm **force-closing the Home Assistant TCP session** was measured on the **SmartCom** (SPIKE-002 / SPIKE-009): the panel seizes that module to report the alarm, kicks off the Connect login, and the line may then show dialer/modem traffic while reconnect fails. That is **not** established ComIP behaviour. On the dedicated ComIP (SPIKE-010 / ADR-013 / ADR-014) the session stayed up through a live alarm while the monitoring station was called and the Texecom Connect app stayed live; HA Disarm worked.
 
-The add-on still retries longer after a trigger-adjacent drop (safety net if `panel_host` is the signalling module or reporting is bound to the ComIP port). Do not document that long wait as the expected path for a correctly pointed ComIP.
+**Current behaviour (ADR-018/ADR-019):** the add-on retries every disconnect the same way — one configured wait interval, retrying indefinitely, regardless of whether the drop was an everyday hiccup or trigger-adjacent. There is no separate "longer" trigger budget any more; the reconnect-wait setting is a single knob (see [Documentation](../texecom_alarm/DOCS.md#reconnect-behaviour)).
 
 ```mermaid
 sequenceDiagram
@@ -155,7 +154,7 @@ sequenceDiagram
     Panel-->>App: ACK; session stays up
   else Session closed (shared signalling module)
     Panel--xApp: TCP closed
-    loop Longer retry budget
+    loop Same reconnect interval as any other disconnect
       App->>Panel: Reconnect + LOGIN + snapshots
     end
   end
@@ -172,8 +171,8 @@ The socket can still look “up” (keepalive OK) while arm commands NAK or push
 
 - **One Connect login per network module** — stop the other client on that IP before this add-on connects. Two modules (ComIP + SmartCom) can each hold a login.
 - **Panel host is the dedicated ComIP**, not the installer SmartCom (ADR-013). Modem/AT bytes on the HA session are a wrong-module tell, not “how ComIP works.”
-- **Keepalive** — do not run forever listen-only.
-- **Resync, don’t panic** on unexpected bytes (including SmartCom modem piping if someone mis-points `panel_host`).
+- **Keepalive** — do not run forever listen-only; a wrong-shaped or eaten keepalive reply gets a small bounded retry before it counts as a failed check-in (the panel can be briefly busy right after zone activity).
+- **Unexpected bytes end the session** — reconnect, don't parse through them (including SmartCom modem piping if someone mis-points `panel_host`).
 - **Don’t hardcode Home/Night slots** from one install’s capture — use install config (Away = full arm).
 - **Don’t treat MQTT retain alone** as truth after restart — snapshot after login.
 
@@ -184,7 +183,7 @@ The socket can still look “up” (keepalive OK) while arm commands NAK or push
 | Need | Go here |
 |------|---------|
 | Opcodes, bodies, flag indices, LOG types | [Protocol reference](protocol-reference.md) |
-| Why we reconnect the way we do | ADR-014 (host-scoped; supersedes ADR-002’s universal trigger-drop claim); ADR-002 kept for resync-on-junk |
+| Why we reconnect the way we do | ADR-019 (single interval, no line-noise defense; supersedes ADR-014); ADR-018 (indefinite retry, no attempts settings); ADR-002/ADR-014 kept for historical context only |
 | Which module Home Assistant must use | ADR-013; [wrong-module how-to](ha-loses-panel-during-alarm.md) |
 | Why Away ≠ Part-Arm | ADR-008 |
 | Startup zone / area snapshots | ADR-006, ADR-009 |

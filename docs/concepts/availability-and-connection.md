@@ -8,7 +8,7 @@ them on **separate** signals on purpose.
 | Question | What to look at | When it goes “off” |
 |----------|-----------------|-------------------|
 | Is the **app** running? | Alarm and zone entities’ availability (MQTT last will) | The add-on process has stopped |
-| Is the **panel link** live and trustworthy? | **Alarm Panel Connection** | The TCP session dropped, an arm/disarm was rejected or timed out, or a house-state check failed |
+| Is the **panel link** live and trustworthy? | **Alarm Panel Connection** | The TCP session dropped, a routine keepalive check-in failed, or an arm/disarm was rejected or timed out |
 
 If the panel connection drops, **alarm and zone entities stay available** with
 their last known state. Dashboards and automations can still *see* a value;
@@ -25,13 +25,19 @@ The sensor is off while the app is still running but should not be trusted for
 fresh panel state, for example:
 
 - The socket closed and the app is reconnecting
-- An arm or disarm was rejected or timed out, even if a quiet heartbeat still
-  succeeds
-- A periodic house/arm-state poll failed
+- A routine keepalive check-in failed (after a small bounded retry — a
+  single odd reply right after zone activity is not enough on its own)
+- An arm or disarm was rejected or timed out, even if keepalives still succeed
 
-A successful house-state check can turn it back on. If it stays off longer than
-the **trust fail window** (default 90 seconds), the app tears down the session
-and logs in again. It does **not** silently re-send the failed arm or disarm.
+A successful keepalive can turn it back on. If it stays off longer than the
+**force-reconnect window** (default 90 seconds), the app tears down the
+session and logs in again. It does **not** silently re-send the failed arm or
+disarm.
+
+Separately, the add-on also periodically double-checks the alarm state
+against the panel and corrects it if they disagree — that reconciliation
+check is a belt-and-braces correction, not a connectivity signal. It does
+**not** affect **Alarm Panel Connection**, even if it times out in isolation.
 
 ## Last-trigger snapshot
 
