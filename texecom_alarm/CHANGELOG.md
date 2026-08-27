@@ -9,26 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Keepalive check-ins now retry a wrong-shaped reply (e.g. a short/empty-ACK-shaped
-  reply instead of the real 6-byte datetime payload) with the same command and
-  sequence, the same as a timeout — up to 3 attempts before the check-in counts as
-  failed. Previously any wrong-shaped reply raised immediately with zero retry,
-  which is what caused the 0.2.1 reconnect-storm incident (2026-08-27): the panel
-  legitimately answering late or short right after a burst of sensor activity was
-  being misread as a dead session and forced unnecessary reconnects during ordinary
-  occupancy. The real dead-session case is still caught just as fast once the
-  (now slightly larger) retry budget is genuinely exhausted.
+- Fixed a regression from 0.2.1 that could disconnect and reconnect the panel
+  unnecessarily during busy periods (for example a burst of motion activity).
+  A brief, otherwise-harmless hiccup in the panel's routine health-check reply
+  is now retried before being treated as a problem; a genuinely unresponsive
+  panel is still caught and reconnected just as quickly as before.
 
 ## [0.2.1] - 2026-08-27
 
 ### Fixed
 
-- A rejected keepalive reply (panel answers but refuses the health check) now
-  degrades **Alarm Panel Connection** and triggers reconnect + re-sync, the
-  same as an unanswered one. Previously only a silent/unanswered keepalive
-  was treated as a dead session, so a panel that kept rejecting check-ins
-  while the TCP connection stayed open could leave Connection stuck showing
-  online with live monitoring silently stopped.
+- **Alarm Panel Connection** could get stuck showing connected even though the
+  panel had stopped responding properly to routine health checks. The app now
+  detects this and reconnects, instead of only reacting to a fully silent
+  connection.
 
 ## [0.2.0] - 2026-08-26
 
