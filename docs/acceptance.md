@@ -1,6 +1,6 @@
 # Acceptance
 
-**Date:** 2026-08-26
+**Date:** 2026-08-27
 **State:** Accepted ✅
 <!-- State is exactly one of: Draft 📝 | Accepted ✅ | Deferred ⏸️ -->
 
@@ -17,6 +17,7 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 | 3 | Refused arm snaps back | ✅ pass | Away refused; card snapped back; logs showed blocked then MQTT arming |
 | 4 | Disarm still works | ✅ pass | Disarm not gated by ready switches |
 | 5 | Simplified config panel | ✅ pass | Reconnect settings collapsed to one; two labels rewritten in plain language during the walk |
+| 6 | Rejected keepalive heals like a timeout | ✅ pass | Verified via merged automated end-to-end test; live corroboration skipped this round (practitioner's call) |
 
 ## Scenario: Replacement still live
 
@@ -73,6 +74,17 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 - **How we know:** Pass if only the new settings show with clear plain-language labels. Fail if old settings persist or wording still reads as jargon.
 - **Result:** pass — practitioner confirmed the panel reads clearly after the label rewrite ("Much better, accepted").
 
+## Scenario: Rejected keepalive heals like a timeout
+
+**Status:** Pass ✅
+
+- **What we're proving:** A panel check-in the panel answers but rejects (NAK) is treated as a dead session, same as one it never answers at all — no zombie session that looks live while monitoring is actually frozen (`spec-panel-session-heal` AC1).
+- **Examples:** Given monitoring was live, When the panel NAKs a routine keepalive instead of returning datetime, Then Alarm Panel Connection goes off, the app keeps retrying, and Connection returns live with zone/alarm state re-synced once the panel accepts again — same path as an unanswered keepalive, without a manual restart.
+- **You:** Reviewed the fix and its test coverage; chose to accept on merged evidence rather than wait for a live reproduction.
+- **I check:** `test_keepalive_nak_enters_reconnect_path` (end-to-end, FakePanel NAK'd keepalive) and `test_keepalive_nak_raises_protocol_error` (unit) both green in the merged suite; TASK-46 checkpoint independently re-verified the same before this walk.
+- **How we know:** Pass if a NAK'd keepalive drives the same `ForcedDisconnect` → reconnect → re-sync path as a timeout. Fail if a NAK is silently treated as a healthy check-in (the original incident).
+- **Result:** pass — this AC's spec `how we'll know` is already automated end-to-end (live corroboration is called out as optional). Real household panel wasn't configured this session (`panel_host` empty), so no live NAK reproduction was attempted; the merged test evidence plus the TASK-46 checkpoint stand in, same as the 26 Aug round left the general live-reconnect check to the merged suites.
+
 ## How it went
 
 - Home Assistant was already up; the add-on had just been rebuilt from the UI and was started.
@@ -81,6 +93,7 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 - We did not re-walk Night ×3, every sensor class, TRACE log hunting, the household alarm wrapper, a crash-free month, or a second household install — those stayed accepted limitations from 21 Aug.
 - HomeKit/iOS refuse (button still offered when the matching ready switch is off; that mode still must not arm) cannot be walked until this add-on is on household Home Assistant.
 - 26 Aug: re-entered accept to cover the connection-simplification wave (ADR-016–019, TASK-39–44), which landed after the 24 Aug walk and changed the config panel. Walked the config panel live against the real household panel (`local_texecom_alarm`, `panel_host=192.168.1.51`); the live-reconnect scenario (physically interrupting the panel connection to watch Alarm Panel Connection recover) was deliberately left to the merged tasks' test suites rather than walked live this round.
+- 27 Aug: re-entered accept to cover the keepalive-NAK reconnect fix (TASK-45/46) that closed out a real household incident (a rejected `GETDATETIME` was miscounted as a healthy check-in, freezing motion detection behind an "ON" connection signal). Booted the sim (`local_texecom_alarm` started, `panel_host` empty this session — no `TEXECOM_PANEL_HOST` set), then accepted on the merged automated evidence rather than reconfiguring for a live NAK reproduction, which isn't reliably triggerable on demand anyway.
 
 ## Still open
 
