@@ -1,10 +1,10 @@
 ---
 id: TASK-45
 title: Treat a rejected keepalive the same as a timed-out one
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-27 08:59'
-updated_date: '2026-08-27 09:47'
+updated_date: '2026-08-27 09:53'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -61,6 +61,12 @@ How we'll know = unit test (client-level NAK rejection) + end-to-end test agains
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: A rejected (NAK'd) keepalive now raises ProtocolError from PanelClient.keepalive() and is treated identically to a timed-out keepalive, driving the same keep-trying reconnect + re-sync path.
+Changed files: texecom_alarm/src/texecom_alarm/protocol/client.py, texecom_alarm/src/texecom_alarm/app.py, texecom_alarm/tests/fake_panel.py, texecom_alarm/tests/test_protocol_client.py, texecom_alarm/tests/test_reconnect.py, texecom_alarm/CHANGELOG.md
+Verification: TDD RED->GREEN confirmed by temporarily reverting the client.py fix - both new tests (test_keepalive_nak_raises_protocol_error, test_keepalive_nak_enters_reconnect_path) failed for the right reason, then the fix was restored. cd texecom_alarm && python -m pytest tests/test_protocol_client.py tests/test_reconnect.py tests/test_app_mqtt.py -q -> 63 passed. Full suite python -m pytest -q -> 343 passed. ruff check/format clean, bandit clean, coverage 92.37% (>=90% required).
+Notes/assumptions: Treated the GETDATETIME success-reply length as a fixed 6 bytes (matches FakePanel's existing handler and the task description); no formal byte-for-byte spec exists in docs/protocol-reference.md beyond "Confirmed". Added a short CHANGELOG Fixed entry under [Unreleased].
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
