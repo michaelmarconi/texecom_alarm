@@ -4,7 +4,7 @@ title: Treat a rejected keepalive the same as a timed-out one
 status: awaiting-review
 assignee: []
 created_date: '2026-08-27 08:59'
-updated_date: '2026-08-27 09:53'
+updated_date: '2026-08-27 09:57'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -68,5 +68,5 @@ Verification: TDD RED->GREEN confirmed by temporarily reverting the client.py fi
 Notes/assumptions: Treated the GETDATETIME success-reply length as a fixed 6 bytes (matches FakePanel's existing handler and the task description); no formal byte-for-byte spec exists in docs/protocol-reference.md beyond "Confirmed". Added a short CHANGELOG Fixed entry under [Unreleased].
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
