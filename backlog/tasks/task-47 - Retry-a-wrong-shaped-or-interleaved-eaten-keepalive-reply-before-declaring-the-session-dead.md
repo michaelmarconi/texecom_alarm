@@ -3,10 +3,10 @@ id: TASK-47
 title: >-
   Retry a wrong-shaped or interleaved-eaten keepalive reply before declaring the
   session dead
-status: awaiting-review
+status: attention
 assignee: []
 created_date: '2026-08-27 19:35'
-updated_date: '2026-08-27 20:46'
+updated_date: '2026-08-27 21:51'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -52,6 +52,17 @@ Files likely affected:
 
 Test strategy: how we'll know = unit test (client-level bounded retry + budget-exhausted-still-fails) + end-to-end test against the FakePanel stand-in (transient-burst no-disconnect + sustained-failure still-disconnects, against the recording MQTT broker harness already used by test_reconnect.py). Command: cd texecom_alarm && python -m pytest tests/test_protocol_client.py tests/test_reconnect.py tests/test_app_mqtt.py -q
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Attention
+## Attention
+Category: 2 ambiguity
+Attempted: Implemented bounded (3-attempt) same-command/sequence keepalive retry via a shared retry_if predicate reusing PanelClient's existing send_command timeout-retry loop; bumped keepalive_retries default 1->2 to reach 3 total attempts. Dispatched required code review + Bugbot as the gate pair.
+Failed: Bugbot: clean. Required code review: verdict findings (one attention item, otherwise clean -- AC/DoD/ADR alignment, TASK-45 no-regression, and all claimed verification independently re-run and confirmed: 68/68 + 348/348 tests, ruff clean, 92.56% coverage). The flagged item: keepalive_retries is also reused by login()'s own retry budget (no dedicated login_retries knob existed before this task), so the same default bump silently raises login()'s attempts from 2 to 3 -- untested at the production default (every login-focused test pins keepalive_retries=0), not called for anywhere in the task's Implementation Plan, and not governed by any ADR either way. Adds ~1 extra response_timeout (~2s at default) to every real failed-login attempt.
+Decision needed: Should login() be decoupled onto its own login_retries knob (leaving keepalive_retries as keepalive-only and login's attempt count unchanged at 2), or is the 2->3 login-attempt side effect explicitly acceptable as shipped? Reviewer recommends deciding rather than letting it ride along unexamined.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
