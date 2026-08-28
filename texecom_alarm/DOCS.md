@@ -114,6 +114,23 @@ failed arm/disarm).
 
 You can leave the default unless live walks suggest a different window.
 
+### Check-in cadence and patience
+
+The add-on checks in with the panel on a fixed schedule to confirm the
+connection is still alive, regardless of how busy the panel is. A single
+refused or unanswered check-in does not end the session — **Alarm Panel
+Connection** stays healthy until check-ins have failed continuously for the
+patience period below, at which point the add-on reconnects and logs in
+again automatically.
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| Check-in interval | `15` seconds | How often the add-on checks in with the panel |
+| Check-in patience | `45` seconds (about three check-ins) | How long continuous check-in failure is tolerated before the session is treated as dead |
+
+Check-in patience must be at least the check-in interval. You can leave the
+defaults unless live use suggests otherwise.
+
 ### Reconciliation poll
 
 Separately from Connection, the add-on periodically double-checks the alarm

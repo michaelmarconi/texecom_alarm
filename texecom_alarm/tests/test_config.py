@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 
 from texecom_alarm.config import (
+    DEFAULT_CHECKIN_INTERVAL_SECONDS,
+    DEFAULT_CHECKIN_PATIENCE_SECONDS,
     DEFAULT_MQTT_PORT,
     DEFAULT_MQTT_TOPIC_PREFIX,
     DEFAULT_PANEL_PORT,
@@ -42,6 +44,8 @@ def _valid_options(**overrides: object) -> dict[str, object]:
         "reconnect_delay_seconds": DEFAULT_RECONNECT_DELAY_SECONDS,
         "trust_fail_window_seconds": DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
         "reconciliation_poll_interval_seconds": DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS,
+        "checkin_interval_seconds": DEFAULT_CHECKIN_INTERVAL_SECONDS,
+        "checkin_patience_seconds": DEFAULT_CHECKIN_PATIENCE_SECONDS,
     }
     data.update(overrides)
     return data
@@ -69,6 +73,8 @@ def test_load_settings_applies_schema_defaults() -> None:
         reconnect_delay_seconds=DEFAULT_RECONNECT_DELAY_SECONDS,
         trust_fail_window_seconds=DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
         reconciliation_poll_interval_seconds=DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS,
+        checkin_interval_seconds=DEFAULT_CHECKIN_INTERVAL_SECONDS,
+        checkin_patience_seconds=DEFAULT_CHECKIN_PATIENCE_SECONDS,
     )
 
 
@@ -160,6 +166,70 @@ def test_reconciliation_poll_interval_from_environ() -> None:
 def test_invalid_reconciliation_poll_interval_raises_clear_error() -> None:
     with pytest.raises(ConfigError, match="reconciliation_poll_interval_seconds"):
         load_settings(_valid_options(reconciliation_poll_interval_seconds=-1))
+
+
+def test_checkin_settings_defaults() -> None:
+    """AC1: unset add-on options fall back to documented defaults (ADR-020)."""
+    defaults = load_settings(
+        {
+            "panel_host": "10.0.0.2",
+            "mqtt_host": "mqtt.local",
+        }
+    )
+    assert defaults.checkin_interval_seconds == 15.0
+    assert defaults.checkin_patience_seconds == 45.0
+    assert DEFAULT_CHECKIN_INTERVAL_SECONDS == 15.0
+    assert DEFAULT_CHECKIN_PATIENCE_SECONDS == 45.0
+
+
+def test_checkin_settings_override_via_options() -> None:
+    """AC2: add-on options change the parsed cadence and patience."""
+    tuned = load_settings(
+        _valid_options(checkin_interval_seconds=10.0, checkin_patience_seconds=30.0)
+    )
+    assert tuned.checkin_interval_seconds == 10.0
+    assert tuned.checkin_patience_seconds == 30.0
+
+
+def test_checkin_settings_override_via_environ() -> None:
+    """AC2: the equivalent environment variables override too."""
+    settings = load_settings(
+        environ={
+            "TEXECOM_PANEL_HOST": "panel.env",
+            "TEXECOM_UDL_PASSWORD": "udl",
+            "TEXECOM_MQTT_HOST": "broker.env",
+            "TEXECOM_CHECKIN_INTERVAL_SECONDS": "20",
+            "TEXECOM_CHECKIN_PATIENCE_SECONDS": "60",
+        },
+        options_path="/nonexistent/options.json",
+    )
+    assert settings.checkin_interval_seconds == 20.0
+    assert settings.checkin_patience_seconds == 60.0
+
+
+def test_checkin_patience_shorter_than_interval_raises_clear_error() -> None:
+    """AC3: patience shorter than one check-in interval is rejected."""
+    with pytest.raises(ConfigError, match="checkin_patience_seconds"):
+        load_settings(_valid_options(checkin_interval_seconds=15.0, checkin_patience_seconds=10.0))
+
+
+def test_checkin_patience_equal_to_interval_is_allowed() -> None:
+    """Patience exactly one interval is the boundary case, not rejected."""
+    settings = load_settings(
+        _valid_options(checkin_interval_seconds=15.0, checkin_patience_seconds=15.0)
+    )
+    assert settings.checkin_interval_seconds == 15.0
+    assert settings.checkin_patience_seconds == 15.0
+
+
+def test_invalid_checkin_interval_raises_clear_error() -> None:
+    with pytest.raises(ConfigError, match="checkin_interval_seconds"):
+        load_settings(_valid_options(checkin_interval_seconds=-1))
+
+
+def test_invalid_checkin_patience_raises_clear_error() -> None:
+    with pytest.raises(ConfigError, match="checkin_patience_seconds"):
+        load_settings(_valid_options(checkin_patience_seconds="nope"))
 
 
 def test_invalid_trust_fail_window_raises_clear_error() -> None:

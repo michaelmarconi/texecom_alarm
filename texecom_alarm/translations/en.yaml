@@ -60,6 +60,18 @@ configuration:
       and corrects it if they disagree (default 300 seconds / 5 minutes).
       Doesn't affect Alarm Panel Connection — that's driven by keepalives
       instead.
+  checkin_interval_seconds:
+    name: Check-in interval
+    description: >-
+      How often the add-on checks in with the panel to confirm the connection
+      is still alive (default 15 seconds). Stays on a fixed schedule
+      regardless of how busy the panel is.
+  checkin_patience_seconds:
+    name: Check-in patience
+    description: >-
+      How long a refused or unanswered check-in is tolerated before the
+      add-on treats the session as dead and reconnects (default 45 seconds
+      — about three check-ins). Must be at least the check-in interval.
   log_level:
     name: Log level
     description: >-
