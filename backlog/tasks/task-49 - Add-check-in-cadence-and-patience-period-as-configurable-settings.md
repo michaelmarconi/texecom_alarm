@@ -1,9 +1,10 @@
 ---
 id: TASK-49
 title: Add check-in cadence and patience-period as configurable settings
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-28 16:13'
+updated_date: '2026-08-28 16:19'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
