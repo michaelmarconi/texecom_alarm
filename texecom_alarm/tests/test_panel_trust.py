@@ -758,6 +758,117 @@ async def test_listen_loop_runs_trust_poll_alongside_keepalive() -> None:
 
 
 @pytest.mark.asyncio
+async def test_checkin_schedule_independent_of_reconciliation_poll_interval() -> None:
+    """The check-in schedule and the reconciliation poll interval must never
+    affect each other (per ADR-020): a slow poll must not slow check-ins, and
+    a slow check-in must not slow the poll."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+
+        # Fast check-in, deliberately slow (effectively never-due) poll: the
+        # check-in must still fire repeatedly on its own schedule.
+        trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12, poll_interval=1000.0)
+        task = asyncio.create_task(
+            _listen_panel_messages(
+                client,
+                mqtt,
+                settings=_settings(panel),
+                topic_prefix="texecom",
+                in_use_zones={1},
+                alarm_state=_SharedAlarmState(payload="disarmed"),
+                idle_timeout=0.03,
+                trust=trust,
+            )
+        )
+        for _ in range(150):
+            if panel.keepalive_attempts >= 5:
+                break
+            await asyncio.sleep(0.02)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        assert (
+            panel.keepalive_attempts >= 5
+        ), "a slow reconciliation poll interval must not slow the check-in schedule"
+        # The poll runs once immediately (nothing polled yet), then not again
+        # for 1000s — it must not have ridden along with the fast check-ins.
+        assert panel.area_flags_calls <= 1
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_poll_independent_of_checkin_interval() -> None:
+    """The other direction of the same independence guarantee (per ADR-020):
+    a slow check-in must not slow the separate reconciliation poll."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+
+        # Fast poll, deliberately slow (effectively never-due) check-in: the
+        # poll must still fire repeatedly on its own schedule.
+        trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12, poll_interval=0.03)
+        task = asyncio.create_task(
+            _listen_panel_messages(
+                client,
+                mqtt,
+                settings=_settings(panel),
+                topic_prefix="texecom",
+                in_use_zones={1},
+                alarm_state=_SharedAlarmState(payload="disarmed"),
+                idle_timeout=1000.0,
+                trust=trust,
+            )
+        )
+        for _ in range(150):
+            if panel.area_flags_calls >= 5:
+                break
+            await asyncio.sleep(0.02)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        assert (
+            panel.area_flags_calls >= 5
+        ), "a slow check-in interval must not slow the reconciliation poll"
+        assert panel.keepalive_attempts == 0
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
 async def test_e2e_arm_nak_while_keepalive_ok_marks_degraded() -> None:
     """FakePanel: keepalive OK + arm NAK → panel_connection OFF; availability unchanged."""
     panel = FakePanel(
@@ -856,6 +967,7 @@ async def test_e2e_trust_poll_fail_then_recover() -> None:
                 panel=client,
                 mqtt=mqtt,
                 idle=stop.wait,
+                idle_timeout=0.05,
                 trust_poll_interval=0.08,
                 trust_recover_window=0.05,
             )
@@ -874,7 +986,9 @@ async def test_e2e_trust_poll_fail_then_recover() -> None:
             await asyncio.sleep(0.02)
         assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
 
-        # Fail every reconciliation poll from here on — it must never block recovery.
+        # Fail every reconciliation poll from here on — it must never block
+        # recovery. Check-ins fire on their own fixed schedule (idle_timeout
+        # above, ADR-020) independent of the poll interval below.
         panel.nak_next_area_flags = 1000
         panel.nak_next_arm = True
         await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
