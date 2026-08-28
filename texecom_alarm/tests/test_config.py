@@ -133,7 +133,7 @@ def test_reconnect_delay_defaults_and_overrides() -> None:
 
 
 def test_reconciliation_poll_interval_defaults_to_five_minutes() -> None:
-    """AC1: unset add-on option → 300s default (ADR-017)."""
+    """Unset add-on option defaults to a 300s reconciliation poll interval (ADR-017)."""
     defaults = load_settings(
         {
             "panel_host": "10.0.0.2",
@@ -145,7 +145,7 @@ def test_reconciliation_poll_interval_defaults_to_five_minutes() -> None:
 
 
 def test_reconciliation_poll_interval_override_via_options() -> None:
-    """AC2: add-on option changes the parsed interval."""
+    """The add-on option changes the parsed reconciliation poll interval."""
     tuned = load_settings(_valid_options(reconciliation_poll_interval_seconds=60.0))
     assert tuned.reconciliation_poll_interval_seconds == 60.0
 
@@ -169,7 +169,7 @@ def test_invalid_reconciliation_poll_interval_raises_clear_error() -> None:
 
 
 def test_checkin_settings_defaults() -> None:
-    """AC1: unset add-on options fall back to documented defaults (ADR-020)."""
+    """Unset add-on options fall back to the documented check-in defaults (ADR-020)."""
     defaults = load_settings(
         {
             "panel_host": "10.0.0.2",
@@ -183,7 +183,7 @@ def test_checkin_settings_defaults() -> None:
 
 
 def test_checkin_settings_override_via_options() -> None:
-    """AC2: add-on options change the parsed cadence and patience."""
+    """Add-on options change the parsed check-in cadence and patience."""
     tuned = load_settings(
         _valid_options(checkin_interval_seconds=10.0, checkin_patience_seconds=30.0)
     )
@@ -192,7 +192,7 @@ def test_checkin_settings_override_via_options() -> None:
 
 
 def test_checkin_settings_override_via_environ() -> None:
-    """AC2: the equivalent environment variables override too."""
+    """The equivalent environment variables override the check-in cadence and patience too."""
     settings = load_settings(
         environ={
             "TEXECOM_PANEL_HOST": "panel.env",
@@ -208,7 +208,7 @@ def test_checkin_settings_override_via_environ() -> None:
 
 
 def test_checkin_patience_shorter_than_interval_raises_clear_error() -> None:
-    """AC3: patience shorter than one check-in interval is rejected."""
+    """Patience shorter than one check-in interval is rejected."""
     with pytest.raises(ConfigError, match="checkin_patience_seconds"):
         load_settings(_valid_options(checkin_interval_seconds=15.0, checkin_patience_seconds=10.0))
 
