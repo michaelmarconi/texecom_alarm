@@ -42,3 +42,10 @@ ordinal: 43000
 <!-- SECTION:PLAN:BEGIN -->
 Files likely affected: texecom_alarm/src/texecom_alarm/config.py (modify — add `checkin_interval_seconds` and `checkin_patience_seconds` fields, env var mapping, and loader defaults, following the existing `reconnect_delay_seconds`/`trust_fail_window_seconds` pattern), texecom_alarm/config.yaml (modify — add schema entries + translations), texecom_alarm/translations/en.yaml (modify — labels), texecom_alarm/tests/test_config.py (modify — default + override + validation cases). Test strategy: how we'll know = unit tests against Settings loader (no stand-in needed); `pytest tests/test_config.py -q`. Defaults: cadence well under the panel's ~60s idle-hang tolerance (docs/protocol-reference.md); patience ≈ 3× cadence per ADR-020.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
