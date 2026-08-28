@@ -1,9 +1,10 @@
 ---
 id: TASK-53
 title: 'Bounded, forcibly-abandoned socket release before reconnecting'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-28 16:14'
+updated_date: '2026-08-28 16:19'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
