@@ -1,10 +1,10 @@
 ---
 id: TASK-49
 title: Add check-in cadence and patience-period as configurable settings
-status: in-progress
+status: done
 assignee: []
 created_date: '2026-08-28 16:13'
-updated_date: '2026-08-28 16:38'
+updated_date: '2026-08-28 17:08'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -32,9 +32,9 @@ ordinal: 43000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Settings exposes checkin_interval_seconds and checkin_patience_seconds with documented defaults
-- [ ] #2 Both are overridable via add-on config and the equivalent environment variables
-- [ ] #3 Settings validation rejects a patience period shorter than one check-in interval
+- [x] #1 Settings exposes checkin_interval_seconds and checkin_patience_seconds with documented defaults
+- [x] #2 Both are overridable via add-on config and the equivalent environment variables
+- [x] #3 Settings validation rejects a patience period shorter than one check-in interval
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -46,6 +46,12 @@ Files likely affected: texecom_alarm/src/texecom_alarm/config.py (modify — add
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Added checkin_interval_seconds and checkin_patience_seconds as configurable Settings (with defaults, env-var overrides, and cross-field validation) per ADR-020.
+Changed files: texecom_alarm/src/texecom_alarm/config.py, texecom_alarm/config.yaml, texecom_alarm/translations/en.yaml, texecom_alarm/DOCS.md, texecom_alarm/tests/test_config.py
+Verification: pytest -q -> 355 passed; ruff check/format clean; coverage 92.56% (>=90%). Mechanical fix cycle: re-worded 6 test docstrings that cited pipeline AC numbers to plain product language (product-code-comments.mdc); re-verified 355 passed, ruff clean; re-review verdict clean.
+Notes/assumptions: Defaults 15.0s check-in interval (matches existing hardcoded idle timeout) and 45.0s patience (3x, per ADR-020's roughly three missed check-ins). Validation boundary is inclusive (patience == interval allowed).
+
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
