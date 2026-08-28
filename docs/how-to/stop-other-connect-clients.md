@@ -7,6 +7,28 @@ Typical other clients: Wintex, another Home Assistant MQTT bridge, or the
 Texecom smartphone app if it is using **this** module rather than a separate
 signalling board.
 
+## Check whether the phone app shares this module
+
+Do not assume the smartphone app is on a separate board. On one Premier Elite 88
+install with two modules fitted, the app turned out to be reaching the *same*
+module as Home Assistant, and simply opening it ended this app's session.
+
+Two ways to tell, easiest first:
+
+1. **Watch the log while you open the app.** With this app running and **Alarm
+   Panel Connection** on, open the Texecom app on your phone. If this app's
+   session drops within a few seconds — and especially if the phone app then
+   shows its own connect-and-retry struggle — both are competing for one module.
+2. **Compare addresses.** Check the address the phone app is configured to dial
+   for a local connection against **Panel host** in this add-on's
+   [Configuration](../../texecom_alarm/DOCS.md#configuration). Same address means
+   same module, so they cannot both be logged in.
+
+If they do share a module, the fix is on the panel side — have the app (or this
+app) pointed at a different module — not something this app can work around. It
+will keep retrying patiently and recover once the slot is free, but live data
+stops for as long as the other client holds it.
+
 ## Before you start
 
 - MQTT broker already running (this app talks to Home Assistant over MQTT

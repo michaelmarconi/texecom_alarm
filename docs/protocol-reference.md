@@ -61,7 +61,7 @@
 | 14 | `SETLCDDISPLAY` | 32-char padded text | Unconfirmed ⚠️ | Seen in other clients |
 | 15 | `GETLOGPOINTER` | — | Unconfirmed ⚠️ | Not exercised |
 | 22 | `GETPANELIDENTIFICATION` | — | Confirmed ✅ | e.g. `Elite 88 … V6.02.02LS1` → 88 zones |
-| 23 | `GETDATETIME` | — | Confirmed ✅ | Production idle keepalive (~15 s). Can come back short/empty-ACK-shaped instead of the 6-byte datetime shortly after zone activity — see Behavioural constraints below; not itself proof the session is dead |
+| 23 | `GETDATETIME` | — | Confirmed ✅ | Production idle keepalive (~15 s). Can come back as a 1-byte **NAK** (`0x15`) instead of the 6-byte datetime after a burst of unsolicited `M` traffic — see Behavioural constraints below; not itself proof the session is dead |
 | 24 | `SETDATETIME` | six numeric date/time bytes | Unconfirmed ⚠️ | Other clients |
 | 25 | `GETSYSTEMPOWER` | — | Confirmed ✅ probe; decode **Hypothesis 🔬** | Example `b0b0ad5300`. Working decode: `[refV,sysV,batV,sysI,batI]`; `V≈13.7+(x−refV)×0.07`; `I≈byte×9` if &gt;0 — uncalibrated |
 | 27 | `GETUSER` | — | Unconfirmed ⚠️ | Not exercised |
@@ -160,13 +160,16 @@ Exit/entry **not** from this snapshot — live AREA pushes.
 
 | Quirk | Confidence | See |
 |-------|------------|-----|
-| Single TCP Connect client | Confirmed ✅ | SPIKE-001 |
+| Single TCP Connect client | Confirmed ✅ | SPIKE-001; enforcement detail and release timing in the rows below (live 2026-08-28) |
 | Idle hang ~60 s without keepalive | Confirmed ✅ | 2026-08-04 |
-| Non-Connect junk → must resync (never fatal) | Confirmed ✅ | ADR-002 / ADR-014 |
+| Non-Connect junk can appear on the wire | Confirmed ✅ **on SmartCom only** | Current policy: treat any unexpected byte as a session fault and reconnect — skip-and-resync retired (ADR-019, supersedes ADR-002 / ADR-014) |
 | Hayes `ATH0`/`ATZ` on the HA socket | Confirmed ✅ **on SmartCom only** | SPIKE-002; wrong `panel_host`. Not seen on dedicated ComIP (SPIKE-010). |
-| Trigger force-closes HA TCP; long recovery | Confirmed ✅ **on SmartCom only** | SPIKE-002 / SPIKE-009. Dedicated ComIP stayed up (SPIKE-010 / ADR-014). |
+| Trigger force-closes HA TCP; long recovery | Confirmed ✅ **on SmartCom only** | SPIKE-002 / SPIKE-009. Dedicated ComIP stayed up (SPIKE-010 / ADR-013; ADR-014 superseded by ADR-019). |
 | Home disarm AREA path unreliable vs Night | Confirmed ✅ (reproduced) | 2026-08-07–08 |
-| Command reply can be short/deferred right after zone activity — panel answers fast (~300ms) but with an empty-ACK-shaped reply instead of the real payload, or interleaves more unsolicited `M` pushes instead of answering at all; symptom is not itself proof of a dead session | Confirmed ✅ (symptom, repeatable) / Hypothesis 🔬 (cause: panel still busy from recent zone traffic) | 2026-08-27 household incident (six `GETDATETIME` 2-byte-reply / interleaved-`M` reconnects, all correlated with PIR bursts 0–20 s earlier; two "near miss" cases show the very next retry getting a normal reply). Corroborated by `davidMbrooke/texecom-connect` (external prior art), whose code comments cite protocol spec §5.5: the panel "sometimes... sends an event at the same time we send a command" — mitigated there with 3 retries, not a different command |
+| Keepalive can be **refused** right after unsolicited traffic — the panel answers fast (~300 ms, same as a healthy reply) with a 1-byte `NAK` (`0x15`) instead of the real payload; a separate case is the panel interleaving more `M` pushes instead of answering at all. Neither symptom is proof of a dead session | Confirmed ✅ (`NAK` byte value, repeatable) / Hypothesis 🔬 (cause: panel still busy from recent traffic) | Live 2026-08-28 capture: 4 of 4 events returned an identical `NAK` on **all three** same-sequence attempts — the refusal never cleared inside the retry budget. Each followed a burst of `M` frames spanning ~50 s, while the three retries fire back-to-back inside ~1 s (no pause between them), so the budget cannot outlast the busy period. Earlier 2026-08-27 household incident (six reconnects, PIR-burst-correlated) had assumed this reply was an `ACK`; the capture refuted that. The *interleaved-`M`* case does sometimes clear on the next attempt (2026-08-27 logs). Corroborated for shape by `davidMbrooke/texecom-connect`, citing protocol spec §5.5: the panel "sometimes... sends an event at the same time we send a command" |
+| Single-client limit is enforced at the **TCP layer**, not just at login — a second connection is refused (`ECONNREFUSED`) while one is live, rather than connecting and having its `LOGIN` rejected | Confirmed ✅ | Live 2026-08-28 capture, 3 of 3 trials |
+| After a session ends, the panel needs a moment before it accepts a new login — an immediate (0 s) reconnect was refused every time (panel sent `+++`); a 2 s wait succeeded every time, first attempt | Confirmed ✅ | Live 2026-08-28 capture, 3 of 3 trials (`success_waits_s: [2.0, 2.01, 2.0]`) |
+| A client that leaves **its own** socket open cannot reconnect — reconnect attempts fail indefinitely until that socket is actually released. Most likely because the panel's one slot stays occupied by the client's own abandoned session | Confirmed ✅ (symptom and the fix) / Hypothesis 🔬 (that the stale socket is what holds the slot — not verified from the panel side) | Live 2026-08-28 capture: a diagnostic client missing its close-before-retry step looped unrecoverably for ~55 min (holding `ESTAB` + `CLOSE-WAIT` sockets); killing the process, which releases sockets at the OS level, logged in on the first attempt |
 
 ---
 
@@ -189,12 +192,12 @@ Other bridges’ **client policies** — not panel law, not ADRs:
 | Topic | Alternate | This project |
 |-------|-----------|--------------|
 | Keepalive | `GETSYSTEMPOWER` ~30 s | `GETDATETIME` ~15 s |
-| Bad CRC | Full reconnect | Resync (ADR-002) |
-| Reconnect | Fixed ~10 s | Asymmetric budgets as wrong-host safety net (ADR-014) |
+| Bad CRC | Full reconnect | Full reconnect — resync retired (ADR-019, supersedes ADR-002) |
+| Reconnect | Fixed ~10 s | One configured interval for every disconnect cause, retrying indefinitely (ADR-018 / ADR-019, supersede ADR-014) |
 | Re-arm | Disarm then arm | Direct arm |
 | In alarm | Cmd 9 then 8 | Cmd 8 (SPIKE-010 on ComIP) |
 | MQTT death | Process exit | LWT + panel_link (ADR-004) |
-| Keepalive fault tolerance | 3 retries, same command/sequence, ~2 s each (`davidMbrooke/texecom-connect`, citing protocol spec §5.5) | 1 retry on timeout only; a received-but-wrong-length reply (e.g. 2-byte `R` to `GETDATETIME`) gets **zero** retries today — this under-provisioning caused the 0.2.1 reconnect-storm incident (2026-08-27); fix pending |
+| Keepalive fault tolerance | 3 retries, same command/sequence, ~2 s each (`davidMbrooke/texecom-connect`, citing protocol spec §5.5) | since 0.2.2: bounded same-sequence retries on a timeout **and** on a wrong-length reply (e.g. a 2-byte `R` to `GETDATETIME`). Live 2026-08-28 shows those retries fire back-to-back inside ~1 s and never recovered a `NAK` (0 of 4 events), so the budget does not help for that case — the original zero-retry gap caused the 0.2.1 reconnect-storm incident (2026-08-27) |
 
 ---
 
@@ -210,6 +213,7 @@ Other bridges’ **client policies** — not panel law, not ADRs:
 | [SPIKE-009](spikes/spike-009-ha-disarm-after-alarm/SPIKE.md) | HA Disarm-during-alarm failed **on SmartCom** (superseded) |
 | [SPIKE-010](spikes/spike-010-comip-stays-online/SPIKE.md) | Dedicated ComIP stays up; HA Disarm during alarm works |
 | Live 2026-08-04 / 07–08 | Zones walk; Home vs Night disarm |
+| [SPIKE-012](spikes/spike-012-getdatetime-keepalive-reply-shape/SPIKE.md) | Extended capture with payload hex logging: the short `GETDATETIME` reply is a `NAK` (`0x15`), not an `ACK` — 4 of 4 events identical on all three attempts; single-client limit enforced at the TCP layer; ~2 s panel release time before a new login is accepted; a client holding its own unclosed socket locks itself out of the single slot |
 | Live 2026-08-27 | 0.2.0 zombie session (keepalive/trust-poll NAK'd all day, TCP never dropped) → 0.2.1 keepalive-NAK fix over-corrected into a same-day reconnect storm (six ~7s drops, all PIR-burst-correlated); root cause was zero keepalive retries on a wrong-length reply, not the choice of `GETDATETIME` as keepalive |
 
 ## How to update
