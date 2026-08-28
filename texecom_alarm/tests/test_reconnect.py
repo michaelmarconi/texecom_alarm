@@ -302,6 +302,68 @@ async def test_reconnect_helper_uses_existing_zones_no_reenumeration() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reconnect_always_awaits_close_before_next_connect_attempt() -> None:
+    """Reconnect must fully await close() (bounded or not) before opening a new
+    connection — otherwise the app could try to log back in while its own
+    abandoned socket still occupies the panel's single connection slot."""
+    from texecom_alarm.reconnect import reconnect_after_disconnect
+
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = PanelClient(
+            panel.host, panel.port, udl_password="1234", login_delay=0.0, response_timeout=0.5
+        )
+        await client.connect()
+        await client.login()
+        await panel.force_disconnect()
+
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        settings = _settings(panel)
+        zones = [Zone(number=1, zone_type=1, name="DOOR")]
+
+        events: list[str] = []
+        real_close = client.close
+        real_connect = client.connect
+
+        async def tracked_close() -> None:
+            events.append("close_start")
+            await asyncio.sleep(0.05)  # simulate a slow (bounded) close taking a moment
+            await real_close()
+            events.append("close_done")
+
+        async def tracked_connect() -> None:
+            events.append("connect_start")
+            await real_connect()
+
+        client.close = tracked_close  # type: ignore[method-assign]
+        client.connect = tracked_connect  # type: ignore[method-assign]
+
+        async def instant_sleep(_delay: float) -> None:
+            return None
+
+        await reconnect_after_disconnect(
+            client,
+            mqtt,
+            settings=settings,
+            zones=zones,
+            zone_count=12,
+            sleep=instant_sleep,
+        )
+
+        assert "close_done" in events and "connect_start" in events
+        assert events.index("close_done") < events.index("connect_start")
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
 async def test_reconnect_helper_retries_after_failed_attempt() -> None:
     """Failed connect attempts keep retrying indefinitely (no attempt cap, ADR-018)."""
     from texecom_alarm.reconnect import reconnect_after_disconnect

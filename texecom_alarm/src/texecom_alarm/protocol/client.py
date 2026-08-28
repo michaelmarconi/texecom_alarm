@@ -35,6 +35,16 @@ logger = logging.getLogger(__name__)
 # particular a 1-byte NAK — means the panel rejected the keepalive check-in.
 _GETDATETIME_REPLY_LENGTH = 6
 
+# How long close() waits for a clean transport shutdown before forcibly abandoning
+# it. This is an internal safety bound, not one of ADR-020's three install-time
+# settings (patience period / check-in cadence / reconnect wait) — it only guards
+# against a transport whose wait_closed() never completes, which would otherwise
+# leave the app's own socket occupying the panel's single connection slot forever
+# and lock the app out of ever reconnecting. Kept short and comfortably below the
+# reconnect-wait interval (default 5s) so a stuck close never itself becomes the
+# bottleneck before the next connect attempt.
+_CLOSE_TIMEOUT_SECONDS = 2.0
+
 # Human labels for panel commands that appear in operator-facing errors.
 _CMD_LABELS: dict[int, str] = {
     CMD_LOGIN: "LOGIN",
@@ -163,7 +173,11 @@ class PanelClient:
         """Tear down the TCP session after any in-flight ``send_command`` finishes.
 
         Acquires ``_io_lock`` so reconnect teardown cannot null reader/writer
-        under a concurrent arm/disarm or keepalive command.
+        under a concurrent arm/disarm or keepalive command. The clean-shutdown
+        wait is bounded (``_CLOSE_TIMEOUT_SECONDS``); a transport that will not
+        close cleanly within that bound is forcibly aborted rather than left
+        dangling, so the app can never lock itself out of the panel's one
+        connection slot while waiting on a session it has already given up on.
         """
         logger.debug("panel_close")
         async with self._io_lock:
@@ -174,7 +188,16 @@ class PanelClient:
             self._buf.clear()
         if writer is not None:
             writer.close()
-            await writer.wait_closed()
+            try:
+                await asyncio.wait_for(writer.wait_closed(), timeout=_CLOSE_TIMEOUT_SECONDS)
+            except TimeoutError:
+                logger.warning(
+                    "panel_close_timed_out_aborting_transport",
+                    extra={"timeout": _CLOSE_TIMEOUT_SECONDS},
+                )
+                transport = writer.transport
+                if transport is not None:
+                    transport.abort()
 
     async def login(self) -> None:
         logger.debug("panel_login")

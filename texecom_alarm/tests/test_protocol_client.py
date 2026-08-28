@@ -511,6 +511,45 @@ async def test_send_command_requires_authenticated_except_login(panel: FakePanel
 
 
 @pytest.mark.asyncio
+async def test_close_bounds_wait_and_aborts_transport_when_wait_closed_hangs() -> None:
+    """A transport whose wait_closed() never completes must not hang close() forever —
+    it must return within the short bound and the transport must be forcibly aborted
+    so the panel's single connection slot is freed for the next reconnect attempt."""
+
+    class _HangingTransport:
+        def __init__(self) -> None:
+            self.abort_calls = 0
+
+        def abort(self) -> None:
+            self.abort_calls += 1
+
+    class _HangingWriter:
+        def __init__(self) -> None:
+            self.transport = _HangingTransport()
+            self.close_calls = 0
+
+        def close(self) -> None:
+            self.close_calls += 1
+
+        async def wait_closed(self) -> None:
+            await asyncio.Event().wait()  # never completes
+
+    client = PanelClient("127.0.0.1", 1, udl_password="1234")
+    writer = _HangingWriter()
+    client._writer = writer  # type: ignore[assignment]
+    client._had_transport = True
+
+    started = asyncio.get_running_loop().time()
+    await asyncio.wait_for(client.close(), timeout=5.0)
+    elapsed = asyncio.get_running_loop().time() - started
+
+    assert writer.close_calls == 1
+    assert writer.transport.abort_calls == 1
+    # Bounded well under the reconnect-interval scale (seconds, not tens of seconds).
+    assert elapsed < 3.0
+
+
+@pytest.mark.asyncio
 async def test_plusplusplus_message_does_not_claim_trigger_is_common(panel: FakePanel) -> None:
     """ADR-013: ForcedDisconnect copy must not present trigger drops as the normal path."""
     client = await _logged_in_client(panel)
