@@ -29,6 +29,14 @@ DEFAULT_TRUST_FAIL_WINDOW_SECONDS = 90.0
 # Reconciliation poll no longer gates connectivity (ADR-016), so it can run this
 # infrequently by default; households can tune it via add-on settings (ADR-017).
 DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS = 300.0
+# Fixed check-in schedule, independent of inbound traffic and of the
+# reconciliation poll (ADR-020) — comfortably under the panel's observed ~60s
+# idle-hang tolerance (docs/protocol-reference.md).
+DEFAULT_CHECKIN_INTERVAL_SECONDS = 15.0
+# Roughly three consecutive missed check-ins before the session is declared
+# dead (ADR-020) — long enough to ride out an observed activity burst, short
+# enough to recover in well under a minute.
+DEFAULT_CHECKIN_PATIENCE_SECONDS = 45.0
 DEFAULT_LOG_LEVEL = "INFO"
 
 PartArmLabel = Literal["home", "night", "unused"]
@@ -53,6 +61,8 @@ _ENV_KEYS = {
     "reconnect_delay_seconds": "TEXECOM_RECONNECT_DELAY_SECONDS",
     "trust_fail_window_seconds": "TEXECOM_TRUST_FAIL_WINDOW_SECONDS",
     "reconciliation_poll_interval_seconds": "TEXECOM_RECONCILIATION_POLL_INTERVAL_SECONDS",
+    "checkin_interval_seconds": "TEXECOM_CHECKIN_INTERVAL_SECONDS",
+    "checkin_patience_seconds": "TEXECOM_CHECKIN_PATIENCE_SECONDS",
     "log_level": "TEXECOM_LOG_LEVEL",
 }
 
@@ -79,6 +89,8 @@ class Settings:
     reconnect_delay_seconds: float = DEFAULT_RECONNECT_DELAY_SECONDS
     trust_fail_window_seconds: float = DEFAULT_TRUST_FAIL_WINDOW_SECONDS
     reconciliation_poll_interval_seconds: float = DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS
+    checkin_interval_seconds: float = DEFAULT_CHECKIN_INTERVAL_SECONDS
+    checkin_patience_seconds: float = DEFAULT_CHECKIN_PATIENCE_SECONDS
     log_level: LogLevel = DEFAULT_LOG_LEVEL
 
     def part_arm_labels(self) -> tuple[PartArmLabel, PartArmLabel, PartArmLabel]:
@@ -186,6 +198,20 @@ def _parse(raw: Mapping[str, Any]) -> Settings:
     part_arm_3 = _parse_part_arm_label(raw, "part_arm_3", DEFAULT_PART_ARM_3)
     _validate_unique_part_arm_modes(part_arm_1, part_arm_2, part_arm_3)
 
+    checkin_interval_seconds = _optional_float(
+        raw,
+        "checkin_interval_seconds",
+        DEFAULT_CHECKIN_INTERVAL_SECONDS,
+        minimum=0.0,
+    )
+    checkin_patience_seconds = _optional_float(
+        raw,
+        "checkin_patience_seconds",
+        DEFAULT_CHECKIN_PATIENCE_SECONDS,
+        minimum=0.0,
+    )
+    _validate_checkin_patience(checkin_interval_seconds, checkin_patience_seconds)
+
     return Settings(
         panel_host=panel_host,
         panel_port=_optional_int(raw, "panel_port", DEFAULT_PANEL_PORT, minimum=1, maximum=65535),
@@ -216,6 +242,8 @@ def _parse(raw: Mapping[str, Any]) -> Settings:
             DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS,
             minimum=0.0,
         ),
+        checkin_interval_seconds=checkin_interval_seconds,
+        checkin_patience_seconds=checkin_patience_seconds,
         log_level=_parse_log_level(raw),
     )
 
@@ -274,6 +302,15 @@ def _validate_unique_part_arm_modes(
                 f"HA mode {label!r} is assigned to both Part-Arm slot {seen[label]} and slot {slot}"
             )
         seen[label] = slot
+
+
+def _validate_checkin_patience(interval_seconds: float, patience_seconds: float) -> None:
+    """Patience shorter than one check-in interval could never see a check-in succeed."""
+    if patience_seconds < interval_seconds:
+        raise ConfigError(
+            "option checkin_patience_seconds must be >= checkin_interval_seconds "
+            f"(got patience={patience_seconds!r}, interval={interval_seconds!r})"
+        )
 
 
 def _require_str(raw: Mapping[str, Any], key: str) -> str:
