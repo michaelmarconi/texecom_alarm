@@ -1,6 +1,6 @@
 # Architecture
 
-<!-- Synthesised by /architecture on 2026-08-25 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md, adr-011-use-automatic-session-recovery-for-mid-run-panel-path-failures.md, adr-012-use-python-3-for-the-texecom-alarm-app.md, adr-013-use-dedicated-local-network-module-for-home-assistant-panel-access.md, adr-015-use-ready-to-arm-switches-and-mqtt-blocked-arm-event-for-unready-arm-refusal.md, adr-016-use-keepalive-failure-and-command-reject-events-for-panel-connection-detection.md, adr-017-use-a-configurable-5-minute-interval-for-the-panel-reconciliation-poll.md, adr-018-use-interval-only-reconnect-budgets-for-panel-disconnects.md, adr-019-use-a-single-reconnect-interval-and-no-line-noise-defense-for-panel-disconnects.md -->
+<!-- Synthesised by /architecture on 2026-08-28 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md, adr-011-use-automatic-session-recovery-for-mid-run-panel-path-failures.md, adr-012-use-python-3-for-the-texecom-alarm-app.md, adr-013-use-dedicated-local-network-module-for-home-assistant-panel-access.md, adr-015-use-ready-to-arm-switches-and-mqtt-blocked-arm-event-for-unready-arm-refusal.md, adr-016-use-keepalive-failure-and-command-reject-events-for-panel-connection-detection.md, adr-017-use-a-configurable-5-minute-interval-for-the-panel-reconciliation-poll.md, adr-018-use-interval-only-reconnect-budgets-for-panel-disconnects.md, adr-019-use-a-single-reconnect-interval-and-no-line-noise-defense-for-panel-disconnects.md, adr-020-use-scheduled-check-ins-and-a-patience-window-for-panel-session-recovery.md -->
 
 **Date:** 2026-08-23
 **State:** Accepted ✅
@@ -13,6 +13,7 @@
 <!-- Update 2026-08-26: /architecture Update — fold ADR-019 (retires frame-resync and the asymmetric reconnect interval, supersedes ADR-014; dedicated module is now a hard prerequisite with no client-side line-noise defense). -->
 <!-- Update 2026-08-27: /architecture Update — tighten keepalive-failure wording (ADR-016) so an explicit reject (NAK) of the check-in command itself is stated as a failed check-in alongside timeout, not implied only by "missed"/"unanswered" phrasing (live incident: GETDATETIME NAK'd while TCP stayed open). -->
 <!-- Update 2026-08-27: /architecture Update — keepalive check-in gets a small bounded retry (same command, same sequence) on a wrong-shaped reply or a retry eaten by interleaved `M` traffic, before counting as a failed check-in, matching the panel's documented tendency to defer/shortcut a reply while busy with recent zone traffic (ADR-016/ADR-011 tuning, no new ADR; live incident: 0.2.1 keepalive-NAK fix over-corrected into a same-day reconnect storm, six PIR-burst-correlated drops). -->
+<!-- Update 2026-08-28: /architecture Update — fold ADR-020 (scheduled check-ins on a fixed cadence, replacing the same-sequence retry burst above; a refused or unanswered check-in no longer ends the session on its own — only continuous failure past a configured patience window does; mandatory bounded socket release before any reconnect; the command-rejection watchdog from ADR-011 is kept as a separate, unmerged mechanism). -->
 
 ## Overview
 
@@ -91,11 +92,17 @@ Building this commits the project to:
   poll no longer feeds this signal at all; it keeps running on its own
   configurable interval (default 5 minutes) purely to correct the alarm entity if
   it ever disagrees with the panel's last-known state (ADR-017).
-- Healing mid-run panel failures without a manual add-on restart: when the usual
-  health check goes unanswered, use the same keep-trying reconnect path as a clean
-  drop; when trust stays broken after a short check window, tear down and log in
-  again. Do not silently re-fire a failed arm/disarm tap (ADR-011 /
-  `spec-panel-session-heal`).
+- Healing mid-run panel failures without a manual add-on restart, via two
+  deliberately separate mechanisms. A refused or unanswered routine check-in does
+  not end the session by itself — check-ins run on their own fixed schedule so a
+  busy panel can't starve them, and only continuous failure past a configured
+  patience window declares the session dead; at that point the app releases its
+  own connection (forcibly, if it will not close in time) and logs back in,
+  retrying for as long as it takes (ADR-020). Separately, a rejected or timed-out
+  arm/disarm command still degrades the connection signal immediately and runs its
+  own independent countdown to a fresh login if trust stays broken (ADR-011) — this
+  watchdog is not merged into the check-in patience window. Do not silently re-fire
+  a failed arm/disarm tap (ADR-011 / `spec-panel-session-heal`).
 
 **Diagram colours:** blue = this system (authored components and local storage); grey =
 external people and systems.
@@ -138,7 +145,9 @@ broker) and its internal shape are detailed under `## Components` below.
   connect/login with progressive waits (5 s → 10 s → 20 s → 30 s, then 30 s
   until success), logging each next wait so operators can tell patience from a
   hang (`spec-startup-login-backoff`). This schedule does not redefine mid-run
-  reconnect patience after a session was already healthy (ADR-014).
+  reconnect patience after a session was already healthy — that is the single
+  configured reconnect interval (ADR-019) plus the check-in patience window and
+  command-rejection fail window (ADR-011, ADR-020).
 - **Unexpected byte on the wire** — the app tears down the connection and
   reconnects rather than scanning forward past it; there is no code-level
   tolerance for dialer/modem text anymore (ADR-019). The dialer/modem text seen
@@ -155,21 +164,28 @@ broker) and its internal shape are detailed under `## Components` below.
   that (ADR-004).
 - **Arm/disarm rejected or times out** — flips **Alarm Panel Connection** off
   immediately, even while routine check-ins still succeed (ADR-016). Brief glitches
-  may clear on the next successful check-in; if trust stays broken past a bounded
-  fail window, the app tears down and logs in again (ADR-011). Zone/alarm entities
-  keep last-known state (ADR-004). Failed arm/disarm taps are not auto-retried. A
-  reconciliation-poll timeout in isolation — check-ins and commands otherwise
-  healthy — does **not** flip this signal (ADR-016).
+  may clear on the next successful check-in; if trust stays broken past its own
+  bounded fail window, the app tears down and logs in again (ADR-011). This is a
+  separate, unmerged mechanism from the check-in patience window below — a panel
+  that answers check-ins while refusing every command must still reach a fresh
+  login (ADR-020). Zone/alarm entities keep last-known state (ADR-004). Failed
+  arm/disarm taps are not auto-retried. A reconciliation-poll timeout in isolation —
+  check-ins and commands otherwise healthy — does **not** flip this signal
+  (ADR-016).
 - **Ready-to-arm switch off** — that arm is not sent to the panel; the alarm
   entity ends as it was; the app publishes MQTT `arming` then that current
   alarm state so Home Assistant can drop an optimistic mode tap (a second
   identical payload is ignored); a blocked-arm MQTT event names the mode
   only. This app does not speak or explain. Disarm still works. Turning the
   switch off while already armed does not disarm (ADR-015, `spec-ready-to-arm`).
-- **Health check unanswered mid-run** — treat like a dead session: Connection stays
-  off, keep trying the same reconnect path used after a clean panel drop, then
-  re-sync zone/alarm state when the panel accepts again — no manual restart
-  (ADR-011). Not the same schedule as progressive first-login backoff.
+- **Health check refused or unanswered mid-run** — does not end the session by
+  itself. Check-ins run on a fixed schedule that heavy panel traffic cannot starve;
+  **Alarm Panel Connection** stays live while the app is being patient, and only
+  continuous check-in failure past the configured patience period declares the
+  session dead. At that point the app releases its own connection (forcibly if it
+  will not close cleanly), then reconnects and re-syncs zone/alarm state — no
+  manual restart (ADR-020). Not the same schedule as progressive first-login
+  backoff, and not the same mechanism as a rejected arm/disarm command above.
 - **MQTT broker unreachable** — out of scope to solve beyond standard client
   reconnect behaviour; this app has the same standing dependency on the broker that
   the prior MQTT bridge does today.
@@ -230,17 +246,19 @@ discovery payloads (ADR-003). Clean rename of zone and connectivity
 **Consumes:**
 - Texecom Connect protocol over TCP to the panel's **dedicated local network
   module** (ADR-001, ADR-013, ADR-019, ADR-006, ADR-008, ADR-009, ADR-016,
-  ADR-011) — not the installer signalling module.
+  ADR-011, ADR-020) — not the installer signalling module.
 - The household's MQTT broker, as a standing runtime dependency (ADR-003) — the same
   broker the prior MQTT bridge already uses today.
 - App configuration (panel host/port, UDL password, MQTT broker settings, the
-  Home/Night→Part-Arm slot mapping, and the reconciliation poll interval — default
-  5 minutes) via the HA Supervisor's `config.yaml`/`options.json`/`bashio::config`
-  mechanism, already scaffolded in this repo (ADR-013 requires panel host to be the
+  Home/Night→Part-Arm slot mapping, the reconciliation poll interval — default
+  5 minutes — and the check-in cadence, patience period, and reconnect wait) via
+  the HA Supervisor's `config.yaml`/`options.json`/`bashio::config` mechanism,
+  already scaffolded in this repo (ADR-013 requires panel host to be the
   dedicated local module; ADR-008 requires Home/Night→slot to be install-time
   configuration with Away excluded from Part-Arm options; ADR-017 requires the
-  reconciliation poll interval to be configurable; the exact option shape is still
-  open — see Open questions).
+  reconciliation poll interval to be configurable; ADR-020 requires the check-in
+  cadence, patience period, and reconnect wait to all be configurable, not fixed
+  in code; the exact option shape is still open — see Open questions).
 **Delivery:** Home Assistant App image with s6-supervised Python 3 process (ADR-012
 language; ADR-003 App shape).
 
@@ -283,9 +301,10 @@ Key behaviours:
   `min(5 × 2^(k-1), 30)` seconds before the next try — **5 s → 10 s → 20 s →
   30 s**, then **30 s** forever until success. Cap is **30 seconds**; never wait
   longer; never give up. Recovery logs must name the wait that will be used
-  before the next try. Distinct from ADR-014 reconnect-after-drop after a
-  previously healthy session. FakePanel must exercise fail-then-succeed and
-  capped-wait shapes for CI.
+  before the next try. Distinct from the mid-run reconnect-after-drop budgets
+  (ADR-019 reconnect interval; ADR-011/ADR-020 patience and fail windows) used
+  after a previously healthy session. FakePanel must exercise fail-then-succeed
+  and capped-wait shapes for CI.
 - **Startup / zone discovery** (ADR-001): after the first successful connect/login
   (including the ≥500ms post-connect wait and UDL password login — panels often
   still use factory default `1234` on unaltered installs; empty UDL is rejected), sends `GETPANELIDENTIFICATION` for
@@ -322,44 +341,53 @@ Key behaviours:
   interval (default 5 minutes) purely to correct the alarm entity if it disagrees
   with the panel — not a replacement for push updates and not part of connectivity
   detection (ADR-016).
-- **Idle keepalive and ordinary collision recovery**: sends a safe read-only command
-  (e.g. `GETDATETIME`) periodically; on a 2–3s timeout, resends with the same sequence
-  number, matching the panel's own documented and empirically-confirmed recovery
-  behaviour (ADR-014). A check-in only counts as successful when the panel returns
-  the expected reply payload (e.g. the 6-byte datetime for `GETDATETIME`). A timeout,
-  a reply that arrives but is the wrong shape (e.g. a short/empty-ACK-shaped reply),
-  or a retry attempt entirely eaten by interleaved unsolicited `M` traffic, is retried
-  the same way — same command, same sequence — for a small bounded number of attempts
-  before it counts as a failed check-in: the panel is documented to sometimes defer or
-  shortcut a reply while still busy with recent zone/area traffic, and a single such
-  reply must not be read as a dead session (live incident 2026-08-27; corroborated by
-  external prior art citing the panel's own protocol spec — see
-  `docs/protocol-reference.md`). Only once that retry budget is exhausted is it one of
-  the two direct triggers for marking **Alarm Panel Connection** degraded (ADR-016);
-  keepalive success alone does not prove a command will be honoured, which is why
-  command-reject/timeout on arm/disarm is the other trigger.
-- **Panel-connection detection** (ADR-016, supersedes ADR-010): **Alarm Panel
-  Connection** goes degraded only on (a) a routine check-in still missed or rejected
-  after its retry budget above (timeout, or the panel replying but with something
-  other than the expected payload — e.g. a NAK to `GETDATETIME`) or an outright
-  disconnect, or (b) an arm/disarm command that is rejected or times out — even
-  while check-ins still succeed. It recovers automatically once check-ins resume
-  and no recent command failure remains, without a manual add-on restart. The panel
-  reconciliation poll (ADR-017) does **not** feed this signal at all — a poll
-  timeout in isolation, with check-ins and commands otherwise healthy, must not
-  degrade it. FakePanel must exercise the SPIKE-011 detector shapes for CI,
-  including that isolated-poll-timeout non-degrade case.
-- **Mid-run session heal** (ADR-011 / `spec-panel-session-heal`): a mid-run
-  health-check still failed after its retry budget above — no reply (timeout) or an
-  explicit reject of the check-in itself (e.g. keepalive NAK) — must **not** abort
-  the listen loop — enter the
-  same keep-trying reconnect path as a clean panel drop (Connection off while
-  recovering; re-LOGIN + ADR-006/ADR-009 snapshots + resubscribe when the panel
-  accepts). Soft trust-degrade: corroborate first; if still stuck after a bounded fail
-  window (exact length at `/plan` / live tuning), tear down and log in again. Do not
-  auto-retry the failed arm/disarm command. FakePanel must cover health-check →
-  reconnect-heal, trust-fail → corroboration recover, and trust-fail → bounded
-  re-login.
+- **Scheduled check-in and patience window** (ADR-020, supersedes the same-sequence
+  retry burst below): sends a safe read-only command (e.g. `GETDATETIME`) on a fixed
+  elapsed-time schedule, independent of how much unsolicited traffic the panel is
+  sending and independent of the reconciliation poll's interval — a busy panel must
+  never starve or delay a scheduled check-in. Live capture found the panel actively
+  refusing this check-in (a NAK, not the ACK previously assumed) during its own
+  activity bursts, and that a bounded same-sequence retry burst fired inside ~1s never
+  recovered it (0 of 4 observed events); that retry burst is retired. A refused or
+  unanswered check-in no longer ends the session by itself — it does not reset the
+  "last successful check-in" clock. Only once that clock exceeds the configured
+  patience period (default ~3 missed check-ins) is the session declared dead: the app
+  releases its own connection within a bounded time (forcibly abandoning it if it will
+  not close cleanly, so it can never lock itself out of the panel's single connection
+  slot), waits briefly, then reconnects and re-syncs state. An outright disconnect, an
+  end-of-session signal, or non-conforming data on the wire still ends the session
+  immediately — patience applies only to a refused or unanswered check-in. Whether a
+  refusal ever clears while the session stays open is unconfirmed; no refusal has been
+  observed outliving the old sub-second teardown (SPIKE-012).
+- **Panel-connection detection** (ADR-016, supersedes ADR-010; narrowed by ADR-020):
+  **Alarm Panel Connection** goes degraded only on (a) the check-in patience window
+  above being exceeded, or an outright disconnect, or (b) an arm/disarm command that
+  is rejected or times out — even while check-ins still succeed. Trigger (a) now
+  takes the configured patience period rather than about a second, and a refusal
+  that clears inside that period never shows as down at all; trigger (b) is
+  unaffected and still degrades immediately. It recovers automatically once check-ins
+  resume (or the session is re-established) and no recent command failure remains,
+  without a manual add-on restart. The panel reconciliation poll (ADR-017) does
+  **not** feed this signal at all — a poll timeout in isolation, with check-ins and
+  commands otherwise healthy, must not degrade it. FakePanel must exercise the
+  SPIKE-011 detector shapes plus the ADR-020 patience-window shapes for CI, including
+  the isolated-poll-timeout non-degrade case and a refusal that clears within the
+  patience period.
+- **Mid-run session heal — two separate, unmerged mechanisms** (ADR-011, ADR-020 /
+  `spec-panel-session-heal`): a refused or unanswered mid-run check-in must **not**
+  abort the listen loop — it feeds the ADR-020 patience window above; only once that
+  window is exceeded does the app tear down (bounded socket release, forcibly
+  abandoning it if needed) and log back in, then re-sync via the ADR-006/ADR-009
+  snapshots and resubscribe. Separately, a rejected or timed-out arm/disarm command
+  degrades the connection signal immediately and starts its own independent fail
+  window (ADR-011): corroborate first via successful check-ins/traffic; if still
+  stuck after that window (exact length at `/plan` / live tuning, distinct from the
+  check-in patience period), tear down and log in again. The two windows must never
+  share one clock — a panel that answers check-ins while refusing every command would
+  otherwise keep resetting a shared clock and the command-path re-login would never
+  fire. Do not auto-retry the failed arm/disarm command. FakePanel must cover
+  check-in-refusal → patience-then-reconnect-heal, command-reject → corroboration
+  recover, and command-reject → bounded re-login, as independent scenarios.
 - **Dedicated local module** (ADR-013): panel host is the dedicated LAN module
   (typically a ComIP reserved for this app), not the installer module used for
   the vendor app and monitoring. This is a hard install prerequisite, not a case
@@ -374,13 +402,17 @@ Key behaviours:
   installer signalling module multiplexing dialer/reporting traffic onto the
   Connect session; that is not dedicated-ComIP behaviour, and the app no longer
   tolerates it if it occurs.
-- **Single-interval reconnect** (ADR-019, supersedes ADR-014): on a dropped
-  connection — and, per ADR-011, on an unanswered mid-run health-check —
-  reconnects using one configured wait interval and flips **Alarm Panel
+- **Single-interval reconnect with bounded release** (ADR-019, supersedes ADR-014;
+  ADR-020 adds the release requirement): on a dropped connection, and — per ADR-020 —
+  once the check-in patience window has been exceeded or a command-rejection fail
+  window has expired, the app first releases its own socket within a bounded time
+  (forcibly abandoning it if it will not close cleanly, so the panel's single
+  connection slot can never be locked out by a connection the app has already given
+  up on), then reconnects using one configured wait interval, flipping **Alarm Panel
   Connection** off throughout — never the `alarm_control_panel`/zone entities
-  themselves (ADR-004). The disconnect's cause (an everyday drop vs. one
-  following a real trigger) no longer selects a different interval; the app
-  always keeps retrying indefinitely either way (ADR-004/ADR-011/ADR-018).
+  themselves (ADR-004). The disconnect's cause (an everyday drop vs. one following a
+  real trigger) no longer selects a different interval; the app always keeps
+  retrying indefinitely either way (ADR-004/ADR-011/ADR-018/ADR-020).
 - **Availability and trigger snapshot** (ADR-004): the `alarm_control_panel` and zone
   entities' availability is governed solely by whether the app process itself is
   running (MQTT Last-Will) — never by panel-link health, so a panel-link outage never
@@ -477,45 +509,64 @@ it is not a substitute for push updates and, since ADR-016, plays no part in
 ### Panel-link trust and mid-run heal
 
 How **Alarm Panel Connection** stays honest using only two triggers (ADR-016), how
-mid-run death or stuck trust recovers without a restart (ADR-011), and how
-zone/alarm entities keep last-known state throughout (ADR-004). The panel
-reconciliation poll (ADR-017) runs independently of this flow — it never
-contributes to a degrade or recover decision here.
+each trigger recovers without a restart via its own separate, unmerged timer
+(ADR-011 for command rejection, ADR-020 for check-in refusal), and how zone/alarm
+entities keep last-known state throughout (ADR-004). The panel reconciliation poll
+(ADR-017) runs independently of this flow — it never contributes to a degrade or
+recover decision here.
 
 ```mermaid
 flowchart LR
     Reject["Arm/disarm NAK<br/>or command timeout"]:::owned
-    HealthFail["Check-in unanswered<br/>or disconnect"]:::owned
-    Off["Alarm Panel Connection<br/>→ off"]:::owned
-    Keep["Zone/alarm keep<br/>last-known state"]:::owned
-    Soft{"Still stuck after<br/>fail window?"}:::owned
-    CheckInOk["Check-ins resume +<br/>no recent cmd fail"]:::owned
+    Off1["Connection → off<br/>(immediate)"]:::owned
+    Soft{"Still stuck after<br/>own fail window?"}:::owned
+    CheckInOk["Check-ins/traffic<br/>resume"]:::owned
     Relogin["Tear down +<br/>re-login + re-sync"]:::owned
-    Reconnect["Keep-trying reconnect<br/>+ re-sync"]:::owned
-    Live["Alarm Panel Connection<br/>→ live"]:::owned
 
-    Reject --> Off
-    HealthFail --> Off
-    Off --> Keep
-    Off --> Soft
-    Soft -->|brief / clears| CheckInOk --> Live
+    CheckInFail["Check-in refused<br/>or unanswered"]:::owned
+    Patient["Stay live —<br/>being patient"]:::owned
+    Window{"Patience window<br/>exceeded?"}:::owned
+    DeclareDead["Declare dead:<br/>Connection → off"]:::owned
+    Release["Bounded release<br/>(force-abandon if stuck)"]:::owned
+    Reconnect["Reconnect + re-login<br/>+ re-sync"]:::owned
+
+    Drop["Outright disconnect,<br/>end-of-session, bad data"]:::external
+
+    Live["Alarm Panel Connection<br/>→ live"]:::owned
+    Keep["Zone/alarm keep<br/>last-known state"]:::owned
+
+    Reject --> Off1 --> Keep
+    Off1 --> Soft
+    Soft -->|clears| CheckInOk --> Live
     Soft -->|yes stuck| Relogin --> Live
-    HealthFail --> Reconnect --> Live
+
+    CheckInFail --> Patient --> Window
+    Window -->|not yet| Patient
+    Window -->|yes| DeclareDead --> Keep
+    DeclareDead --> Release --> Reconnect --> Live
+
+    Drop --> DeclareDead
 
     classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
+    classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
 ```
 
-A rejected or timed-out arm/disarm is an immediate “Connection off” *event* even when
-routine check-ins still succeed. A reconciliation-poll timeout in isolation is not a
-trigger here at all (ADR-016). Brief glitches may return to live once check-ins
-resume and the recent-command-failure window has cleared. If trust stays broken past
-the fail window, tear down and log in again. An unanswered mid-run health check
-takes the keep-trying reconnect path used after a clean drop — not process exit and
-not “wait for a human restart.” Failed arm/disarm taps are never auto-retried as
-part of heal. Exact fail-window length and how patient retry cadence lines up with
-existing mid-run reconnect budgets stay plan-time / live-tunable (ADR-011); ADR-016
-flags that this cadence should be re-checked against the now-narrower set of degrade
-triggers, not that it has been re-tuned already.
+The two triggers recover on independent clocks that must never merge into one. A
+rejected or timed-out arm/disarm is an immediate "Connection off" event even when
+routine check-ins still succeed; if trust stays broken past its own fail window
+(exact length plan-time / live-tunable, ADR-011), the app tears down and logs in
+again. A refused or unanswered check-in does the opposite of that at first — it
+changes nothing observable, because check-ins run on a fixed schedule a busy panel
+cannot starve, and the connection signal stays live while the app is being patient.
+Only once the check-in patience window (a separate, ADR-020 install-time setting) is
+exceeded does the app declare the session dead, release its own socket within a
+bounded time (forcibly abandoning it if it will not close), and reconnect. Merging
+these two windows would mean a panel that answers check-ins while refusing every
+command never reaches a fresh login — the exact zombie ADR-011 exists to clear.
+An outright disconnect, an end-of-session signal, or non-conforming data on the wire
+skips the patience window entirely and declares dead immediately. A
+reconciliation-poll timeout in isolation is not a trigger on either path (ADR-016).
+Failed arm/disarm taps are never auto-retried as part of either heal path.
 
 ### Reconnect after disconnect
 
@@ -531,14 +582,15 @@ wait interval regardless of what caused the disconnect.
 flowchart LR
     Trigger["Panel decodes<br/>in alarm event"]:::external
     Snap["Publish trigger<br/>snapshot"]:::owned
-    Fault["Dropped or unexpected<br/>data on the wire"]:::external
+    Fault["Dropped, unexpected data,<br/>or declared-dead (ADR-020)"]:::external
     Degrade["Flip connectivity<br/>sensor degraded"]:::owned
+    Release["Bounded socket release<br/>(force-abandon if stuck)"]:::owned
     Reconnect["Reconnect<br/>(one configured interval)"]:::owned
     Resume["Re-LOGIN, zone + area<br/>snapshots, resubscribe"]:::owned
 
     Trigger --> Snap
     Trigger -.->|may or may not disconnect<br/>on a correctly configured ComIP| Fault
-    Fault --> Degrade --> Reconnect --> Resume
+    Fault --> Degrade --> Release --> Reconnect --> Resume
 
     classDef owned fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#111827
@@ -546,12 +598,17 @@ flowchart LR
 
 On the dedicated ComIP, most alarms never reach a forced-disconnect branch at all.
 Earlier "real trigger always force-disconnects" findings were the signalling-module
-path (ADR-014, superseded). If a disconnect does happen — for any reason, not only a
-trigger — Resume re-runs login, the zone-state snapshot, the area-flags snapshot, and
-event subscribe before live reporting continues, always retrying indefinitely
-(ADR-004/ADR-011/ADR-018). The alarm entity itself is unaffected by this whole flow —
-it keeps reporting last-known state (including triggered) throughout; only the
-dedicated connectivity sensor reflects the degraded/recovering link (ADR-004).
+path (ADR-014, superseded). An outright disconnect reaches this flow directly; a
+refused or unanswered check-in only reaches it once the ADR-020 patience window is
+exceeded (see the previous flow) — either way, the app releases its own socket
+within a bounded time before reconnecting, so it can never lock itself out of the
+panel's single connection slot waiting on a connection it has already given up on.
+Resume re-runs login, the zone-state snapshot, the area-flags snapshot, and event
+subscribe before live reporting continues, always retrying indefinitely
+(ADR-004/ADR-011/ADR-018/ADR-020). The alarm entity itself is unaffected by this
+whole flow — it keeps reporting last-known state (including triggered) throughout;
+only the dedicated connectivity sensor reflects the degraded/recovering link
+(ADR-004).
 
 ### Arm/disarm command
 
@@ -600,11 +657,14 @@ armed does not disarm.
 
 | Outside system | In CI | What CI may claim | Live-only |
 |---|---|---|---|
-| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), reconnect-when-TCP-dies with no resync/skip path — an unexpected byte sequence ends the session and triggers reconnect, on one configured interval regardless of disconnect cause (ADR-019); keepalive-failure and command-reject connection detection, including that an isolated reconciliation-poll timeout does **not** degrade connectivity (ADR-016 / SPIKE-011); reconciliation poll fires on its configured interval (default 5 minutes) without affecting the connection signal (ADR-017); mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login (ADR-011); progressive startup-login backoff (fail-N-then-succeed waits strictly increasing then capped at 30 s; recovery without process exit); ready-to-arm refuse — matching switch off means no arm command, Home Assistant alarm payload ends unchanged, MQTT `arming` then that current payload (including the Home Assistant command path); disarm still works; switch-off while armed does not disarm (ADR-015, `spec-ready-to-arm`) | Real Away/Night/Home arm sequences; which module `panel_host` is (ADR-013); survive-trigger and HA Disarm-during-alarm on dedicated ComIP (SPIKE-010 / ADR-013 — live-only; FakePanel must not claim the opposite); live quiet-house / command-rejection zombie corroboration under the simplified detector (ADR-016); mid-run heal under real ComIP contention; whether the reconciliation poll's cadence measurably affects audible panel pips (ADR-017 — unconfirmed); live Supervisor timing (RISK-015) |
+| Texecom panel (ComIP) | Stand-in: FakePanel | Login, zone enumerate, zone-state and area-flags snapshots, arm/disarm mode-byte selection (Away = full arm; Home/Night = configured slots), reconnect-when-TCP-dies with no resync/skip path — an unexpected byte sequence ends the session and triggers reconnect, on one configured interval regardless of disconnect cause (ADR-019); keepalive-failure and command-reject connection detection, including that an isolated reconciliation-poll timeout does **not** degrade connectivity (ADR-016 / SPIKE-011); reconciliation poll fires on its configured interval (default 5 minutes) without affecting the connection signal (ADR-017); scheduled check-ins not starved by sustained inbound traffic and independent of the reconciliation-poll interval, a refused check-in inside the patience period changing neither the session nor the connection signal, continuous refusal past the window declaring dead → bounded release → reconnect → state re-read, immediate session end on outright close / end-of-session / non-conforming data, and bounded release even when the connection will not close cleanly (ADR-020); command-rejection watchdog still degrading immediately and escalating on its own separate timer, unmerged with the check-in patience window (ADR-011 / ADR-020); progressive startup-login backoff (fail-N-then-succeed waits strictly increasing then capped at 30 s; recovery without process exit); ready-to-arm refuse — matching switch off means no arm command, Home Assistant alarm payload ends unchanged, MQTT `arming` then that current payload (including the Home Assistant command path); disarm still works; switch-off while armed does not disarm (ADR-015, `spec-ready-to-arm`) | Real Away/Night/Home arm sequences; which module `panel_host` is (ADR-013); survive-trigger and HA Disarm-during-alarm on dedicated ComIP (SPIKE-010 / ADR-013 — live-only; FakePanel must not claim the opposite); live quiet-house / command-rejection zombie corroboration under the simplified detector (ADR-016); mid-run heal under real ComIP contention; whether the reconciliation poll's cadence measurably affects audible panel pips (ADR-017 — unconfirmed); whether a real check-in refusal ever clears within the patience period, and whether the long outages seen during investigation were a competing client rather than an app defect (ADR-020 — unconfirmed); live Supervisor timing (RISK-015) |
 | MQTT broker | Hermetic / test broker (or FakePanel + recording MQTT client) | Discovery payloads, state/command publish/subscribe, connectivity sensor and last-trigger snapshot attributes; three ready-to-arm switches that start on; blocked-arm MQTT event with mode and without reason (ADR-015) | Household HA entity behaviour; that a real Home Assistant shows the ready switches and can automate on the blocked-arm event (ADR-015); HomeKit/iOS still offering an arm button when a switch is off |
 
 CI never targets the live household panel or a production broker account. Product
 validation of live behaviour belongs at `/accept` (optional go-live smoke at `/ship`).
+CI may **not** claim that patience recovers a refusing session: FakePanel models a
+check-in refusal as sticky until re-login by construction, so no hermetic test can
+demonstrate a refusal self-clearing while the session stays open (ADR-020).
 
 ## Security, operations, scope, and open questions
 
@@ -680,6 +740,14 @@ up for the vendor app and monitoring (ADR-013).
   because the session had already dropped. SPIKE-010 on the ComIP disarmed a live
   alarm with ordinary disarm (cmd 8). Do not wire cmd 9 unless a ComIP run shows it
   is actually required.
+- **The check-in patience-window default (~3 missed check-ins) is provisional**
+  (ADR-020) — no refusal has ever been observed clearing while a session stayed
+  open, because the app always tore down first before this decision. Live
+  observation after cutover may justify tuning it.
+- **Whether the household's phone app shares the same panel module as this app's
+  ComIP is unresolved** (ADR-020) — it remains the most likely cause of the long
+  outages seen during investigation, but is an install question this architecture
+  does not resolve.
 
 ## Review
 
@@ -704,3 +772,4 @@ up for the vendor app and monitoring (ADR-013).
 | 17 | 2026-08-24 | Clear | — |
 | 18 | 2026-08-24 | Clear | — |
 | 19 | 2026-08-25 | Clear | — |
+| 20 | 2026-08-28 | Clear | — |
