@@ -127,6 +127,7 @@ async def run(
     trust_poll_interval: float | None = None,
     trust_recover_window: float | None = None,
     trust_fail_window: float | None = None,
+    trust_checkin_patience: float | None = None,
     idle_timeout: float | None = None,
 ) -> None:
     """Connect, enumerate, discover, snapshot zone+alarm state, subscribe, listen."""
@@ -218,6 +219,11 @@ async def run(
                 trust_fail_window
                 if trust_fail_window is not None
                 else cfg.trust_fail_window_seconds
+            ),
+            checkin_patience=(
+                trust_checkin_patience
+                if trust_checkin_patience is not None
+                else cfg.checkin_patience_seconds
             ),
             settings=cfg,
         )
@@ -527,12 +533,17 @@ async def _listen_with_reconnect(
 
 
 async def _send_scheduled_checkin(panel: PanelClient, trust: PanelTrust | None) -> None:
-    """Send the due GETDATETIME check-in and drive the existing recovery/degrade.
+    """Send the due GETDATETIME check-in; only a sustained failure ends the session.
 
-    A single refused or unanswered check-in still ends the session immediately
-    today — softening that into a patience window before declaring the session
-    dead is a later change (ADR-020); this only decides *when* the attempt
-    fires, not what happens after one fails.
+    A refused or unanswered check-in (``TimeoutError``/``ProtocolError`` from
+    ``keepalive()``) no longer ends the session on its own — the session is
+    declared dead only once that failure has persisted continuously for
+    longer than the configured patience period (ADR-020). Until then this
+    logs and returns, leaving Connection untouched, so the check-in's own
+    fixed schedule can retry at the next interval. A transport-level fault
+    (``ForcedDisconnect`` — peer close, ``+++``, non-conforming data) is
+    unaffected: it always ends the session immediately; patience never
+    applies to it.
     """
     try:
         await panel.keepalive()
@@ -542,24 +553,31 @@ async def _send_scheduled_checkin(panel: PanelClient, trust: PanelTrust | None) 
         if trust is not None:
             trust.note_keepalive_failed()
         raise
-    except TimeoutError as exc:
-        # Unanswered mid-run health check = dead session (ADR-011):
-        # same keep-trying reconnect path as a clean panel drop.
-        if trust is not None:
-            trust.note_keepalive_failed()
+    except (TimeoutError, ProtocolError) as exc:
+        if trust is None:
+            # No tracker to hold patience open with — fall back to the
+            # pre-ADR-020 immediate-death behaviour rather than silently
+            # ignoring every future check-in failure forever.
+            raise ForcedDisconnect(
+                "Panel check-in failed and no patience tracker is available — "
+                f"treating the session as dead and reconnecting. {exc}"
+            ) from exc
+        trust.note_keepalive_failed()
+        trust.note_checkin_failed()
+        if not trust.checkin_patience_exceeded():
+            logger.warning(
+                "Panel check-in was refused or unanswered — within the "
+                "patience window (%g s), so the session and Alarm Panel "
+                "Connection stay as they are; retrying on the next scheduled "
+                "check-in. %s",
+                trust.checkin_patience,
+                exc,
+            )
+            return
         raise ForcedDisconnect(
-            f"Panel health check went unanswered — treating the session as dead "
-            f"and reconnecting. {exc}"
-        ) from exc
-    except ProtocolError as exc:
-        # A rejected (NAK'd) mid-run health check is just as dead a session as
-        # an unanswered one (ADR-016): same keep-trying reconnect path, not the
-        # generic except-Exception fallthrough.
-        if trust is not None:
-            trust.note_keepalive_failed()
-        raise ForcedDisconnect(
-            "Panel rejected the keepalive check-in — treating the session as dead "
-            f"and reconnecting. {exc}"
+            f"Panel check-in kept failing for longer than the configured "
+            f"patience period ({trust.checkin_patience:g}s) — treating the "
+            f"session as dead and reconnecting. {exc}"
         ) from exc
     except Exception:
         if trust is not None:

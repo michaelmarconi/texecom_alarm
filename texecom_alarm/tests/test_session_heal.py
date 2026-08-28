@@ -76,7 +76,7 @@ async def test_health_check_death_heals_without_restart() -> None:
             udl_password="1234",
             login_delay=0.0,
             response_timeout=0.2,
-            keepalive_retries=0,
+            login_retries=0,
         )
         await client.connect()
         await client.login()
@@ -89,6 +89,9 @@ async def test_health_check_death_heals_without_restart() -> None:
                 idle=stop.wait,
                 idle_timeout=0.05,
                 trust_poll_interval=60.0,
+                # Fast patience (ADR-020) so a silenced keepalive still declares
+                # the session dead well within this test's wait budget.
+                trust_checkin_patience=0.15,
             )
         )
         await _wait_until(
@@ -169,7 +172,7 @@ async def test_failing_health_check_recovery_stays_off_and_logs(
             udl_password="1234",
             login_delay=0.0,
             response_timeout=0.2,
-            keepalive_retries=0,
+            login_retries=0,
         )
         await client.connect()
         await client.login()
@@ -183,6 +186,7 @@ async def test_failing_health_check_recovery_stays_off_and_logs(
                     idle=stop.wait,
                     idle_timeout=0.05,
                     trust_poll_interval=60.0,
+                    trust_checkin_patience=0.15,
                 )
             )
             await _wait_until(

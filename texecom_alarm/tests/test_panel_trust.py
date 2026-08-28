@@ -12,7 +12,12 @@ import pytest
 from tests.fake_panel import FakePanel, FakeZone
 from tests.recording_mqtt import RecordingMqttPublisher
 
-from texecom_alarm.app import _listen_panel_messages, _SharedAlarmState, run
+from texecom_alarm.app import (
+    _listen_panel_messages,
+    _send_scheduled_checkin,
+    _SharedAlarmState,
+    run,
+)
 from texecom_alarm.arm_commands import handle_alarm_command
 from texecom_alarm.config import Settings
 from texecom_alarm.mqtt.discovery import AVAILABILITY_ONLINE, availability_topic
@@ -27,7 +32,7 @@ from texecom_alarm.panel_trust import (
     REASON_TRUST_POLL_TIMEOUT,
     PanelTrust,
 )
-from texecom_alarm.protocol.client import PanelClient, ProtocolError
+from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient, ProtocolError
 
 
 def _settings(panel: FakePanel | None = None, **overrides: object) -> Settings:
@@ -86,6 +91,7 @@ def _trust(
     poll_interval: float = 30.0,
     recover_window: float = 30.0,
     fail_window: float = 90.0,
+    checkin_patience: float = 45.0,
     clock: Callable[[], float] | None = None,
 ) -> PanelTrust:
     return PanelTrust(
@@ -95,6 +101,7 @@ def _trust(
         poll_interval=poll_interval,
         recover_window=recover_window,
         fail_window=fail_window,
+        checkin_patience=checkin_patience,
         clock=clock,
     )
 
@@ -1024,3 +1031,166 @@ async def test_e2e_trust_poll_fail_then_recover() -> None:
         await asyncio.wait_for(task, timeout=2.0)
     finally:
         await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_checkin_failure_without_a_trust_tracker_still_ends_the_session() -> None:
+    """No ``PanelTrust`` to hold patience open with — falls back to the
+    pre-ADR-020 immediate-death behaviour rather than silently ignoring every
+    future check-in failure forever."""
+    panel = MagicMock()
+    panel.keepalive = AsyncMock(side_effect=TimeoutError("no reply"))
+    with pytest.raises(ForcedDisconnect):
+        await _send_scheduled_checkin(panel, None)
+
+
+@pytest.mark.asyncio
+async def test_outright_disconnect_without_a_trust_tracker_still_propagates() -> None:
+    """A transport-level ForcedDisconnect must still propagate with no tracker."""
+    panel = MagicMock()
+    panel.keepalive = AsyncMock(side_effect=ForcedDisconnect("peer closed the session"))
+    with pytest.raises(ForcedDisconnect):
+        await _send_scheduled_checkin(panel, None)
+
+
+@pytest.mark.asyncio
+async def test_checkin_failure_within_patience_stays_live_and_does_not_raise() -> None:
+    """AC1: a refused/unanswered check-in that has not yet run past the
+    configured patience must not raise ForcedDisconnect and must not touch
+    Alarm Panel Connection at all — it stays exactly as it was."""
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    clock = {"t": 0.0}
+    trust = _trust(mqtt, checkin_patience=10.0, clock=lambda: clock["t"])
+    await trust.note_keepalive_ok()
+
+    panel = MagicMock()
+    panel.keepalive = AsyncMock(side_effect=ProtocolError("GETDATETIME NAK"))
+
+    clock["t"] = 1.0
+    await _send_scheduled_checkin(panel, trust)
+    assert trust.live is True
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+
+    clock["t"] = 5.0
+    await _send_scheduled_checkin(panel, trust)
+    assert trust.live is True
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    assert trust.checkin_patience_exceeded() is False
+
+
+@pytest.mark.asyncio
+async def test_checkin_failure_past_patience_raises_forced_disconnect() -> None:
+    """AC2: continuous check-in failure that has run past the configured
+    patience must declare the session dead (ForcedDisconnect), so the
+    existing reconnect-after-disconnect flow runs."""
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    clock = {"t": 0.0}
+    trust = _trust(mqtt, checkin_patience=10.0, clock=lambda: clock["t"])
+    await trust.note_keepalive_ok()
+
+    panel = MagicMock()
+    panel.keepalive = AsyncMock(side_effect=TimeoutError("no reply"))
+
+    clock["t"] = 1.0
+    await _send_scheduled_checkin(panel, trust)  # first failure — starts the streak
+
+    clock["t"] = 11.0
+    with pytest.raises(ForcedDisconnect):
+        await _send_scheduled_checkin(panel, trust)
+
+
+@pytest.mark.asyncio
+async def test_checkin_success_restarts_the_patience_clock() -> None:
+    """A successful check-in in between two failures must clear the streak —
+    the second failure starts a brand-new patience window, not a continuation
+    of the first."""
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    clock = {"t": 0.0}
+    trust = _trust(mqtt, checkin_patience=5.0, clock=lambda: clock["t"])
+    await trust.note_keepalive_ok()
+
+    panel = MagicMock()
+    panel.keepalive = AsyncMock(side_effect=TimeoutError("no reply"))
+    clock["t"] = 1.0
+    await _send_scheduled_checkin(panel, trust)
+    assert trust.checkin_patience_exceeded() is False
+
+    panel.keepalive = AsyncMock(return_value=b"\x00" * 6)
+    clock["t"] = 2.0
+    await _send_scheduled_checkin(panel, trust)
+    assert trust.checkin_patience_exceeded() is False
+
+    panel.keepalive = AsyncMock(side_effect=TimeoutError("no reply"))
+    clock["t"] = 6.0
+    # 4s since the restart at t=2.0 — still inside the 5s patience window,
+    # even though 6s have passed since the original failure at t=1.0.
+    await _send_scheduled_checkin(panel, trust)
+    assert trust.checkin_patience_exceeded() is False
+
+
+@pytest.mark.asyncio
+async def test_outright_disconnect_bypasses_patience_immediately() -> None:
+    """AC2: a transport-level ForcedDisconnect from keepalive() (peer close,
+    ``+++``, non-conforming data) must end the session immediately, with no
+    patience delay, even with a very long configured patience."""
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    clock = {"t": 0.0}
+    trust = _trust(mqtt, checkin_patience=1000.0, clock=lambda: clock["t"])
+    await trust.note_keepalive_ok()
+
+    panel = MagicMock()
+    panel.keepalive = AsyncMock(side_effect=ForcedDisconnect("peer closed the session"))
+
+    with pytest.raises(ForcedDisconnect):
+        await _send_scheduled_checkin(panel, trust)
+    # A ForcedDisconnect must never start (or count toward) a patience streak.
+    assert trust.checkin_patience_exceeded() is False
+
+
+@pytest.mark.asyncio
+async def test_command_watchdog_fail_window_independent_of_checkin_patience() -> None:
+    """AC3: the command-rejection watchdog's own fail window (ADR-011) still
+    escalates on its own timer even while check-ins keep succeeding and the
+    check-in patience window is configured far longer — proving the two
+    timers never share a clock."""
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    clock = {"t": 0.0}
+    trust = _trust(
+        mqtt,
+        fail_window=10.0,
+        checkin_patience=10_000.0,
+        clock=lambda: clock["t"],
+    )
+    await trust.note_keepalive_ok()
+
+    panel = MagicMock()
+    panel.keepalive = AsyncMock(return_value=b"\x00" * 6)
+
+    clock["t"] = 1.0
+    await _send_scheduled_checkin(panel, trust)
+    assert trust.live is True
+
+    await trust.record_command_failure(REASON_ARM_NAK, ha_mode="away")
+    assert trust.live is False
+    assert trust.needs_session_relogin() is False
+
+    # Check-ins keep succeeding the whole time — must not reset or otherwise
+    # interact with the command watchdog's own countdown.
+    clock["t"] = 5.0
+    await _send_scheduled_checkin(panel, trust)
+    assert trust.needs_session_relogin() is False
+
+    clock["t"] = 9.0
+    await _send_scheduled_checkin(panel, trust)
+    assert trust.needs_session_relogin() is False
+
+    clock["t"] = 11.0
+    await _send_scheduled_checkin(panel, trust)
+    assert trust.needs_session_relogin() is True

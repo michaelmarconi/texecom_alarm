@@ -94,21 +94,23 @@ async def test_injected_garbage_raises_forced_disconnect(panel: FakePanel) -> No
 
 
 @pytest.mark.asyncio
-async def test_keepalive_retries_once_with_same_sequence(panel: FakePanel) -> None:
+async def test_keepalive_makes_a_single_attempt_no_same_call_retry(panel: FakePanel) -> None:
+    """ADR-020: keepalive() no longer retries within a call — a dropped reply
+    raises immediately. Repeated failures are now absorbed across calls by the
+    app's own check-in patience window instead (see ``test_app_listen`` /
+    ``PanelTrust.checkin_patience_exceeded``), not by a same-call retry here."""
     client = await _logged_in_client(panel, response_timeout=0.15)
     panel.drop_next_command_responses = 1
-    await client.keepalive()
-
+    with pytest.raises(TimeoutError):
+        await client.keepalive()
     assert panel.last_command == CMD_GETDATETIME
-    assert panel.keepalive_attempts == 2
-    assert panel.keepalive_sequences[0] == panel.keepalive_sequences[1]
-    assert client.authenticated is True
+    assert panel.keepalive_attempts == 1
     await client.close()
 
 
 @pytest.mark.asyncio
 async def test_keepalive_timeout_exhausted(panel: FakePanel) -> None:
-    client = await _logged_in_client(panel, response_timeout=0.1, keepalive_retries=1)
+    client = await _logged_in_client(panel, response_timeout=0.1)
     panel.drop_next_command_responses = 5
     with pytest.raises(TimeoutError):
         await client.keepalive()
@@ -116,45 +118,29 @@ async def test_keepalive_timeout_exhausted(panel: FakePanel) -> None:
 
 
 @pytest.mark.asyncio
-async def test_keepalive_retries_wrong_shaped_reply_within_budget(panel: FakePanel) -> None:
-    """TASK-47: a wrong-shaped (not-NAK) reply within the retry budget must not raise —
-    same command/sequence retried until the real 6-byte datetime payload comes back."""
+async def test_keepalive_wrong_shaped_reply_raises_without_retry(panel: FakePanel) -> None:
+    """ADR-020: a wrong-shaped (not-NAK) reply now raises on the first attempt —
+    no same-call retry budget left in keepalive() to ride out a near-miss like
+    the 2026-08-27 incident; that patience now lives at the app level instead."""
     client = await _logged_in_client(panel)
-    panel.wrong_shape_keepalive_replies = client.keepalive_retries  # recovers on final attempt
-    payload = await client.keepalive()
-    assert len(payload) == 6
-    assert panel.keepalive_attempts == client.keepalive_retries + 1
-    # Every attempt for this keepalive() call reused the same sequence number.
-    attempts = panel.keepalive_sequences[-(client.keepalive_retries + 1) :]
-    assert len(set(attempts)) == 1
-    assert client.authenticated is True
-    await client.close()
-
-
-@pytest.mark.asyncio
-async def test_keepalive_wrong_shaped_reply_budget_exhausted_raises(panel: FakePanel) -> None:
-    """TASK-47: once every attempt in the budget is still wrong-shaped, keepalive() must
-    still raise — preserving TASK-45's zombie-session fix with no regression."""
-    client = await _logged_in_client(panel)
-    panel.wrong_shape_keepalive_replies = 1000  # never recovers within the budget
+    panel.wrong_shape_keepalive_replies = 1
     with pytest.raises(ProtocolError, match="unexpected keepalive reply"):
         await client.keepalive()
-    assert panel.keepalive_attempts == client.keepalive_retries + 1
+    assert panel.keepalive_attempts == 1
     await client.close()
 
 
 @pytest.mark.asyncio
-async def test_keepalive_survives_interleaved_message_eating_one_attempt(
+async def test_keepalive_attempt_eaten_by_interleaved_message_times_out(
     panel: FakePanel,
 ) -> None:
-    """TASK-47: an attempt entirely eaten by interleaved 'M' traffic (no response at all)
-    must be retried the same way as a wrong-shaped reply, within the same budget."""
+    """ADR-020: an attempt entirely eaten by interleaved 'M' traffic (no response
+    at all) now simply times out on the single attempt — no same-call retry."""
     client = await _logged_in_client(panel, response_timeout=0.15)
     panel.eat_keepalive_attempts_with_message = 1
-    payload = await client.keepalive()
-    assert len(payload) == 6
-    assert panel.keepalive_attempts == 2
-    assert panel.keepalive_sequences[-2] == panel.keepalive_sequences[-1]
+    with pytest.raises(TimeoutError):
+        await client.keepalive()
+    assert panel.keepalive_attempts == 1
     await client.close()
 
 
