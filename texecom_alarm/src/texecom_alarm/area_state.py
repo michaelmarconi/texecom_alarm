@@ -1,4 +1,4 @@
-"""Shared area-flags decode and MQTT alarm-state publish helpers (ADR-007)."""
+"""Shared area-flags decode and MQTT alarm-state publish helpers (ADR-009)."""
 
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ def mqtt_payload_for_area_state(state: int, settings: Settings) -> str | None:
     """Map live AREA state byte → MQTT alarm_control_panel payload.
 
     Part-Arm settled states (6/7) use the same install-time slot → HA mapping
-    as the area-flags snapshot (ADR-005). Unknown bytes return None so callers
+    as the area-flags snapshot (ADR-008). Unknown bytes return None so callers
     leave the last MQTT payload unchanged (do not guess disarmed).
     """
     slot = _LIVE_PART_ARM_STATE_TO_SLOT.get(state)
@@ -99,7 +99,7 @@ def mqtt_payload_for_area_state(state: int, settings: Settings) -> str | None:
 
 
 def _ha_state_for_part_arm_slot(slot: int, settings: Settings) -> str:
-    """Invert install-time Part-Arm mapping (ADR-005) to an HA armed_* payload."""
+    """Invert install-time Part-Arm mapping (ADR-008) to an HA armed_* payload."""
     ha_mode = settings.ha_mode_for_part_arm_slot(slot)
     if ha_mode is None:
         return "armed_away"
@@ -113,7 +113,7 @@ def decode_area_ha_state(
     area_number: int,
     settings: Settings,
 ) -> str:
-    """Decode GetAreaFlags bytes for one area into an HA alarm payload (ADR-007).
+    """Decode GetAreaFlags bytes for one area into an HA alarm payload (ADR-009).
 
     Priority: Alarm → triggered; Armed/FullArmed/ForceArmed/PartArmed → armed_*;
     PartArmed + PartArm slot → Night/Home via inverted Settings; else disarmed.
@@ -177,13 +177,13 @@ async def publish_area_state_snapshot(
     topic_prefix: str,
     zone_count: int,
 ) -> str:
-    """GetAreaFlags snapshot → retained MQTT for area 1 only (ADR-007).
+    """GetAreaFlags snapshot → retained MQTT for area 1 only (ADR-009).
 
     Returns the HA payload that was published.
     """
     area_size = area_size_for_zones(zone_count)
     if area_size != 1:
-        # Dual-request area_size==8 path is an ADR-007 open follow-on.
+        # Dual-request area_size==8 path is an ADR-009 open follow-on.
         raise ProtocolError(
             f"GetAreaFlags: area_size={area_size} dual-request path not implemented"
         )

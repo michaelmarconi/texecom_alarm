@@ -256,7 +256,7 @@ class PanelClient:
     async def get_area_flags(self, start: int, count: int, *, area_size: int = 1) -> bytes:
         """GetAreaFlags (cmd 11): return exactly ``count * area_size`` flag bytes.
 
-        Elite 88 path (ADR-007 / SPIKE-007): ``area_size=1``, ``start=0``,
+        Elite 88 path (ADR-009 / SPIKE-007): ``area_size=1``, ``start=0``,
         ``count=72`` (``AREA_FLAGS_COUNT``). Dual-request ``area_size==8`` panels
         are out of scope for this task.
         """

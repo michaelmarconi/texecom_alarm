@@ -52,8 +52,9 @@ logger = logging.getLogger(__name__)
 # (docs/protocol-reference.md). Used as recv_message idle timeout → keepalive.
 _KEEPALIVE_IDLE_TIMEOUT = 15.0
 
-# First-login progressive backoff (spec-startup-login-backoff). Distinct from ADR-002
-# mid-run reconnect budgets.
+# First-login progressive backoff (spec-startup-login-backoff). Distinct from the
+# mid-run reconnect interval (ADR-019) and check-in/command fail windows (ADR-011,
+# ADR-020).
 _STARTUP_LOGIN_BACKOFF_BASE_SECONDS = 5.0
 _STARTUP_LOGIN_BACKOFF_CAP_SECONDS = 30.0
 
@@ -310,7 +311,7 @@ async def _connect_and_login_with_retry(
     """Keep retrying first connect/login until the panel accepts (continuous-operation).
 
     Waits follow the progressive startup schedule (spec-startup-login-backoff), not
-    ADR-002 mid-run reconnect intervals.
+    the mid-run reconnect interval or check-in/command fail windows.
     """
     sleeper = sleep if sleep is not None else asyncio.sleep
     attempt = 0

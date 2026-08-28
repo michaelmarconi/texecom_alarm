@@ -1,4 +1,4 @@
-"""Area-flags decode, MQTT snapshot, and live AREA push helpers (ADR-007)."""
+"""Area-flags decode, MQTT snapshot, and live AREA push helpers (ADR-009)."""
 
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def test_mqtt_payload_for_live_area_state(state: int, expected: str) -> None:
 
 
 def test_mqtt_payload_for_live_part_arm_uses_remapped_settings() -> None:
-    """AREA 6/7 are Part-Arm slots 1/2 — HA mode follows Settings (ADR-005)."""
+    """AREA 6/7 are Part-Arm slots 1/2 — HA mode follows Settings (ADR-008)."""
     remapped = _settings(part_arm_1="home", part_arm_2="night", part_arm_3="unused")
     assert mqtt_payload_for_area_state(6, remapped) == "armed_home"
     assert mqtt_payload_for_area_state(7, remapped) == "armed_night"

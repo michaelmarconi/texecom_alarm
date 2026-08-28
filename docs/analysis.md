@@ -30,7 +30,7 @@ align Connected→Connection wording via `/correction`. Scope remains **Medium**
 | Source | spec-alarm-control.md § Spike Candidates |
 | Category | Technology unknowns |
 | Severity | Low |
-| Severity rationale | Downgraded 2026-08-04 — SPIKE-002 / SPIKE-005 Validated; ADR-002 and ADR-008 record the production command and reconnect path. Residual risk is implementation fidelity, not an open framing unknown. |
+| Severity rationale | Downgraded 2026-08-04 — SPIKE-002 / SPIKE-005 Validated; ADR-008 records the production command mapping and ADR-019 (supersedes ADR-002) records the current reconnect path. Residual risk is implementation fidelity, not an open framing unknown. |
 | Spike required | No (resolved 2026-08-04; was Yes) |
 
 Originally the highest-stakes protocol unknown: no public code issued arm/disarm, and
@@ -193,7 +193,7 @@ about that misconfiguration today.
 | Source | spec-panel-link-liveness.md § Spike Candidates |
 | Category | Technology unknowns |
 | Severity | Low |
-| Severity rationale | Downgraded 2026-08-09 — SPIKE-008 Validated; ADR-010 records command-reject + periodic house-state poll. Tens-of-seconds bound locked at **30s** (2026-08-09). Residual is live quiet-house / zombie corroboration and heal follow-ons (RISK-019), not an open detection fork. |
+| Severity rationale | Downgraded 2026-08-09 — SPIKE-008 Validated; ADR-010 (originally) recorded command-reject + periodic house-state poll, tens-of-seconds bound locked at **30s**. **Updated 2026-08-28:** ADR-016 supersedes ADR-010 — the periodic poll no longer feeds connectivity at all; command-reject/timeout and keepalive failure are the only two triggers. ADR-020 further narrows the keepalive-failure trigger to a configured patience window rather than an immediate degrade. Residual is live quiet-house / zombie corroboration and heal follow-ons (RISK-019), not an open detection fork. |
 | Spike required | No (resolved 2026-08-09; was Yes) |
 
 Detection is decided and largely built. Live corroboration remains accept-walk;
@@ -296,7 +296,9 @@ historical; FakePanel need not model cmd 9 for the current disarm contract.
    failed arm/disarm tap remains out of scope).
 
 FakePanel must cover fail-then-heal shapes in CI; live zombie/heal corroboration
-remains accept-walk. Exact patient retry cadence may align with ADR-002 budgets.
+remains accept-walk. Patient retry cadence is now settled by ADR-011 (command-
+rejection fail window) and ADR-020 (check-in patience window) as two separate,
+unmerged install-time settings — not the retired ADR-002 reconnect budgets.
 
 ### RISK-020: Panel-link-liveness naming still says Connected
 
@@ -323,11 +325,11 @@ manual HomeKit/iOS.
 | Item | Source | Rationale |
 |---|---|---|
 | Whether the new integration can expose the alarm as a more natively-modeled HA alarm (removing the `house_alarm_panel` wrapper) vs keeping two-layer architecture | spec-alarm-control.md § Spike Candidates | Covered by ADR-003 — MQTT discovery from an App; wrapper collapse is not this app's decision |
-| Exact byte-level command framing for `arm_home` / surviving triggered events without TX/RX collision crash | spec-alarm-control.md § Spike Candidates | Covered by ADR-002 (frame resync + asymmetric reconnect) and ADR-008 (confirmed shared arm/disarm; Away full arm); SPIKE-002 and SPIKE-005 Validated |
+| Exact byte-level command framing for `arm_home` / surviving triggered events without TX/RX collision crash | spec-alarm-control.md § Spike Candidates | Covered by ADR-008 (confirmed shared arm/disarm; Away full arm) and ADR-013/ADR-019 (dedicated module + single-interval reconnect, supersede ADR-002's frame-resync/asymmetric-reconnect); SPIKE-002 and SPIKE-005 Validated |
 | Whether/how the Texecom Connect protocol supports enumerating the zone list programmatically | spec-zone-monitoring.md § Spike Candidates | Covered by ADR-001 — dynamic panel enumeration; SPIKE-001 Validated |
 | Whether `GETAREADETAILS` (`cmd=35`) exposes each Part-Arm slot's configured name/role | spec-alarm-control.md § Spike Candidates | Not a genuine open unknown — exercised live 2026-08-04; returns area identity only, not Part-Arm roles; Home/Night→slot remains manual install mapping (Away is full arm, not a Part-Arm option) |
 | Whether a stable numeric panel serial can be read for device/`unique_id` namespacing | spec-zone-monitoring.md § Spike Candidates | Not required by Accepted zone-monitoring — zone-stable `unique_id` without panel serial is the decided scheme; serial remains optional later, not a current unknown to spike |
-| How to detect silent panel-path death reliably… | spec-panel-link-liveness.md § Spike Candidates | Covered by ADR-010 — command-reject + house-state poll; SPIKE-008 Validated (was RISK-012) |
+| How to detect silent panel-path death reliably… | spec-panel-link-liveness.md § Spike Candidates | Covered by ADR-016 (supersedes ADR-010) — command-reject/timeout + keepalive failure, narrowed by ADR-020's patience window; SPIKE-008 Validated (was RISK-012) |
 | Whether renaming the friendly name alone is enough… vs `unique_id` / Entity ID | spec-panel-link-liveness.md § Spike Candidates | Settled 2026-08-09 with heal-spec rename — clean refactor to **Alarm Panel Connection** including id change; RISK-013 / RISK-020 |
 | How mid-run health-check timeout should join clean-disconnect recovery | spec-panel-session-heal.md § Spike Candidates | Settled 2026-08-09 — treat as dead session; same keep-trying reconnect heal; RISK-019 → `/adr` then build (no spike) |
 | Whether trust-degrade heal requires session tear-down / re-login | spec-panel-session-heal.md § Spike Candidates | Settled 2026-08-09 — corroboration first; tear-down/re-login if stuck after bounded window; RISK-019 → `/adr` (no spike) |
@@ -353,7 +355,7 @@ complete (below). Historical spikes remain for traceability.
 |---|---|
 | Resolves | RISK-012 |
 | Depends on | None |
-| Outcome | ADR-010 |
+| Outcome | ADR-016 (supersedes ADR-010) |
 
 ### SPIKE-001: Determine whether zones can be enumerated programmatically — Validated ✅
 
@@ -369,7 +371,7 @@ complete (below). Historical spikes remain for traceability.
 |---|---|
 | Resolves | RISK-001 (observation / crash path) |
 | Depends on | SPIKE-001 |
-| Outcome | ADR-002 |
+| Outcome | ADR-019 (supersedes ADR-002, via ADR-014) |
 
 ### SPIKE-003: ~~Establish the safe achievable zone-state update latency~~ — Dismissed 2026-08-02
 

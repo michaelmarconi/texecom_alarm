@@ -1,4 +1,4 @@
-"""Unit tests for MQTT alarm command → panel arm/disarm mapping (ADR-005)."""
+"""Unit tests for MQTT alarm command → panel arm/disarm mapping (ADR-008)."""
 
 from __future__ import annotations
 

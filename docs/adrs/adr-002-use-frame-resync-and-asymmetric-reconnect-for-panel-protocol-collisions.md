@@ -1,6 +1,6 @@
 # ADR-002: Use Frame Resync and Asymmetric Reconnect for Panel Protocol Collisions
 
-**Status:** ~~Accepted~~ Superseded by [ADR-014](adr-014-use-host-scoped-trigger-disconnect-assumptions-for-panel-reconnect-design.md)
+**Status:** ~~Accepted~~ Superseded by [ADR-014](adr-014-use-host-scoped-trigger-disconnect-assumptions-for-panel-reconnect-design.md) (itself superseded — current word is [ADR-019](adr-019-use-a-single-reconnect-interval-and-no-line-noise-defense-for-panel-disconnects.md))
 **Date:** 2026-08-01
 **Spike:** [spike-002-arm-home-triggered-framing/SPIKE.md](../spikes/spike-002-arm-home-triggered-framing/SPIKE.md)
 

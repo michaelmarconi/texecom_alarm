@@ -512,7 +512,7 @@ async def test_send_command_requires_authenticated_except_login(panel: FakePanel
 
 @pytest.mark.asyncio
 async def test_plusplusplus_message_does_not_claim_trigger_is_common(panel: FakePanel) -> None:
-    """ADR-014: ForcedDisconnect copy must not present trigger drops as the normal path."""
+    """ADR-013: ForcedDisconnect copy must not present trigger drops as the normal path."""
     client = await _logged_in_client(panel)
     panel.plusplusplus_on_next_command = True
     with pytest.raises(ForcedDisconnect) as excinfo:
