@@ -3,9 +3,10 @@ id: TASK-51
 title: >-
   Declare the session dead only after check-in failure persists past the
   patience window
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-28 16:14'
+updated_date: '2026-08-28 20:02'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
