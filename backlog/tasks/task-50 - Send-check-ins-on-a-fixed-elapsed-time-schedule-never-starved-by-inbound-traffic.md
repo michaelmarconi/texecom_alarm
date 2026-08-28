@@ -3,9 +3,10 @@ id: TASK-50
 title: >-
   Send check-ins on a fixed elapsed-time schedule, never starved by inbound
   traffic
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-28 16:13'
+updated_date: '2026-08-28 17:09'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
