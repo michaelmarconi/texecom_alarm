@@ -1,10 +1,10 @@
 ---
 id: TASK-53
 title: 'Bounded, forcibly-abandoned socket release before reconnecting'
-status: in-progress
+status: done
 assignee: []
 created_date: '2026-08-28 16:14'
-updated_date: '2026-08-28 16:28'
+updated_date: '2026-08-28 16:29'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -32,9 +32,9 @@ ordinal: 47000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 close() always returns within a short bounded time even when the underlying transport's wait_closed() never completes
-- [ ] #2 A socket that would not close cleanly is forcibly abandoned at the OS level rather than left open
-- [ ] #3 Reconnect always waits for close() (bounded or not) to finish before attempting a new connection
+- [x] #1 close() always returns within a short bounded time even when the underlying transport's wait_closed() never completes
+- [x] #2 A socket that would not close cleanly is forcibly abandoned at the OS level rather than left open
+- [x] #3 Reconnect always waits for close() (bounded or not) to finish before attempting a new connection
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -47,5 +47,5 @@ Files likely affected: texecom_alarm/src/texecom_alarm/protocol/client.py (modif
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
