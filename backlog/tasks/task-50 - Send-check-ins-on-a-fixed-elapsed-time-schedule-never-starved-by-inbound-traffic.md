@@ -6,7 +6,7 @@ title: >-
 status: awaiting-review
 assignee: []
 created_date: '2026-08-28 16:13'
-updated_date: '2026-08-28 19:33'
+updated_date: '2026-08-28 20:01'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -57,5 +57,5 @@ Verification: pytest -q -> 360 passed; ruff check/format clean; coverage 92.54% 
 Notes/assumptions: Kept the idle_timeout parameter name in _listen_panel_messages/run() for backward compatibility with the existing test seam, even though it now means check-in interval rather than idle timeout - documented inline in app.py. The check-in-due check now runs both on recv_message timeout and after every received frame (previously only on timeout) - this is the mechanism that satisfies AC1. Several pre-existing tests implicitly relied on the old behavior where a fast reconciliation-poll interval caused near-immediate keepalives; these now pass an explicit fast idle_timeout to keep their timing intent, decoupled from production default of 15s - intended consequence of AC2.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
