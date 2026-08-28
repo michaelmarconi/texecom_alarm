@@ -81,6 +81,78 @@ async def test_listen_loop_sends_keepalive_on_idle_timeout() -> None:
 
 
 @pytest.mark.asyncio
+async def test_listen_loop_sends_checkins_on_schedule_under_continuous_traffic() -> None:
+    """A busy panel must not be able to starve the check-in schedule (ADR-020).
+
+    Continuous unsolicited zone traffic used to reset the old idle-timeout
+    clock on every frame, so the check-in never fired while traffic kept
+    arriving. Check-ins must now fire on a fixed elapsed-time schedule
+    regardless of how much other traffic the panel is sending.
+    """
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+
+        stop_traffic = asyncio.Event()
+
+        async def _flood() -> None:
+            status = 0
+            while not stop_traffic.is_set():
+                status ^= 1
+                await panel.inject_zone_message(1, status)
+                await asyncio.sleep(0.01)
+
+        flood_task = asyncio.create_task(_flood())
+        before = panel.keepalive_attempts
+        task = asyncio.create_task(
+            _listen_zone_messages(
+                client,
+                mqtt,
+                settings=_settings(panel),
+                topic_prefix="texecom",
+                in_use_zones={1},
+                alarm_state=_SharedAlarmState(),
+                idle_timeout=0.05,
+            )
+        )
+        try:
+            for _ in range(150):
+                if panel.keepalive_attempts >= before + 5:
+                    break
+                await asyncio.sleep(0.02)
+        finally:
+            stop_traffic.set()
+            await asyncio.gather(flood_task, return_exceptions=True)
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+        assert (
+            len(mqtt.payloads_for("texecom/zone/1/state")) >= 2
+        ), "test setup must actually produce continuous inbound traffic"
+        assert (
+            panel.keepalive_attempts >= before + 5
+        ), "continuous inbound traffic must not starve the scheduled check-in"
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
 async def test_run_owns_panel_with_login_delay() -> None:
     panel = FakePanel(
         udl_password="1234",

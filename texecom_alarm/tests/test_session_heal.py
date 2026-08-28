@@ -262,6 +262,7 @@ async def test_trust_fail_recovers_via_corroboration_without_relogin() -> None:
                 panel=client,
                 mqtt=mqtt,
                 idle=stop.wait,
+                idle_timeout=0.05,
                 trust_poll_interval=0.08,
                 trust_recover_window=0.05,
                 trust_fail_window=5.0,
@@ -279,6 +280,9 @@ async def test_trust_fail_recovers_via_corroboration_without_relogin() -> None:
 
         # A rejected arm degrades Connection; the reconciliation poll fails
         # throughout too, to prove recovery never depends on it succeeding.
+        # Check-ins now fire on their own fixed schedule (idle_timeout above,
+        # ADR-020) rather than riding the trust-poll capping, so recovery via
+        # a resumed keepalive still happens comfortably inside the fail window.
         panel.nak_next_area_flags = 1000
         panel.nak_next_arm = True
         await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")

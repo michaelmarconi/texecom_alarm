@@ -931,6 +931,7 @@ async def test_e2e_quiet_house_panel_link_stays_on() -> None:
                 panel=client,
                 mqtt=mqtt,
                 idle=stop.wait,
+                idle_timeout=0.05,
                 trust_poll_interval=0.08,
                 trust_recover_window=0.05,
             )
@@ -945,6 +946,8 @@ async def test_e2e_quiet_house_panel_link_stays_on() -> None:
             await asyncio.sleep(0.02)
         assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
 
+        # Check-ins fire on their own fixed schedule (idle_timeout above,
+        # ADR-020), independent of the reconciliation poll interval below.
         for _ in range(50):
             if panel.area_flags_calls >= 2 and panel.keepalive_attempts >= 1:
                 break

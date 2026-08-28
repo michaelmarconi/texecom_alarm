@@ -49,7 +49,12 @@ from texecom_alarm.zones import Zone, enumerate_zones
 logger = logging.getLogger(__name__)
 
 # Panel drops passive listen-only sessions after ~60s; ~15s GETDATETIME keeps alive
-# (docs/protocol-reference.md). Used as recv_message idle timeout → keepalive.
+# (docs/protocol-reference.md). Fallback check-in schedule interval when neither
+# Settings.checkin_interval_seconds nor an explicit override is supplied — the
+# check-in now fires on this fixed elapsed-time schedule regardless of how much
+# other panel traffic arrives, never from resetting on each received frame
+# (ADR-020). Kept as the ``idle_timeout`` parameter name below for the existing
+# test seam, even though it no longer means "idle".
 _KEEPALIVE_IDLE_TIMEOUT = 15.0
 
 # First-login progressive backoff (spec-startup-login-backoff). Distinct from the
@@ -128,7 +133,7 @@ async def run(
     cfg = settings if settings is not None else load_settings()
     warn_if_factory_udl(cfg)
     owns_panel = panel is None
-    listen_idle_timeout = idle_timeout if idle_timeout is not None else _KEEPALIVE_IDLE_TIMEOUT
+    listen_idle_timeout = idle_timeout if idle_timeout is not None else cfg.checkin_interval_seconds
 
     panel_kwargs: dict = {}
     if login_delay is not None:
@@ -521,6 +526,47 @@ async def _listen_with_reconnect(
         )
 
 
+async def _send_scheduled_checkin(panel: PanelClient, trust: PanelTrust | None) -> None:
+    """Send the due GETDATETIME check-in and drive the existing recovery/degrade.
+
+    A single refused or unanswered check-in still ends the session immediately
+    today — softening that into a patience window before declaring the session
+    dead is a later change (ADR-020); this only decides *when* the attempt
+    fires, not what happens after one fails.
+    """
+    try:
+        await panel.keepalive()
+        if trust is not None:
+            await trust.note_keepalive_ok()
+    except ForcedDisconnect:
+        if trust is not None:
+            trust.note_keepalive_failed()
+        raise
+    except TimeoutError as exc:
+        # Unanswered mid-run health check = dead session (ADR-011):
+        # same keep-trying reconnect path as a clean panel drop.
+        if trust is not None:
+            trust.note_keepalive_failed()
+        raise ForcedDisconnect(
+            f"Panel health check went unanswered — treating the session as dead "
+            f"and reconnecting. {exc}"
+        ) from exc
+    except ProtocolError as exc:
+        # A rejected (NAK'd) mid-run health check is just as dead a session as
+        # an unanswered one (ADR-016): same keep-trying reconnect path, not the
+        # generic except-Exception fallthrough.
+        if trust is not None:
+            trust.note_keepalive_failed()
+        raise ForcedDisconnect(
+            "Panel rejected the keepalive check-in — treating the session as dead "
+            f"and reconnecting. {exc}"
+        ) from exc
+    except Exception:
+        if trust is not None:
+            trust.note_keepalive_failed()
+        raise
+
+
 async def _listen_panel_messages(
     panel: PanelClient,
     mqtt: object,
@@ -536,17 +582,26 @@ async def _listen_panel_messages(
 ) -> None:
     """Steady-state loop until ForcedDisconnect.
 
-    Keepalive on idle timeout, with a periodic house/arm reconciliation poll
-    alongside; the poll only corroborates the alarm entity and never feeds
-    Alarm Panel Connection (ADR-016). Cancellation still propagates.
-    Updates ``alarm_state`` when HOUSE AREA pushes change the MQTT payload.
+    The check-in (keepalive) fires on a fixed elapsed-time schedule
+    (``idle_timeout``, normally ``Settings.checkin_interval_seconds``) tracked
+    independently of the panel's own traffic — a busy connection sending lots
+    of zone/area/log frames can never silently skip its check-in, because the
+    schedule is checked both when ``recv_message`` times out *and* every time a
+    frame arrives (ADR-020). A periodic house/arm reconciliation poll rides
+    alongside on its own separate interval; it only corroborates the alarm
+    entity and never feeds Alarm Panel Connection (ADR-016/ADR-017). The two
+    schedules are independent — changing one can never change the other.
+    Cancellation still propagates. Updates ``alarm_state`` when HOUSE AREA
+    pushes change the MQTT payload.
     """
     logger.debug("panel_listen_start")
     buffer = activity if activity is not None else TriggerActivityBuffer()
     zone_by_number = {z.number: z for z in zones} if zones is not None else None
+    clock = asyncio.get_running_loop().time
+    last_checkin_at = clock()
     try:
         while True:
-            wait = idle_timeout
+            wait = max(0.0, idle_timeout - (clock() - last_checkin_at))
             if trust is not None and trust.poll_due():
                 wait = min(wait, 0.05)
             elif trust is not None:
@@ -554,40 +609,10 @@ async def _listen_panel_messages(
             try:
                 frame = await panel.recv_message(timeout=wait)
             except TimeoutError:
-                # Idle or trust-poll slice elapsed: keep session alive and
-                # corroborate house/arm state when due. The reconciliation poll
-                # below never feeds Alarm Panel Connection (ADR-016).
-                try:
-                    await panel.keepalive()
-                    if trust is not None:
-                        await trust.note_keepalive_ok()
-                except ForcedDisconnect:
-                    if trust is not None:
-                        trust.note_keepalive_failed()
-                    raise
-                except TimeoutError as exc:
-                    # Unanswered mid-run health check = dead session (ADR-011):
-                    # same keep-trying reconnect path as a clean panel drop.
-                    if trust is not None:
-                        trust.note_keepalive_failed()
-                    raise ForcedDisconnect(
-                        f"Panel health check went unanswered — treating the session as dead "
-                        f"and reconnecting. {exc}"
-                    ) from exc
-                except ProtocolError as exc:
-                    # A rejected (NAK'd) mid-run health check is just as dead a
-                    # session as an unanswered one (ADR-016): same keep-trying
-                    # reconnect path, not the generic except-Exception fallthrough.
-                    if trust is not None:
-                        trust.note_keepalive_failed()
-                    raise ForcedDisconnect(
-                        "Panel rejected the keepalive check-in — treating the session as dead "
-                        f"and reconnecting. {exc}"
-                    ) from exc
-                except Exception:
-                    if trust is not None:
-                        trust.note_keepalive_failed()
-                    raise
+                # Idle, scheduled check-in due, or trust-poll slice elapsed.
+                if clock() - last_checkin_at >= idle_timeout:
+                    last_checkin_at = clock()
+                    await _send_scheduled_checkin(panel, trust)
                 if trust is not None:
                     previous = alarm_state.payload
                     new_payload = await trust.maybe_poll(panel, current_alarm_payload=previous)
@@ -609,12 +634,18 @@ async def _listen_panel_messages(
                         alarm_state.payload = new_payload
                     _raise_if_stuck_trust_relogin(trust)
                 continue
+            if clock() - last_checkin_at >= idle_timeout:
+                # Fixed schedule, checked on every received frame too: a busy
+                # connection that never lets recv_message time out must not be
+                # able to skip its check-in just by staying busy (ADR-020).
+                last_checkin_at = clock()
+                await _send_scheduled_checkin(panel, trust)
             if trust is not None:
                 # Any well-formed frame arriving on the live socket is itself
                 # proof the panel connection is alive, just like a successful
                 # keepalive — drive the same recovery so a busy panel (lots of
-                # zone/area/log traffic) can't starve the idle-timeout
-                # keepalive path and stall Connection recovery (ADR-016).
+                # zone/area/log traffic) can't starve the check-in path and
+                # stall Connection recovery (ADR-016).
                 await trust.note_panel_traffic()
                 previous = alarm_state.payload
                 new_payload = await trust.maybe_poll(panel, current_alarm_payload=previous)
