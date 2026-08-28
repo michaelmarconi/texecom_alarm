@@ -42,3 +42,10 @@ ordinal: 47000
 <!-- SECTION:PLAN:BEGIN -->
 Files likely affected: texecom_alarm/src/texecom_alarm/protocol/client.py (modify — wrap `close()`'s `await writer.wait_closed()` in a bounded wait, e.g. `asyncio.wait_for` with a short fixed timeout; on timeout, forcibly abort the transport rather than leaving it dangling), texecom_alarm/src/texecom_alarm/reconnect.py (modify — confirm/ensure the bounded close is always awaited before the next connect attempt), texecom_alarm/tests/test_protocol_client.py (modify — a fake transport whose close() never completes, asserting close() still returns within the bound and the transport was aborted). Test strategy: how we'll know = unit test against a stand-in transport that never completes wait_closed(); `pytest tests/test_protocol_client.py -k close -q`. Novel decisions: the bound's default value (short — seconds, not the reconnect interval itself) and the abandon mechanism (transport.abort() vs a lower-level socket close).
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
