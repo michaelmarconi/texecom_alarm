@@ -26,7 +26,6 @@ options:
   part_arm_2: Unused
   part_arm_3: Unused
   reconnect_delay_seconds: 5
-  trust_fail_window_seconds: 90
   reconciliation_poll_interval_seconds: 300
   checkin_interval_seconds: 15
   checkin_patience_seconds: 45
@@ -44,10 +43,12 @@ schema:
   part_arm_1: list(Home 🏠|Night 🌙|Unused)
   part_arm_2: list(Home 🏠|Night 🌙|Unused)
   part_arm_3: list(Home 🏠|Night 🌙|Unused)
-  reconnect_delay_seconds: float(0,)
-  trust_fail_window_seconds: float(0,)
+  # Timing bounds mirror the loader: the panel needs ~2s to free its single
+  # connection slot, and hangs up on a connection it has not heard from for
+  # ~60s — so the check-in cadence stays at half that tolerance or tighter.
+  reconnect_delay_seconds: float(2,)
   reconciliation_poll_interval_seconds: float(0,)
-  checkin_interval_seconds: float(0,)
-  checkin_patience_seconds: float(0,)
+  checkin_interval_seconds: float(5,30)
+  checkin_patience_seconds: float(5,)
   # list(...) tokens are the Configuration radio labels (AC1).
   log_level: list(WARNING|INFO|DEBUG|TRACE)

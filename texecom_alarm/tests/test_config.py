@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 
 import pytest
+import yaml
 
 from texecom_alarm.config import (
     DEFAULT_CHECKIN_INTERVAL_SECONDS,
@@ -122,14 +123,12 @@ def test_reconnect_delay_defaults_and_overrides() -> None:
     assert defaults.reconnect_delay_seconds == 5.0
     assert defaults.trust_fail_window_seconds == 90.0
 
-    tuned = load_settings(
-        _valid_options(
-            reconnect_delay_seconds=0.5,
-            trust_fail_window_seconds=45.0,
-        )
-    )
-    assert tuned.reconnect_delay_seconds == 0.5
-    assert tuned.trust_fail_window_seconds == 45.0
+    tuned = load_settings(_valid_options(reconnect_delay_seconds=2.5))
+    assert tuned.reconnect_delay_seconds == 2.5
+    # Leftover Force-reconnect-after values from older installs are ignored —
+    # the field is no longer an add-on option.
+    leftover = load_settings(_valid_options(trust_fail_window_seconds=45.0))
+    assert leftover.trust_fail_window_seconds == 90.0
 
 
 def test_reconciliation_poll_interval_defaults_to_five_minutes() -> None:
@@ -227,14 +226,63 @@ def test_invalid_checkin_interval_raises_clear_error() -> None:
         load_settings(_valid_options(checkin_interval_seconds=-1))
 
 
+def test_checkin_interval_above_panel_idle_tolerance_is_refused() -> None:
+    """A cadence the panel would outlast is refused, whatever patience is set to.
+
+    Patience is set well above the interval here so the rejection cannot come
+    from the patience-vs-interval rule as a side effect.
+    """
+    with pytest.raises(ConfigError) as excinfo:
+        load_settings(
+            _valid_options(checkin_interval_seconds=120.0, checkin_patience_seconds=360.0)
+        )
+    message = str(excinfo.value)
+    assert "checkin_interval_seconds" in message
+    assert "60" in message
+
+
+def test_zero_checkin_interval_is_refused() -> None:
+    """A zero cadence would send check-ins as fast as the panel can answer."""
+    with pytest.raises(ConfigError) as excinfo:
+        load_settings(_valid_options(checkin_interval_seconds=0.0, checkin_patience_seconds=45.0))
+    assert "checkin_interval_seconds" in str(excinfo.value)
+
+
+def test_zero_checkin_patience_is_refused() -> None:
+    """Zero patience would end the session on the first refused check-in."""
+    with pytest.raises(ConfigError) as excinfo:
+        load_settings(_valid_options(checkin_patience_seconds=0.0))
+    message = str(excinfo.value)
+    assert "checkin_patience_seconds" in message
+    assert "refused check-in" in message
+
+
+def test_zero_reconnect_delay_is_refused() -> None:
+    """The panel needs a moment to free its single slot; 0s was refused live."""
+    with pytest.raises(ConfigError) as excinfo:
+        load_settings(_valid_options(reconnect_delay_seconds=0.0))
+    message = str(excinfo.value)
+    assert "reconnect_delay_seconds" in message
+    assert "connection slot" in message
+
+
+def test_plausible_non_default_timings_are_accepted() -> None:
+    """Bounds must not refuse a configuration a household could sensibly choose."""
+    settings = load_settings(
+        _valid_options(
+            checkin_interval_seconds=30.0,
+            checkin_patience_seconds=90.0,
+            reconnect_delay_seconds=2.0,
+        )
+    )
+    assert settings.checkin_interval_seconds == 30.0
+    assert settings.checkin_patience_seconds == 90.0
+    assert settings.reconnect_delay_seconds == 2.0
+
+
 def test_invalid_checkin_patience_raises_clear_error() -> None:
     with pytest.raises(ConfigError, match="checkin_patience_seconds"):
         load_settings(_valid_options(checkin_patience_seconds="nope"))
-
-
-def test_invalid_trust_fail_window_raises_clear_error() -> None:
-    with pytest.raises(ConfigError, match="trust_fail_window_seconds"):
-        load_settings(_valid_options(trust_fail_window_seconds=-1))
 
 
 def test_invalid_reconnect_delay_raises_clear_error() -> None:
@@ -253,13 +301,13 @@ def test_reconnect_delay_from_environ() -> None:
             "TEXECOM_PANEL_HOST": "panel.env",
             "TEXECOM_UDL_PASSWORD": "udl",
             "TEXECOM_MQTT_HOST": "broker.env",
-            "TEXECOM_RECONNECT_DELAY_SECONDS": "1.5",
+            "TEXECOM_RECONNECT_DELAY_SECONDS": "2.5",
             "TEXECOM_TRUST_FAIL_WINDOW_SECONDS": "120",
         },
         options_path="/nonexistent/options.json",
     )
-    assert settings.reconnect_delay_seconds == 1.5
-    assert settings.trust_fail_window_seconds == 120.0
+    assert settings.reconnect_delay_seconds == 2.5
+    assert settings.trust_fail_window_seconds == 90.0
 
 
 def test_part_arm_slot_defaults_and_mode_bytes() -> None:
@@ -325,6 +373,19 @@ def test_addon_config_schema_uses_display_part_arm_tokens() -> None:
     assert display.part_arm_1 == "home"
     assert display.part_arm_2 == "night"
     assert display.part_arm_3 == "unused"
+
+
+def test_addon_config_schema_advertises_the_enforced_timing_bounds() -> None:
+    """Supervisor must reject the same timings the loader does, before the add-on starts."""
+    config_path = Path(__file__).resolve().parents[1] / "config.yaml"
+    schema = yaml.safe_load(config_path.read_text(encoding="utf-8"))["schema"]
+    assert schema["checkin_interval_seconds"] == "float(5,30)"
+    assert schema["checkin_patience_seconds"] == "float(5,)"
+    assert schema["reconnect_delay_seconds"] == "float(2,)"
+    # A setting that does not bind behaviour must not stay in the schema (ADR-018).
+    assert "trust_fail_window_seconds" not in schema
+    options = yaml.safe_load(config_path.read_text(encoding="utf-8"))["options"]
+    assert "trust_fail_window_seconds" not in options
 
 
 def test_legacy_away_slot_coerces_to_unused(caplog: pytest.LogCaptureFixture) -> None:
