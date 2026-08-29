@@ -3,10 +3,10 @@ id: TASK-51
 title: >-
   Declare the session dead only after check-in failure persists past the
   patience window
-status: attention
+status: awaiting-review
 assignee: []
 created_date: '2026-08-28 16:14'
-updated_date: '2026-08-29 09:07'
+updated_date: '2026-08-29 10:18'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -63,11 +63,11 @@ Decision needed: Should note_panel_traffic() stop clearing _checkin_failure_sinc
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build result
-Summary: Softened check-in failures into a patience window (ADR-020) - a refused/unanswered check-in now only ends the session once failures persist continuously past checkin_patience_seconds, with login()'s retry budget decoupled from keepalive()'s (now single-attempt) behavior, plus a frame-parsing fix the retry removal exposed.
-Changed files: texecom_alarm/src/texecom_alarm/app.py, texecom_alarm/src/texecom_alarm/panel_trust.py, texecom_alarm/src/texecom_alarm/protocol/client.py, texecom_alarm/src/texecom_alarm/protocol/frame.py, texecom_alarm/tests/test_protocol_client.py, texecom_alarm/tests/test_startup_login_backoff.py, texecom_alarm/tests/test_operator_errors.py, texecom_alarm/tests/test_session_heal.py, texecom_alarm/tests/test_e2e_fake_panel.py, texecom_alarm/tests/test_reconnect.py, texecom_alarm/tests/test_panel_trust.py
-Verification: pytest -q -> 366 passed; ruff check/format clean; coverage 92.15% (>=90% gate). AC1/AC2 via test_panel_trust.py (checkin-failure-within-patience / past-patience / success-restarts-clock / outright-disconnect-bypasses-patience) plus reconnect/session-heal/e2e updates. AC3 via test_command_watchdog_fail_window_independent_of_checkin_patience.
-Notes/assumptions: Tracker lives on PanelTrust as its own _checkin_failure_since field, structurally separate from _degraded_since (command-rejection watchdog) - no shared clock/helper. PanelClient.keepalive_retries renamed to login_retries (breaking rename, all in-repo usages updated); keepalive() simplified to single attempt (retries=0). FakePanel already had sufficient primitives - no new API added. Fixed a latent bug in protocol/frame.py's try_decode_frame: 3-byte +++ end-of-session marker was only recognized once buffer held >=4 bytes, so +++ arriving alone would time out instead of raising ForcedDisconnect - previously masked by keepalive()'s old same-call retry; this touches a file outside the task's originally-scoped list, flagging for reviewer awareness. Patience boundary is inclusive (>=), matching TASK-49's inclusive patience==interval convention. run() gained a trust_checkin_patience override parameter mirroring existing trust_poll_interval/trust_recover_window/trust_fail_window pattern.
+Summary: Check-in patience window per ADR-020 - a refused/unanswered check-in only ends the session once failures persist continuously past checkin_patience_seconds; outright disconnect/end-of-session/bad data still end it immediately; command-rejection watchdog (ADR-011) left independent.
+Changed files: texecom_alarm/src/texecom_alarm/app.py, texecom_alarm/src/texecom_alarm/panel_trust.py, texecom_alarm/src/texecom_alarm/protocol/client.py, texecom_alarm/src/texecom_alarm/protocol/frame.py, plus tests (test_panel_trust, test_reconnect, test_protocol_client, test_session_heal, test_e2e_fake_panel, test_startup_login_backoff, test_operator_errors)
+Verification: pytest -q -> 368 passed; ruff check/format clean; coverage 92.15% (>=90% gate). Re-review verdict clean, including a mutation check (bug re-inserted in memory) proving both new regression tests fail when the defect is present, and 10 consecutive runs of the timing-sensitive e2e test with no instability.
+Notes/assumptions: First review round flagged a governance violation (note_panel_traffic cleared the check-in failure clock on unsolicited traffic - ADR-020 Option E / AGENTS.md stop condition). Escalated to attention, human approved the fix, then fixed TDD-first: only note_keepalive_ok (a check-in that got a valid reply) and reset_after_reconnect now clear _checkin_failure_since. note_panel_traffic still drives command-rejection-degrade recovery via _maybe_recover, unchanged. PanelClient.keepalive_retries renamed to login_retries; keepalive() now single-attempt since patience absorbs cross-call retries. Latent frame.py bug fixed: bare 3-byte +++ end-of-session marker was only recognised once the buffer held >=4 bytes, previously masked by keepalive's old same-call retry. Patience boundary inclusive (>=), matching TASK-49. run() gained a trust_checkin_patience override mirroring existing trust_* overrides.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
