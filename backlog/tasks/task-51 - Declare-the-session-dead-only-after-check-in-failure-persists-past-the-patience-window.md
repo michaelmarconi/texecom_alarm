@@ -3,10 +3,10 @@ id: TASK-51
 title: >-
   Declare the session dead only after check-in failure persists past the
   patience window
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-28 16:14'
-updated_date: '2026-08-29 10:18'
+updated_date: '2026-08-29 10:19'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:L'
@@ -37,9 +37,9 @@ ordinal: 45000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A refused or unanswered check-in that clears within the patience period never shows as a connection drop
-- [ ] #2 Continuous check-in failure past the patience period declares the session dead, reconnects, and re-reads panel state — while an outright disconnect, end-of-session signal, or bad data still ends the session immediately with no patience delay
-- [ ] #3 The command-rejection watchdog's own fail window (ADR-011) is demonstrated independent of the check-in patience window — refusing every command while answering check-ins still escalates on its own timer
+- [x] #1 A refused or unanswered check-in that clears within the patience period never shows as a connection drop
+- [x] #2 Continuous check-in failure past the patience period declares the session dead, reconnects, and re-reads panel state — while an outright disconnect, end-of-session signal, or bad data still ends the session immediately with no patience delay
+- [x] #3 The command-rejection watchdog's own fail window (ADR-011) is demonstrated independent of the check-in patience window — refusing every command while answering check-ins still escalates on its own timer
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -69,5 +69,5 @@ Verification: pytest -q -> 368 passed; ruff check/format clean; coverage 92.15% 
 Notes/assumptions: First review round flagged a governance violation (note_panel_traffic cleared the check-in failure clock on unsolicited traffic - ADR-020 Option E / AGENTS.md stop condition). Escalated to attention, human approved the fix, then fixed TDD-first: only note_keepalive_ok (a check-in that got a valid reply) and reset_after_reconnect now clear _checkin_failure_since. note_panel_traffic still drives command-rejection-degrade recovery via _maybe_recover, unchanged. PanelClient.keepalive_retries renamed to login_retries; keepalive() now single-attempt since patience absorbs cross-call retries. Latent frame.py bug fixed: bare 3-byte +++ end-of-session marker was only recognised once the buffer held >=4 bytes, previously masked by keepalive's old same-call retry. Patience boundary inclusive (>=), matching TASK-49. run() gained a trust_checkin_patience override mirroring existing trust_* overrides.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
