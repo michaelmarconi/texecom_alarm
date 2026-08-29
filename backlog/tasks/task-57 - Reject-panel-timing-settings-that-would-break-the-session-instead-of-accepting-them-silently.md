@@ -3,10 +3,10 @@ id: TASK-57
 title: >-
   Reject panel timing settings that would break the session instead of accepting
   them silently
-status: in-progress
+status: done
 assignee: []
 created_date: '2026-08-29 11:01'
-updated_date: '2026-08-29 11:12'
+updated_date: '2026-08-29 11:26'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -39,13 +39,20 @@ ordinal: 51000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A check-in interval that is not comfortably under the panel's ~60s idle tolerance is refused at startup with a message naming the setting and why the limit exists
-- [ ] #2 A zero check-in interval, a zero patience period, and a zero reconnect wait are each refused with their own clear operator-facing message
-- [ ] #3 The add-on schema advertises the same bounds as the loader enforces, so the Supervisor UI rejects bad values too
+- [x] #1 A check-in interval that is not comfortably under the panel's ~60s idle tolerance is refused at startup with a message naming the setting and why the limit exists
+- [x] #2 A zero check-in interval, a zero patience period, and a zero reconnect wait are each refused with their own clear operator-facing message
+- [x] #3 The add-on schema advertises the same bounds as the loader enforces, so the Supervisor UI rejects bad values too
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: done
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 The shipped defaults (15s interval, 45s patience, 5s reconnect wait) all still load unchanged
-- [ ] #2 Reconnection still retries indefinitely with no attempt cap (ADR-018)
+- [x] #1 The shipped defaults (15s interval, 45s patience, 5s reconnect wait) all still load unchanged
+- [x] #2 Reconnection still retries indefinitely with no attempt cap (ADR-018)
 <!-- DOD:END -->
