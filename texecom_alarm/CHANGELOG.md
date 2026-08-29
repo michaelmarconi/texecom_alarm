@@ -5,6 +5,40 @@ All notable changes to this Add-on are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.3.0] - 2026-08-29
+
+### Added
+
+- **Check-in interval** (default 15 seconds) and **Check-in patience**
+  (default 45 seconds) in Configuration, so you can see how often the add-on
+  confirms the panel is still answering and how long a refused check-in is
+  tolerated before it reconnects.
+
+### Changed
+
+- The add-on now checks in with the panel on a fixed schedule, even when the
+  panel is busy sending zone activity. A single refused check-in no longer
+  turns **Alarm Panel Connection** off or drops the session — that only
+  happens after check-ins have failed continuously for the patience period.
+- **Reconnection delay** must be at least 2 seconds. The panel needs a
+  moment to free its only connection slot; an immediate retry is refused.
+
+### Removed
+
+- **Force reconnect after** (the 90-second setting). It did not change
+  behaviour at any value a household would actually use, so it has been
+  dropped from Configuration. A leftover value from an older install is
+  ignored.
+
+### Fixed
+
+- If the panel dropped the connection at the exact moment the add-on was
+  sending a command, Home Assistant could keep showing green entities with
+  frozen values. The add-on now reconnects, or exits so Supervisor can
+  restart it.
+
 ## [0.2.2] - 2026-08-27
 
 ### Fixed
