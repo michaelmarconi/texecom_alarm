@@ -1246,10 +1246,15 @@ async def test_outright_disconnect_bypasses_patience_immediately() -> None:
 
 @pytest.mark.asyncio
 async def test_command_watchdog_fail_window_independent_of_checkin_patience() -> None:
-    """AC3: the command-rejection watchdog's own fail window (ADR-011) still
-    escalates on its own timer even while check-ins keep succeeding and the
-    check-in patience window is configured far longer — proving the two
-    timers never share a clock."""
+    """The command-rejection countdown and the check-in patience clock are
+    separate fields: a long patience window does not stop the command
+    watchdog from becoming due on *its* timer.
+
+    This uses a fail window shorter than the recover window so the
+    countdown can expire before a successful check-in is allowed to clear
+    the degrade. That is the inverse of the shipped 90s-against-30s
+    ratio, where a healthy check-in restores Connection first — this test
+    does not claim the watchdog fires at those shipped numbers."""
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
     await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)

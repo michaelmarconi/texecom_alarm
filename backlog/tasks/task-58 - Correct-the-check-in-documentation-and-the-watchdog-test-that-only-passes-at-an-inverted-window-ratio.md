@@ -3,9 +3,10 @@ id: TASK-58
 title: >-
   Correct the check-in documentation and the watchdog test that only passes at
   an inverted window ratio
-status: ready
+status: done
 assignee: []
 created_date: '2026-08-29 11:01'
+updated_date: '2026-08-29 11:27'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -37,13 +38,20 @@ ordinal: 52000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The add-on documentation no longer contradicts itself about what a failed check-in does to Alarm Panel Connection
-- [ ] #2 The architecture document describes the patience clock the code actually implements - measured from the start of the failure streak, not from the last success
-- [ ] #3 The watchdog-independence test either runs at the shipped window ratio or is renamed and re-scoped so it no longer claims coverage it does not have
+- [x] #1 The add-on documentation no longer contradicts itself about what a failed check-in does to Alarm Panel Connection
+- [x] #2 The architecture document describes the patience clock the code actually implements - measured from the start of the failure streak, not from the last success
+- [x] #3 The watchdog-independence test either runs at the shipped window ratio or is renamed and re-scoped so it no longer claims coverage it does not have
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: done
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 No behavioural change to the check-in or watchdog code in this task - documentation and tests only
-- [ ] #2 Shipping code and tests cite behaviour in product language, not pipeline task IDs
+- [x] #1 No behavioural change to the check-in or watchdog code in this task - documentation and tests only
+- [x] #2 Shipping code and tests cite behaviour in product language, not pipeline task IDs
 <!-- DOD:END -->

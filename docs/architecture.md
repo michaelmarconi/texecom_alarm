@@ -349,9 +349,10 @@ Key behaviours:
   refusing this check-in (a NAK, not the ACK previously assumed) during its own
   activity bursts, and that a bounded same-sequence retry burst fired inside ~1s never
   recovered it (0 of 4 observed events); that retry burst is retired. A refused or
-  unanswered check-in no longer ends the session by itself — it does not reset the
-  "last successful check-in" clock. Only once that clock exceeds the configured
-  patience period (default ~3 missed check-ins) is the session declared dead: the app
+  unanswered check-in no longer ends the session by itself — it starts a failure
+  streak clock that later refusals do not push further out. Only once that streak
+  has run past the configured patience period (default ~3 missed check-ins) is the
+  session declared dead: the app
   releases its own connection within a bounded time (forcibly abandoning it if it will
   not close cleanly, so it can never lock itself out of the panel's single connection
   slot), waits briefly, then reconnects and re-syncs state. An outright disconnect, an
