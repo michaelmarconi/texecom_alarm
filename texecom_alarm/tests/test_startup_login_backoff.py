@@ -93,7 +93,7 @@ async def test_startup_backoff_waits_grow_then_cap(
 
     def _fast_init(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         kwargs.setdefault("response_timeout", 0.15)
-        kwargs.setdefault("keepalive_retries", 0)
+        kwargs.setdefault("login_retries", 0)
         real_init(self, *args, **kwargs)
 
     monkeypatch.setattr(PanelClient, "__init__", _fast_init)
@@ -158,7 +158,7 @@ async def test_startup_backoff_recovers_into_monitoring(
 
     def _fast_init(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         kwargs.setdefault("response_timeout", 0.15)
-        kwargs.setdefault("keepalive_retries", 0)
+        kwargs.setdefault("login_retries", 0)
         real_init(self, *args, **kwargs)
 
     monkeypatch.setattr(PanelClient, "__init__", _fast_init)

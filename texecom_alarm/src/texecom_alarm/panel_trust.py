@@ -34,6 +34,9 @@ TRUST_POLL_INTERVAL_SECONDS = 300.0
 RECOVER_WINDOW_SECONDS = 30.0
 # Plan default: 3× shipping trust-poll interval (ADR-011 — tunable, not final).
 STUCK_TRUST_FAIL_WINDOW_SECONDS = 90.0
+# Roughly three consecutive missed check-ins before a refusing session is
+# declared dead (ADR-020) — matches config.DEFAULT_CHECKIN_PATIENCE_SECONDS.
+CHECKIN_PATIENCE_SECONDS = 45.0
 
 REASON_ARM_NAK = "arm_nak"
 REASON_DISARM_NAK = "disarm_nak"
@@ -81,6 +84,7 @@ class PanelTrust:
         poll_interval: float = TRUST_POLL_INTERVAL_SECONDS,
         recover_window: float = RECOVER_WINDOW_SECONDS,
         fail_window: float = STUCK_TRUST_FAIL_WINDOW_SECONDS,
+        checkin_patience: float = CHECKIN_PATIENCE_SECONDS,
         clock: Callable[[], float] | None = None,
         settings: Settings | None = None,
     ) -> None:
@@ -90,6 +94,7 @@ class PanelTrust:
         self._poll_interval = poll_interval
         self._recover_window = recover_window
         self._fail_window = fail_window
+        self._checkin_patience = checkin_patience
         self._clock = clock if clock is not None else time.monotonic
         self._settings = settings
         self._live = True
@@ -100,6 +105,11 @@ class PanelTrust:
         self._degraded_since: float | None = None
         self._last_failure_reason: str | None = None
         self._last_failure_ha_mode: str | None = None
+        # Separate from _degraded_since/_mark_degraded on purpose (ADR-020): a
+        # refused/unanswered check-in must never touch Connection/_live by
+        # itself, only this streak-since timestamp, kept fully independent of
+        # the command-rejection watchdog's own fail window (ADR-011/ADR-016).
+        self._checkin_failure_since: float | None = None
 
     @property
     def live(self) -> bool:
@@ -109,29 +119,61 @@ class PanelTrust:
     def fail_window(self) -> float:
         return self._fail_window
 
+    @property
+    def checkin_patience(self) -> float:
+        return self._checkin_patience
+
     async def note_keepalive_ok(self) -> None:
         """Record a successful routine check-in and drive Connection recovery.
 
         Recovery from a command-failure degrade is driven from here, not from a
-        successful reconciliation poll (ADR-016).
+        successful reconciliation poll (ADR-016). Also clears any in-progress
+        check-in failure streak (ADR-020) — a session that just answered is,
+        by definition, no longer in an unbroken run of refusals.
         """
         self._last_keepalive_ok = True
+        self._checkin_failure_since = None
         await self._maybe_recover(reason=REASON_KEEPALIVE_OK)
 
     async def note_panel_traffic(self) -> None:
         """Record that a well-formed frame arrived on the live socket.
 
-        A frame the panel pushes unprompted (zone/area/log) is itself evidence
-        the connection is alive, exactly like a successful keepalive — so this
-        also drives command-failure recovery. Without it, a busy panel that
-        keeps sending frames faster than the idle-timeout window would starve
-        the keepalive path (``note_keepalive_ok``) and stall recovery for as
-        long as that traffic kept arriving.
+        A frame the panel pushes unprompted (zone/area/log) is evidence the
+        socket is alive, so it drives recovery from a command-failure degrade:
+        without it, a busy panel sending frames faster than the idle-timeout
+        window would starve the keepalive path (``note_keepalive_ok``) and
+        stall that recovery for as long as the traffic kept arriving.
+
+        It deliberately does *not* clear the check-in failure streak. Unprompted
+        chatter is not proof the panel still answers when asked, and a session
+        has been seen carrying traffic all day while refusing every request; if
+        traffic reset the patience clock, such a session would hold the window
+        open forever and never be recovered (ADR-020). Only a check-in that got
+        a valid reply clears the streak.
         """
         await self._maybe_recover(reason=REASON_PANEL_TRAFFIC)
 
     def note_keepalive_failed(self) -> None:
         self._last_keepalive_ok = False
+
+    def note_checkin_failed(self) -> None:
+        """Record the start of an unbroken run of refused/unanswered check-ins.
+
+        Only the *first* failure in a streak sets the clock — later failures
+        in the same streak must not push the patience deadline back out
+        (ADR-020: patience is measured from when the streak started). Never
+        touches Connection/``_live``: a refusal inside the patience window
+        must not degrade the signal (ADR-004/ADR-020) — that stays a job for
+        the app to decide once ``checkin_patience_exceeded`` is true.
+        """
+        if self._checkin_failure_since is None:
+            self._checkin_failure_since = self._clock()
+
+    def checkin_patience_exceeded(self) -> bool:
+        """True once the current check-in failure streak has run past patience."""
+        if self._checkin_failure_since is None:
+            return False
+        return (self._clock() - self._checkin_failure_since) >= self._checkin_patience
 
     async def reset_after_reconnect(self) -> None:
         """Clear degrade memory and republish panel-link ON after recovery.
@@ -149,6 +191,7 @@ class PanelTrust:
         self._degraded_since = None
         self._last_failure_reason = None
         self._last_failure_ha_mode = None
+        self._checkin_failure_since = None
         await publish_panel_link_state(
             self._mqtt,
             topic_prefix=self._topic_prefix,

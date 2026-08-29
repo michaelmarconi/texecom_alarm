@@ -78,18 +78,20 @@ class PanelClient:
         *,
         login_delay: float = 0.5,
         response_timeout: float = 2.0,
-        keepalive_retries: int = 2,
-        # `keepalive_retries` is deliberately one shared "retry attempts" dial for
-        # both keepalive() and login() rather than two separate settings — a user
-        # configuring this only wants "how many times do you retry", not a choice
-        # between two knobs for two commands (decision: 2026-08-27, TASK-47 review).
+        login_retries: int = 2,
+        # `login_retries` is login()'s own retry budget. It used to be shared
+        # with keepalive()'s same-call retry loop, but that loop is gone now
+        # that the app's own check-in patience window absorbs repeated
+        # keepalive failures across calls instead of within one (ADR-020) —
+        # login keeps its budget under this name of its own rather than
+        # losing it as a side effect.
     ) -> None:
         self.host = host
         self.port = port
         self.udl_password = udl_password
         self.login_delay = login_delay
         self.response_timeout = response_timeout
-        self.keepalive_retries = keepalive_retries
+        self.login_retries = login_retries
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._buf = bytearray()
@@ -201,15 +203,10 @@ class PanelClient:
 
     async def login(self) -> None:
         logger.debug("panel_login")
-        # Deliberately reuses keepalive_retries as login's own retry budget too —
-        # one shared "retry attempts" setting for the whole session, not a second
-        # knob (decision: 2026-08-27, TASK-47 review). Raising keepalive_retries
-        # for the keepalive bounded-retry fix therefore also raises login's own
-        # attempt count; that's accepted, not a bug.
         payload = await self.send_command(
             CMD_LOGIN,
             self.udl_password.encode("ascii"),
-            retries=self.keepalive_retries,
+            retries=self.login_retries,
         )
         if len(payload) == 1 and payload[0] == ACK:
             self._authenticated = True
@@ -218,30 +215,25 @@ class PanelClient:
         raise ProtocolError(self.login_failure_message(payload))
 
     async def keepalive(self) -> bytes:
-        """Send GETDATETIME; retry same command/sequence on timeout, an attempt eaten
-        by interleaved 'M' traffic, or a reply that arrives but is the wrong shape
-        (e.g. a short/empty-ACK-shaped reply) — the panel is documented to sometimes
-        defer or shortcut a reply while still busy with recent zone/area traffic, and
-        a single such reply must not be read as a dead session (2026-08-27 incident;
-        see docs/protocol-reference.md). Only once the bounded retry budget
-        (``keepalive_retries``) is exhausted does this raise.
+        """Send GETDATETIME once; a rejected or wrongly-shaped reply raises immediately.
+
+        This used to retry the same command/sequence within the call
+        (2026-08-27 incident; see docs/protocol-reference.md), but repeated
+        keepalive failures are now absorbed across calls by the app's own
+        check-in patience window instead (ADR-020) — a lone refusal or
+        wrong-shaped reply here simply becomes one failed attempt for that
+        window to track, not a reason for this call itself to retry.
         """
         logger.debug("panel_keepalive")
-        payload = await self.send_command(
-            CMD_GETDATETIME,
-            retries=self.keepalive_retries,
-            retry_if=lambda reply: len(reply) != _GETDATETIME_REPLY_LENGTH,
-        )
+        payload = await self.send_command(CMD_GETDATETIME, retries=0)
         if len(payload) != _GETDATETIME_REPLY_LENGTH:
-            attempts = self.keepalive_retries + 1
             if len(payload) == 1 and payload[0] == NAK:
                 raise ProtocolError(
-                    f"Panel rejected the keepalive check-in (GETDATETIME NAK) after "
-                    f"{attempts} attempt(s). "
-                    "Treating the session as dead so the add-on can reconnect."
+                    "Panel rejected the keepalive check-in (GETDATETIME NAK). "
+                    "The add-on will keep retrying on its scheduled check-in cadence."
                 )
             raise ProtocolError(
-                f"Panel returned an unexpected keepalive reply after {attempts} attempt(s) "
+                f"Panel returned an unexpected keepalive reply "
                 f"(wanted {_GETDATETIME_REPLY_LENGTH} datetime bytes, got {len(payload)})."
             )
         return payload

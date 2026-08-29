@@ -57,7 +57,7 @@ async def test_startup_retries_silent_login_then_succeeds(
 
     def _fast_init(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         kwargs.setdefault("response_timeout", 0.15)
-        kwargs.setdefault("keepalive_retries", 0)
+        kwargs.setdefault("login_retries", 0)
         real_init(self, *args, **kwargs)
 
     monkeypatch.setattr(PanelClient, "__init__", _fast_init)

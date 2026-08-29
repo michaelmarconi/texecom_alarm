@@ -76,13 +76,17 @@ def try_decode_frame(buf: bytearray | bytes) -> tuple[Frame | None, int]:
       the caller treats this as a session fault and reconnects rather than
       skipping past it (ADR-019).
     """
+    if len(buf) >= 3 and bytes(buf[:3]) == b"+++":
+        # Forced-disconnect signal — treat as needing caller attention by
+        # consuming the marker without returning a frame. Checked ahead of
+        # the HEADER_LEN wait below: the 3-byte marker must be recognised on
+        # its own, not only once a 4th byte happens to arrive afterwards
+        # (e.g. from a same-sequence retry) — a session ending with exactly
+        # these 3 bytes and nothing else must still end the session promptly.
+        return None, 3
+
     if len(buf) < HEADER_LEN:
         return None, 0
-
-    if bytes(buf[:3]) == b"+++":
-        # Forced-disconnect signal — treat as needing caller attention by
-        # consuming the marker without returning a frame.
-        return None, 3
 
     if buf[0] != HEADER_START:
         return None, 1

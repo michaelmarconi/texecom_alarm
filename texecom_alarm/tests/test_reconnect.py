@@ -578,7 +578,7 @@ async def test_keepalive_timeout_enters_reconnect_path() -> None:
             udl_password="1234",
             login_delay=0.0,
             response_timeout=0.2,
-            keepalive_retries=0,
+            login_retries=0,
         )
         await client.connect()
         await client.login()
@@ -591,6 +591,9 @@ async def test_keepalive_timeout_enters_reconnect_path() -> None:
                 idle=stop.wait,
                 idle_timeout=0.05,
                 trust_poll_interval=60.0,
+                # Fast patience (ADR-020) so a silenced keepalive still declares
+                # the session dead well within this test's wait budget.
+                trust_checkin_patience=0.15,
             )
         )
         for _ in range(150):
@@ -650,7 +653,7 @@ async def test_keepalive_nak_enters_reconnect_path() -> None:
             udl_password="1234",
             login_delay=0.0,
             response_timeout=0.2,
-            keepalive_retries=0,
+            login_retries=0,
         )
         await client.connect()
         await client.login()
@@ -663,6 +666,9 @@ async def test_keepalive_nak_enters_reconnect_path() -> None:
                 idle=stop.wait,
                 idle_timeout=0.05,
                 trust_poll_interval=60.0,
+                # Fast patience (ADR-020) so an every-check-in NAK still declares
+                # the session dead well within this test's wait budget.
+                trust_checkin_patience=0.15,
             )
         )
         for _ in range(150):
@@ -705,9 +711,11 @@ async def test_keepalive_nak_enters_reconnect_path() -> None:
 
 @pytest.mark.asyncio
 async def test_keepalive_wrong_shape_transient_burst_does_not_flip_connection() -> None:
-    """TASK-47: a transient burst of wrong-shaped keepalive replies within the retry
-    budget must not flip Alarm Panel Connection or tear down the session — mirrors
-    the 2026-08-27 'near miss' incident (docs/protocol-reference.md)."""
+    """ADR-020: a transient burst of wrong-shaped keepalive replies that clears
+    within the patience window must not flip Alarm Panel Connection or tear down
+    the session — mirrors the 2026-08-27 'near miss' incident
+    (docs/protocol-reference.md), now absorbed by the app-level patience window
+    across scheduled check-ins rather than a same-call retry inside keepalive()."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
@@ -724,7 +732,6 @@ async def test_keepalive_wrong_shape_transient_burst_does_not_flip_connection() 
             udl_password="1234",
             login_delay=0.0,
             response_timeout=0.2,
-            keepalive_retries=2,
         )
         await client.connect()
         await client.login()
@@ -737,6 +744,8 @@ async def test_keepalive_wrong_shape_transient_burst_does_not_flip_connection() 
                 idle=stop.wait,
                 idle_timeout=0.05,
                 trust_poll_interval=60.0,
+                # Two failed check-ins (~0.1s) must clear well inside patience.
+                trust_checkin_patience=1.0,
             )
         )
         for _ in range(150):
@@ -778,9 +787,10 @@ async def test_keepalive_wrong_shape_transient_burst_does_not_flip_connection() 
 
 @pytest.mark.asyncio
 async def test_keepalive_wrong_shape_sustained_failure_still_reconnects() -> None:
-    """TASK-47: once the retry budget is genuinely exhausted (every attempt still
-    wrong-shaped, no M traffic), keepalive() still raises and the app still degrades
-    Connection and reconnects — preserving TASK-45's zombie-session fix, no regression."""
+    """ADR-020: once wrong-shaped keepalive replies persist past the patience
+    window (every scheduled check-in still wrong-shaped, no M traffic, never
+    recovering), the app still degrades Connection and reconnects rather than
+    hanging on a zombie session."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
@@ -797,7 +807,6 @@ async def test_keepalive_wrong_shape_sustained_failure_still_reconnects() -> Non
             udl_password="1234",
             login_delay=0.0,
             response_timeout=0.2,
-            keepalive_retries=1,
         )
         await client.connect()
         await client.login()
@@ -810,6 +819,10 @@ async def test_keepalive_wrong_shape_sustained_failure_still_reconnects() -> Non
                 idle=stop.wait,
                 idle_timeout=0.05,
                 trust_poll_interval=60.0,
+                # Fast patience (ADR-020) so a never-recovering wrong-shaped
+                # keepalive still declares the session dead within this test's
+                # wait budget.
+                trust_checkin_patience=0.15,
             )
         )
         for _ in range(150):
@@ -847,6 +860,104 @@ async def test_keepalive_wrong_shape_sustained_failure_still_reconnects() -> Non
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)
     finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_busy_panel_refusing_check_ins_is_still_declared_dead_after_patience() -> None:
+    """ADR-020: a panel that keeps pushing zone traffic while NAKing every
+    scheduled check-in must still be declared dead once patience runs out.
+    Unprompted chatter is not proof the panel answers when asked, so it must
+    not hold the patience window open — otherwise a session that talks all day
+    while refusing every request would stay a zombie with Connection wrongly
+    reading ON."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    pump: asyncio.Task[None] | None = None
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.2,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(
+            run(
+                settings,
+                panel=client,
+                mqtt=mqtt,
+                idle=stop.wait,
+                idle_timeout=0.05,
+                trust_poll_interval=60.0,
+                trust_checkin_patience=0.15,
+            )
+        )
+        for _ in range(150):
+            if mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["ON"]:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        setevent_before = panel.seteventmessages_calls
+        panel.nak_keepalive = True  # cleared again by a fresh login
+
+        async def keep_pushing() -> None:
+            """Zone frames arriving faster than the check-in interval."""
+            status = 0x01
+            while True:
+                try:
+                    await panel.inject_zone_message(1, status)
+                except (RuntimeError, OSError):
+                    pass  # no client attached while the app is reconnecting
+                status ^= 0x01
+                await asyncio.sleep(0.01)
+
+        pump = asyncio.create_task(keep_pushing())
+
+        for _ in range(300):
+            link = mqtt.payloads_for("texecom/panel_connection/state")
+            resumed = (
+                link.count("OFF") >= 1
+                and link[-1] == "ON"
+                and panel.seteventmessages_calls > setevent_before
+            )
+            if resumed:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        link = mqtt.payloads_for("texecom/panel_connection/state")
+        assert "OFF" in link
+        assert link[-1] == "ON"
+        assert panel.seteventmessages_calls > setevent_before
+        assert task.done() is False
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        if pump is not None:
+            pump.cancel()
+            try:
+                await pump
+            except asyncio.CancelledError:
+                pass
         await panel.stop()
 
 
