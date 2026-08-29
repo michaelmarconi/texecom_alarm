@@ -21,17 +21,17 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | Backups | n/a | No extra datastore; HA backup of add-on options is sufficient |
 | Official HA Apps store | n/a | Community GitHub repository is the intended path |
 | Store-shaped repository | pass | Root `repository.yaml` + App in `texecom_alarm/`; store URL uses generated `#app` branch |
-| Pre-built images (GHCR) | pending | 0.3.0 not published yet |
+| Pre-built images (GHCR) | pass | `0.3.0` published (`docker manifest inspect`, amd64 + arm64) |
 | RISK-017 fingerprint | pass | Working tree + history rewrite complete (recorded 2026-08-23) |
 | CHANGELOG vs product | pass | `[0.3.0]` records scheduled check-ins, patience, removed Force-reconnect-after, send-side reconnect — household language, no pipeline IDs |
 | Licence label consistency | pass | `Dockerfile` OCI label is MIT |
 | Version bump policy | pass | 0.2.2 → 0.3.0 (minor) — new Configuration settings and a removed setting; same class as 0.2.0 |
-| Store Update rehearsal | pending | `./scripts/ha-store-upgrade-smoke.sh` after publish |
+| Store Update rehearsal | pass | 2026-08-29: `STORE_UPGRADE_SMOKE_PASS from=0.2.0 to=0.3.0` on `d05f66f6_texecom_alarm` — real panel login, zone enumeration, MQTT discovery before and after Update |
 
 ## Deploy
 
 - Authorized: yes — 2026-08-29 (practitioner chose Authorize deploy)
-- Step performed: pending — bump + push in this cycle
+- Step performed: yes — bumped to `0.3.0` (`a99eaf4`); pushed `main`; Tag version created `v0.3.0`; Sync app branch refreshed `#app` (`version: "0.3.0"` + `image:`). Builder `on: push: tags` did not fire automatically (same `GITHUB_TOKEN` limitation as 0.2.x), so dispatched (`gh workflow run builder.yml --ref v0.3.0 -f version=0.3.0`) — succeeded, GHCR `0.3.0` amd64 + arm64 confirmed.
 
 Prior Accepted ship (kept for history):
 - 0.2.2 Accepted 2026-08-28 — household Supervisor Update confirmed live
