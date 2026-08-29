@@ -400,8 +400,20 @@ class PanelClient:
             self._pending_cmd = cmd
             try:
                 while True:
-                    self._writer.write(frame)
-                    await self._writer.drain()
+                    # Only the write/drain pair is guarded: a socket that dies
+                    # while sending must end the session exactly as one that dies
+                    # while reading does. The response wait below raises its own
+                    # TimeoutError — itself an OSError — which the retry loop
+                    # still needs, so it must stay outside this guard.
+                    try:
+                        self._writer.write(frame)
+                        await self._writer.drain()
+                    except OSError as exc:
+                        raise ForcedDisconnect(
+                            f"Panel at {self.host}:{self.port} dropped the network "
+                            f"connection while sending {self.command_label(cmd)} "
+                            f"({exc}). The add-on will reconnect."
+                        ) from exc
                     logger.log(
                         TRACE_LEVEL,
                         "panel_tx %s seq=%s attempt=%s %s bytes",

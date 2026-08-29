@@ -13,7 +13,11 @@ from tests.recording_mqtt import RecordingMqttPublisher
 from texecom_alarm.app import _listen_with_reconnect, _SharedAlarmState, run
 from texecom_alarm.area_state import AREA_FLAGS_COUNT
 from texecom_alarm.config import Settings
-from texecom_alarm.mqtt.discovery import AVAILABILITY_ONLINE, availability_topic
+from texecom_alarm.mqtt.discovery import (
+    AVAILABILITY_OFFLINE,
+    AVAILABILITY_ONLINE,
+    availability_topic,
+)
 from texecom_alarm.protocol.client import PanelClient
 from texecom_alarm.protocol.frame import (
     CMD_GET_AREA_FLAGS,
@@ -1065,6 +1069,186 @@ async def test_connection_reset_enters_reconnect_path() -> None:
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_send_side_connection_reset_enters_reconnect_path() -> None:
+    """A socket that dies while the app is *sending* must reconnect too.
+
+    The receive half already normalises a dead socket; this breaks only the write
+    half so the next scheduled check-in — not the reader — is what discovers it.
+    """
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(
+            run(
+                settings,
+                panel=client,
+                mqtt=mqtt,
+                idle=stop.wait,
+                idle_timeout=0.05,
+                trust_poll_interval=60.0,
+            )
+        )
+        for _ in range(150):
+            if mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["ON"]:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        setevent_before = panel.seteventmessages_calls
+        login_before = panel.commands_seen.count(CMD_LOGIN)
+        assert client._writer is not None
+
+        def _rst(_data: bytes) -> None:
+            raise ConnectionResetError("Connection reset by peer")
+
+        client._writer.write = _rst  # type: ignore[method-assign]
+
+        for _ in range(300):
+            link = mqtt.payloads_for("texecom/panel_connection/state")
+            resumed = (
+                link.count("OFF") >= 1
+                and link[-1] == "ON"
+                and panel.seteventmessages_calls > setevent_before
+            )
+            if resumed:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        link = mqtt.payloads_for("texecom/panel_connection/state")
+        assert "OFF" in link
+        assert link[-1] == "ON"
+        # A fresh LOGIN reached the panel — the session really was rebuilt.
+        assert panel.commands_seen.count(CMD_LOGIN) > login_before
+        assert panel.seteventmessages_calls > setevent_before
+        assert task.done() is False
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_unexpected_listen_failure_stops_the_app_instead_of_idling() -> None:
+    """An unexpected listen-task failure must never leave the add-on alive-but-idle
+    behind frozen entities — run() surfaces it so the process exits and Home
+    Assistant's last will marks the add-on unavailable."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel)
+        never = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        with patch(
+            "texecom_alarm.app._listen_panel_messages",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("listen boom"),
+        ):
+            with pytest.raises(RuntimeError, match="listen boom"):
+                await asyncio.wait_for(
+                    run(
+                        settings,
+                        panel=client,
+                        mqtt=mqtt,
+                        idle=never.wait,
+                        idle_timeout=0.05,
+                        trust_poll_interval=60.0,
+                    ),
+                    timeout=5.0,
+                )
+
+        assert mqtt.will_topic == availability_topic("texecom")
+        assert mqtt.will_payload == AVAILABILITY_OFFLINE
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_unexpected_command_listener_failure_stops_the_app_instead_of_idling() -> None:
+    """The MQTT command listener dying silently is the same class of bug as the
+    listen task dying: the add-on must stop rather than keep running deaf to taps."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel)
+        never = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        with patch(
+            "texecom_alarm.app._listen_alarm_commands",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("command boom"),
+        ):
+            with pytest.raises(RuntimeError, match="command boom"):
+                await asyncio.wait_for(
+                    run(
+                        settings,
+                        panel=client,
+                        mqtt=mqtt,
+                        idle=never.wait,
+                        idle_timeout=0.05,
+                        trust_poll_interval=60.0,
+                    ),
+                    timeout=5.0,
+                )
+        await client.close()
     finally:
         await panel.stop()
 

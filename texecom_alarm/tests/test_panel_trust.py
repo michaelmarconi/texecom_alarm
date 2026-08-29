@@ -24,6 +24,7 @@ from texecom_alarm.mqtt.discovery import AVAILABILITY_ONLINE, availability_topic
 from texecom_alarm.panel_trust import (
     REASON_ARM_NAK,
     REASON_ARM_TIMEOUT,
+    REASON_DISARM_DISCONNECT,
     REASON_DISARM_NAK,
     REASON_DISARM_TIMEOUT,
     REASON_KEEPALIVE_OK,
@@ -218,6 +219,62 @@ async def test_arm_timeout_and_disarm_nak_reasons() -> None:
         _extra([r for r in capture.records if r.levelno == logging.WARNING][-1])["reason"]
         == REASON_DISARM_NAK
     )
+
+
+@pytest.mark.asyncio
+async def test_disarm_on_a_dead_socket_records_a_command_failure() -> None:
+    """A disarm that fails because the socket died must be recorded as a command
+    failure and turn Alarm Panel Connection off — not escape as an unclassified
+    network error that leaves Connection reading healthy."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+        await mqtt.publish(availability_topic("texecom"), AVAILABILITY_ONLINE, retain=True)
+        trust = _trust(mqtt)
+        await trust.note_keepalive_ok()
+        capture = _attach_capture()
+
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+        assert client._writer is not None
+
+        def _rst(_data: bytes) -> None:
+            raise ConnectionResetError("Connection reset by peer")
+
+        client._writer.write = _rst  # type: ignore[method-assign]
+
+        await handle_alarm_command(
+            client,
+            _settings(panel),
+            "DISARM",
+            mqtt=mqtt,
+            topic_prefix="texecom",
+            trust=trust,
+        )
+
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+        warnings = [r for r in capture.records if r.levelno == logging.WARNING]
+        assert warnings
+        assert _extra(warnings[-1])["reason"] == REASON_DISARM_DISCONNECT
+        # Availability still belongs to the process alone (ADR-004).
+        assert mqtt.payloads_for(availability_topic("texecom"))[-1] == AVAILABILITY_ONLINE
+        await client.close()
+    finally:
+        await panel.stop()
 
 
 @pytest.mark.asyncio

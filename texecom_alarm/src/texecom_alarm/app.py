@@ -276,10 +276,7 @@ async def run(
             name="mqtt-alarm-commands",
         )
 
-        if idle is not None:
-            await idle()
-        else:
-            await _idle_forever()
+        await _wait_for_shutdown_or_background_failure(idle, listen_task, command_task)
     finally:
         for task in (command_task, listen_task):
             if task is not None and not task.done():
@@ -784,6 +781,49 @@ def _raise_if_stuck_trust_relogin(trust: PanelTrust) -> None:
         f"Alarm Panel Connection stayed untrustworthy for {trust.fail_window:g}s "
         f"(stuck-trust fail window) — tearing down and logging in again."
     )
+
+
+async def _wait_for_shutdown_or_background_failure(
+    idle: Callable[[], Awaitable[None]] | None,
+    listen_task: asyncio.Task[None],
+    command_task: asyncio.Task[None],
+) -> None:
+    """Stay up until asked to stop, or until a background task dies.
+
+    Parking on an idle wait alone used to hide a listen or command-task crash:
+    the process stayed alive, the last-will never fired, and Home Assistant
+    kept showing frozen entities. If either task fails, surface that error so
+    the add-on exits and Supervisor can restart it.
+    """
+    idle_task = asyncio.create_task(
+        idle() if idle is not None else _idle_forever(),
+        name="app-idle",
+    )
+    try:
+        done, _pending = await asyncio.wait(
+            {idle_task, listen_task, command_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if idle_task in done:
+            exc = idle_task.exception() if not idle_task.cancelled() else None
+            if exc is not None:
+                raise exc
+            return
+        for task in (listen_task, command_task):
+            if task not in done:
+                continue
+            exc = task.exception()
+            if exc is not None:
+                raise exc
+            logger.error(
+                "Background task %s ended without an error — stopping the add-on.",
+                task.get_name(),
+            )
+            return
+    finally:
+        if not idle_task.done():
+            idle_task.cancel()
+            await asyncio.gather(idle_task, return_exceptions=True)
 
 
 async def _idle_forever() -> None:

@@ -433,6 +433,51 @@ async def test_connection_reset_maps_to_forced_disconnect(panel: FakePanel) -> N
 
 
 @pytest.mark.asyncio
+async def test_connection_reset_while_sending_maps_to_forced_disconnect(panel: FakePanel) -> None:
+    """A socket that dies while sending must end the session exactly like one that
+    dies while reading, and name the command so an operator can see what was in flight."""
+    client = await _logged_in_client(panel)
+    assert client._writer is not None
+
+    def _rst(_data: bytes) -> None:
+        raise ConnectionResetError("Connection reset by peer")
+
+    client._writer.write = _rst  # type: ignore[method-assign]
+    with pytest.raises(ForcedDisconnect) as excinfo:
+        await client.keepalive()
+    message = str(excinfo.value)
+    assert "GETDATETIME" in message
+    assert "reconnect" in message.lower()
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_send_side_drain_failure_maps_to_forced_disconnect(panel: FakePanel) -> None:
+    """A reset surfacing from drain() rather than write() ends the session the same way."""
+    client = await _logged_in_client(panel)
+    assert client._writer is not None
+
+    async def _rst_drain() -> None:
+        raise ConnectionResetError("Connection reset by peer")
+
+    client._writer.drain = _rst_drain  # type: ignore[method-assign]
+    with pytest.raises(ForcedDisconnect, match="SETAREADISARM"):
+        await client.set_area_disarm()
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_send_command_still_times_out_when_the_socket_is_healthy(panel: FakePanel) -> None:
+    """The send-side guard must not swallow a timeout — an unanswered command still
+    raises TimeoutError (which is itself an OSError) rather than ending the session."""
+    client = await _logged_in_client(panel, response_timeout=0.1)
+    panel.drop_next_command_responses = 2
+    with pytest.raises(TimeoutError):
+        await client.keepalive()
+    await client.close()
+
+
+@pytest.mark.asyncio
 async def test_send_command_after_session_teardown_is_forced_disconnect(
     panel: FakePanel,
 ) -> None:
