@@ -3,9 +3,10 @@ id: TASK-57
 title: >-
   Reject panel timing settings that would break the session instead of accepting
   them silently
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-29 11:01'
+updated_date: '2026-08-29 11:12'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'

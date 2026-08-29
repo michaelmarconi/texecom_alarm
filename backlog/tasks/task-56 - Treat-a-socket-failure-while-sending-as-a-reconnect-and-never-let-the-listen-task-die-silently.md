@@ -3,9 +3,10 @@ id: TASK-56
 title: >-
   Treat a socket failure while sending as a reconnect, and never let the listen
   task die silently
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-29 11:01'
+updated_date: '2026-08-29 11:12'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
