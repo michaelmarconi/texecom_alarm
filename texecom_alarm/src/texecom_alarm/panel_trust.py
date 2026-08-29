@@ -138,15 +138,19 @@ class PanelTrust:
     async def note_panel_traffic(self) -> None:
         """Record that a well-formed frame arrived on the live socket.
 
-        A frame the panel pushes unprompted (zone/area/log) is itself evidence
-        the connection is alive, exactly like a successful keepalive — so this
-        also drives command-failure recovery and clears the check-in failure
-        streak (ADR-020). Without it, a busy panel that keeps sending frames
-        faster than the idle-timeout window would starve the keepalive path
-        (``note_keepalive_ok``) and stall recovery for as long as that traffic
-        kept arriving.
+        A frame the panel pushes unprompted (zone/area/log) is evidence the
+        socket is alive, so it drives recovery from a command-failure degrade:
+        without it, a busy panel sending frames faster than the idle-timeout
+        window would starve the keepalive path (``note_keepalive_ok``) and
+        stall that recovery for as long as the traffic kept arriving.
+
+        It deliberately does *not* clear the check-in failure streak. Unprompted
+        chatter is not proof the panel still answers when asked, and a session
+        has been seen carrying traffic all day while refusing every request; if
+        traffic reset the patience clock, such a session would hold the window
+        open forever and never be recovered (ADR-020). Only a check-in that got
+        a valid reply clears the streak.
         """
-        self._checkin_failure_since = None
         await self._maybe_recover(reason=REASON_PANEL_TRAFFIC)
 
     def note_keepalive_failed(self) -> None:

@@ -1133,6 +1133,41 @@ async def test_checkin_success_restarts_the_patience_clock() -> None:
 
 
 @pytest.mark.asyncio
+async def test_unsolicited_panel_traffic_does_not_hold_the_patience_window_open() -> None:
+    """A panel that keeps pushing zone/area/log frames while refusing every
+    check-in must still be declared dead once patience runs out. Only a
+    check-in that actually got a valid reply proves the panel still answers
+    when asked; its own unprompted chatter never does, or a busy-but-refusing
+    session would reset the patience clock with its own traffic and never be
+    recovered (ADR-020)."""
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    clock = {"t": 0.0}
+    trust = _trust(mqtt, checkin_patience=10.0, clock=lambda: clock["t"])
+    await trust.note_keepalive_ok()
+
+    panel = MagicMock()
+    panel.keepalive = AsyncMock(side_effect=ProtocolError("GETDATETIME NAK"))
+
+    # Each tick mirrors one busy listen-loop iteration: the due check-in is
+    # refused, then the frame that arrived is recorded as panel traffic.
+    for tick in (1.0, 4.0, 7.0):
+        clock["t"] = tick
+        await _send_scheduled_checkin(panel, trust)
+        await trust.note_panel_traffic()
+        assert trust.checkin_patience_exceeded() is False
+        assert trust.live is True
+
+    # 10s of unbroken refusals since the streak began at t=1.0, all of it
+    # under a steady stream of panel traffic.
+    clock["t"] = 11.0
+    assert trust.checkin_patience_exceeded() is True
+    with pytest.raises(ForcedDisconnect):
+        await _send_scheduled_checkin(panel, trust)
+
+
+@pytest.mark.asyncio
 async def test_outright_disconnect_bypasses_patience_immediately() -> None:
     """AC2: a transport-level ForcedDisconnect from keepalive() (peer close,
     ``+++``, non-conforming data) must end the session immediately, with no

@@ -80,11 +80,11 @@ class PanelClient:
         response_timeout: float = 2.0,
         login_retries: int = 2,
         # `login_retries` is login()'s own retry budget. It used to be shared
-        # with keepalive()'s same-call retry loop (decision: 2026-08-27,
-        # TASK-47 review), but that loop is gone now that the app's own
-        # check-in patience window absorbs repeated keepalive failures across
-        # calls instead of within one (ADR-020) — login keeps its budget
-        # under this name of its own rather than losing it as a side effect.
+        # with keepalive()'s same-call retry loop, but that loop is gone now
+        # that the app's own check-in patience window absorbs repeated
+        # keepalive failures across calls instead of within one (ADR-020) —
+        # login keeps its budget under this name of its own rather than
+        # losing it as a side effect.
     ) -> None:
         self.host = host
         self.port = port
