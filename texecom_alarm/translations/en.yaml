@@ -47,12 +47,7 @@ configuration:
     name: Reconnection delay
     description: >-
       Seconds to wait before retrying after any panel disconnect (default 5).
-  trust_fail_window_seconds:
-    name: Force reconnect after
-    description: >-
-      How long Alarm Panel Connection can stay off before the add-on forces a
-      fresh reconnect instead of continuing to wait (default 90 seconds).
-      Short blips often clear on their own before this.
+      Must be at least 2 seconds so the panel can free its connection slot.
   reconciliation_poll_interval_seconds:
     name: Recheck interval
     description: >-

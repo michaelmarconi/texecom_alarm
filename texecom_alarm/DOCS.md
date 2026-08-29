@@ -98,21 +98,17 @@ wrong network module — see
 |--------|---------|---------|
 | Reconnection delay | `5` seconds | Wait before retrying after any panel disconnect |
 
+The delay must be at least **2 seconds**. When a session ends the panel needs a
+moment to free its single connection slot: on the real panel an immediate retry
+was turned away every time it was tried, while a two-second wait was accepted
+first time, every time.
+
 ### Soft trust recovery
 
-If the panel path looks connected but is untrustworthy (for example a routine
-keepalive check-in fails, or an arm/disarm command is rejected or times out),
-**Alarm Panel Connection** goes off while zone and alarm entities keep their
-last-known state. A successful keepalive can restore the link. If it stays off
-longer than the window below, the add-on tears down the session and logs in
-again (without restarting the add-on, and without silently re-trying the
-failed arm/disarm).
-
-| Option | Default | Meaning |
-|--------|---------|---------|
-| Force reconnect after | `90` seconds | How long Connection may stay off before tear-down / re-login |
-
-You can leave the default unless live walks suggest a different window.
+If an arm or disarm command is rejected or times out, **Alarm Panel
+Connection** goes off while zone and alarm entities keep their last-known
+state. A successful check-in restores the link. A refused check-in on its own
+does not turn Connection off — that waits for the patience period below.
 
 ### Check-in cadence and patience
 
@@ -128,8 +124,19 @@ again automatically.
 | Check-in interval | `15` seconds | How often the add-on checks in with the panel |
 | Check-in patience | `45` seconds (about three check-ins) | How long continuous check-in failure is tolerated before the session is treated as dead |
 
-Check-in patience must be at least the check-in interval. You can leave the
-defaults unless live use suggests otherwise.
+The check-in interval must be between **5 and 30 seconds**. The panel hangs up
+on a connection it has not heard from for about a minute, so a slower cadence
+would leave the add-on dropping and reconnecting for good; 30 seconds is half
+that tolerance, which leaves room for one check-in to go missing before the
+panel loses patience. Below 5 seconds the add-on asks again before the panel
+has finished answering the last one.
+
+Check-in patience must be at least **5 seconds**, and at least as long as the
+check-in interval — a patience period shorter than one check-in could never see
+a check-in succeed, and a near-zero one would end the session on the very first
+refusal, which is the thing the patience period exists to ride out.
+
+You can leave the defaults unless live use suggests otherwise.
 
 ### Reconciliation poll
 

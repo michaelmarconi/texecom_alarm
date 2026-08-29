@@ -24,6 +24,10 @@ FULL_ARM_AWAY_MODE_BYTE = 0
 # One reconnect wait interval covers every disconnect cause (ADR-018 / ADR-019)
 # — no attempts cap (the app always keeps retrying) and no normal/trigger split.
 DEFAULT_RECONNECT_DELAY_SECONDS = 5.0
+# The panel needs a moment to free its single connection slot once a session
+# ends: live capture had an immediate retry refused 3 of 3 times and a 2s wait
+# accepted 3 of 3, first attempt (docs/protocol-reference.md).
+MIN_RECONNECT_DELAY_SECONDS = 2.0
 # Stuck-trust fail window before tear-down / re-login (ADR-011) — tunable, not final.
 DEFAULT_TRUST_FAIL_WINDOW_SECONDS = 90.0
 # Reconciliation poll no longer gates connectivity (ADR-016), so it can run this
@@ -33,10 +37,23 @@ DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS = 300.0
 # reconciliation poll (ADR-020) — comfortably under the panel's observed ~60s
 # idle-hang tolerance (docs/protocol-reference.md).
 DEFAULT_CHECKIN_INTERVAL_SECONDS = 15.0
+# Half the panel's ~60s idle-hang tolerance, which is itself an approximate
+# figure: at this cadence a single missed check-in still leaves a whole further
+# interval before the panel would hang up. Anything slower stops being
+# "comfortably shorter" than the tolerance (ADR-020).
+MAX_CHECKIN_INTERVAL_SECONDS = 30.0
+# Below this the next check-in falls due before the panel's own ~2–3s command
+# timeout has even expired on the previous one, so check-ins pile up instead of
+# taking turns.
+MIN_CHECKIN_INTERVAL_SECONDS = 5.0
 # Roughly three consecutive missed check-ins before the session is declared
 # dead (ADR-020) — long enough to ride out an observed activity burst, short
 # enough to recover in well under a minute.
 DEFAULT_CHECKIN_PATIENCE_SECONDS = 45.0
+# Patience is also held to at least one check-in interval below; this absolute
+# floor keeps a near-zero window from ending the session on the first refusal,
+# which is the one thing the patience window exists to prevent (ADR-020).
+MIN_CHECKIN_PATIENCE_SECONDS = 5.0
 DEFAULT_LOG_LEVEL = "INFO"
 
 PartArmLabel = Literal["home", "night", "unused"]
@@ -59,7 +76,6 @@ _ENV_KEYS = {
     "part_arm_2": "TEXECOM_PART_ARM_2",
     "part_arm_3": "TEXECOM_PART_ARM_3",
     "reconnect_delay_seconds": "TEXECOM_RECONNECT_DELAY_SECONDS",
-    "trust_fail_window_seconds": "TEXECOM_TRUST_FAIL_WINDOW_SECONDS",
     "reconciliation_poll_interval_seconds": "TEXECOM_RECONCILIATION_POLL_INTERVAL_SECONDS",
     "checkin_interval_seconds": "TEXECOM_CHECKIN_INTERVAL_SECONDS",
     "checkin_patience_seconds": "TEXECOM_CHECKIN_PATIENCE_SECONDS",
@@ -87,6 +103,9 @@ class Settings:
     part_arm_2: PartArmLabel
     part_arm_3: PartArmLabel
     reconnect_delay_seconds: float = DEFAULT_RECONNECT_DELAY_SECONDS
+    # Internal only — not an add-on option. The advertised 90s "force reconnect"
+    # dial never actually fired at any household-usable value, so it was dropped
+    # from the schema rather than left looking like it bound behaviour (ADR-018).
     trust_fail_window_seconds: float = DEFAULT_TRUST_FAIL_WINDOW_SECONDS
     reconciliation_poll_interval_seconds: float = DEFAULT_RECONCILIATION_POLL_INTERVAL_SECONDS
     checkin_interval_seconds: float = DEFAULT_CHECKIN_INTERVAL_SECONDS
@@ -202,13 +221,25 @@ def _parse(raw: Mapping[str, Any]) -> Settings:
         raw,
         "checkin_interval_seconds",
         DEFAULT_CHECKIN_INTERVAL_SECONDS,
-        minimum=0.0,
+        minimum=MIN_CHECKIN_INTERVAL_SECONDS,
+        maximum=MAX_CHECKIN_INTERVAL_SECONDS,
+        reason=(
+            "the panel hangs up on a connection it has not heard from for about "
+            "60 seconds, so a slower cadence leaves the add-on dropping and "
+            "reconnecting for good, while a faster one asks again before the "
+            "panel has finished answering"
+        ),
     )
     checkin_patience_seconds = _optional_float(
         raw,
         "checkin_patience_seconds",
         DEFAULT_CHECKIN_PATIENCE_SECONDS,
-        minimum=0.0,
+        minimum=MIN_CHECKIN_PATIENCE_SECONDS,
+        reason=(
+            "a shorter window would let a single refused check-in end the "
+            "session on its own, which is exactly what the patience period "
+            "exists to ride out"
+        ),
     )
     _validate_checkin_patience(checkin_interval_seconds, checkin_patience_seconds)
 
@@ -228,13 +259,12 @@ def _parse(raw: Mapping[str, Any]) -> Settings:
             raw,
             "reconnect_delay_seconds",
             DEFAULT_RECONNECT_DELAY_SECONDS,
-            minimum=0.0,
-        ),
-        trust_fail_window_seconds=_optional_float(
-            raw,
-            "trust_fail_window_seconds",
-            DEFAULT_TRUST_FAIL_WINDOW_SECONDS,
-            minimum=0.0,
+            minimum=MIN_RECONNECT_DELAY_SECONDS,
+            reason=(
+                "the panel needs about two seconds to free its single "
+                "connection slot after a session ends, and an immediate retry "
+                "was refused every time it was tried on the real panel"
+            ),
         ),
         reconciliation_poll_interval_seconds=_optional_float(
             raw,
@@ -360,7 +390,14 @@ def _optional_float(
     default: float,
     *,
     minimum: float,
+    maximum: float | None = None,
+    reason: str | None = None,
 ) -> float:
+    """Parse an optional seconds value, refusing anything outside its bounds.
+
+    ``reason`` explains the panel behaviour behind the bound so the operator
+    sees why the value was refused, not just which number was out of range.
+    """
     if key not in raw or raw[key] is None or raw[key] == "":
         return default
     value = raw[key]
@@ -368,8 +405,10 @@ def _optional_float(
         number = float(value)
     except (TypeError, ValueError) as exc:
         raise ConfigError(f"option {key} must be a number") from exc
-    if number < minimum:
-        raise ConfigError(f"option {key} must be >= {minimum}")
+    if number < minimum or (maximum is not None and number > maximum):
+        bound = f"between {minimum} and {maximum}" if maximum is not None else f">= {minimum}"
+        message = f"option {key} must be {bound} (got {number})"
+        raise ConfigError(f"{message} — {reason}" if reason else message)
     return number
 
 
