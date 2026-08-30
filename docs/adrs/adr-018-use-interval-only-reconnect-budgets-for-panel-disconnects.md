@@ -1,6 +1,6 @@
 # ADR-018: Use Interval-Only Reconnect Budgets for Panel Disconnects
 
-**Status:** Accepted ✅
+**Status:** ~~Accepted~~ Superseded by [ADR-021](adr-021-use-one-busy-versus-dead-session-model-for-panel-connection-health.md)
 **Date:** 2026-08-26
 
 ## Overview

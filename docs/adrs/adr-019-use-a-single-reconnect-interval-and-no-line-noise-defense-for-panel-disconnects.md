@@ -1,6 +1,6 @@
 # ADR-019: Use a Single Reconnect Interval and No Line-Noise Defense for Panel Disconnects
 
-**Status:** Accepted ✅
+**Status:** ~~Accepted~~ Superseded by [ADR-021](adr-021-use-one-busy-versus-dead-session-model-for-panel-connection-health.md)
 **Date:** 2026-08-26
 **Supersedes:** ADR-014
 

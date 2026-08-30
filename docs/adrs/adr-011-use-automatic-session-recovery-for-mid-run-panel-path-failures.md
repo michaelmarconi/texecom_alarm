@@ -1,6 +1,6 @@
 # ADR-011: Use Automatic Session Recovery for Mid-Run Panel Path Failures
 
-**Status:** Accepted ✅  
+**Status:** ~~Accepted~~ Superseded by [ADR-021](adr-021-use-one-busy-versus-dead-session-model-for-panel-connection-health.md)  
 **Date:** 2026-08-09  
 
 ## Overview

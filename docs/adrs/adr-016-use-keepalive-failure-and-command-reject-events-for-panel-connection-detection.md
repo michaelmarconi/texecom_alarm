@@ -1,6 +1,6 @@
 # ADR-016: Use Keepalive Failure and Command-Reject Events for Panel-Connection Detection
 
-**Status:** Accepted ✅
+**Status:** ~~Accepted~~ Superseded by [ADR-021](adr-021-use-one-busy-versus-dead-session-model-for-panel-connection-health.md)
 **Date:** 2026-08-25
 **Spike:** [spike-011-panel-trust-signal-simplification/SPIKE.md](../spikes/spike-011-panel-trust-signal-simplification/SPIKE.md)
 **Supersedes:** ADR-010

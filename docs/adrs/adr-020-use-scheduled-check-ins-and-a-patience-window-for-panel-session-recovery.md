@@ -1,6 +1,6 @@
 # ADR-020: Use Scheduled Check-Ins and a Patience Window for Panel Session Recovery
 
-**Status:** Accepted ✅
+**Status:** ~~Accepted~~ Superseded by [ADR-021](adr-021-use-one-busy-versus-dead-session-model-for-panel-connection-health.md)
 **Date:** 2026-08-28
 **Spike:** [spike-012-getdatetime-keepalive-reply-shape/SPIKE.md](../spikes/spike-012-getdatetime-keepalive-reply-shape/SPIKE.md)
 
