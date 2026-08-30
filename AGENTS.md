@@ -1,6 +1,6 @@
 # Agent Instructions
 
-<!-- Synthesised by /constitute on 2026-08-28 from: ADR-001, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-011, ADR-012, ADR-013, ADR-015, ADR-016, ADR-017, ADR-018, ADR-019, ADR-020 -->
+<!-- Synthesised by /constitute on 2026-08-30 from: ADR-001, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-012, ADR-013, ADR-015, ADR-017, ADR-021 -->
 <!-- Re-run /constitute after any new ADR is accepted. -->
 
 ## Project
@@ -43,7 +43,7 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - The app must publish a separate, dedicated signal for panel-link health, distinct from the entities' own state, so the household and its automations can tell live data from stale data.
 - The app must keep a short rolling memory of recent zone/panel activity so it can produce a "what happened right before this trigger" snapshot that survives a subsequent outage.
 - Anything consuming the alarm/zone entity state (dashboards, automations) can be shown a stale value for as long as an outage lasts, with currency only communicated via the separate connectivity signal — this should be documented/exposed prominently rather than assumed to be obvious.
-- ADR-020 narrows how promptly that connectivity signal reflects a refusing panel: it now stays healthy for the configured patience period before going off, so for that window neither the entity state nor the connectivity signal indicates staleness. Treat the signal as a report of sustained trouble, not of instantaneous currency.
+- ADR-021 narrows when that signal goes off: it stays on through check-in patience and through a first-attempt collision resync, so treat it as a report of sustained inability to talk, not of instantaneous currency.
 
 ### ADR-006: Use panel zone-state snapshot for startup re-sync
 
@@ -80,18 +80,7 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - When the snapshot reports a Part-Arm slot, Home/Night labels come from install-time configuration (ADR-008); Away is full arm, not a Part-Arm label. The snapshot reports which slot is active, not which HA mode name that slot carries.
 - Client, FakePanel, and tests must implement this snapshot command family and flag decode (extra round-trip at startup is required).
 - Exit/entry transient states may still depend on live area pushes — the Disarmed-only spike run did not prove those appear in the flag block.
-
-### ADR-011: Use automatic session recovery for mid-run panel path failures
-
-**Decision:** Use automatic session recovery after mid-run panel failure — reconnect when the health check dies, and open a fresh login only when trust stays broken after a short corroboration window.
-
-**Constraints:**
-- An unanswered mid-run health check must enter the same keep-trying recovery path as a clean panel drop — connection signal off while recovering; live again with state re-synced when the panel accepts — without a manual add-on restart.
-- Soft trust failures may try corroboration first; if still stuck after a bounded fail window, the app must tear down and log in again (still no manual restart).
-- Zone and alarm entities must not be blanked solely because recovery is running; freshness stays on the connection signal.
-- A failed arm/disarm tap must not be automatically re-fired as part of heal.
-- Exact fail-window length and how patient retry cadence lines up with existing mid-run reconnect budgets remain plan-time (and may need live tuning); do not treat reconnect budgets as newly finalised by this ADR alone. ADR-020 closes this for the check-in path only — the patience period, check-in cadence, and reconnect wait are now required install-time settings. The command-rejection path's own fail window is deliberately untouched and must stay a separate mechanism.
-- Renaming the connection entity (e.g. Alarm Panel Connection) is a separate product rename — not decided by this ADR's recovery mechanism.
+- Immediate flags refresh after a successful arm/disarm ACK is not required by this ADR when live area/log events already published the new alarm state (ADR-021).
 
 ### ADR-012: Use Python 3 for the Texecom Alarm App
 
@@ -109,7 +98,7 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 **Constraints:**
 - The panel address in add-on configuration is the local module, not the installer signalling module.
 - Do not treat "the panel always kicks Home Assistant off when sirens start" as true for a correctly pointed local module.
-- This ADR's own text notes that reconnect-when-the-socket-dies and frame skipping "remain" as general robustness — ADR-019 has since retired frame skipping (and the asymmetric reconnect interval) entirely, so treat ADR-019 as the current word on that point; ADR-013's own decision (which module to use) is otherwise unaffected.
+- This ADR's own text still mentioned frame skipping as remaining robustness — ADR-021 retired skip-and-resync; the current word on parse misses and reconnect is ADR-021. Which module to use is unchanged.
 - Disarm from Home Assistant during a live alarm is expected to work when the local module is the one in use — not when Home Assistant is still on the signalling module.
 - This does not prove every Premier Elite installation has two separate modules — treat as one household's evidence, not a universal layout.
 
@@ -127,68 +116,38 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - On refuse, the app must emit a first-class Home Assistant MQTT event that names the mode and does not include the household's reason — not a switch, a sensor, or an unspecified "signal".
 - This does not replace ADR-003: entities stay on MQTT discovery, and household-specific arming/notification *rules* stay out of the app; a generic refuse mechanism *does* live in the app.
 
-### ADR-016: Use keepalive failure and command-reject events for panel-connection detection
-
-**Decision:** The panel-connection signal goes down only when routine check-ins stop succeeding (or the connection drops outright), or when an arm/disarm command is rejected or times out. The periodic background reconciliation poll no longer feeds this signal at all — supersedes ADR-010.
-
-**Constraints:**
-- The connection signal must not depend on the background reconciliation poll's success or failure.
-- A rejected or timed-out arm/disarm command must still immediately mark the connection down.
-- Missed routine check-ins or an outright disconnect must still mark the connection down, and it must recover automatically once check-ins resume — no manual restart required. Narrowed by ADR-020: a refused or unanswered check-in now takes the configured patience period to mark the connection down rather than about a second, and a refusal that clears inside that period never shows as down at all. An outright disconnect still marks it down immediately. ADR-016's trigger set and its poll-independence rule are unchanged.
-- The background reconciliation poll keeps running for its separate job of correcting the alarm entity if it disagrees with the panel's last-known state; that job is not removed by this decision.
-- The automatic "stayed down too long, log back in again" recovery path (ADR-011) should be re-checked against this narrower set of degrade triggers as ordinary follow-through, not re-decided here. ADR-020 performed that check and kept the command-rejection path's re-login window separate and unchanged.
-- Live confirmation of quiet-house and command-rejection behaviour on this simplified design remains open — inherited from the original detection work (ADR-010/SPIKE-008), not newly resolved here.
-
 ### ADR-017: Use a configurable 5-minute interval for the panel reconciliation poll
 
-**Decision:** The panel reconciliation poll (kept running by ADR-016 for its own job, no longer for connectivity) runs every 5 minutes by default; the interval is exposed as an add-on setting, not hardcoded.
+**Decision:** The panel reconciliation poll (kept running for its own job, no longer for connectivity) runs every 5 minutes by default; the interval is exposed as an add-on setting, not hardcoded.
 
 **Constraints:**
-- The reconciliation poll's timing must not be tied to any connectivity-detection bound.
+- The reconciliation poll's timing must not be tied to any connectivity-detection bound, and the poll must not feed Alarm Panel Connection (ADR-021).
 - The interval must be an add-on setting, shipping with 5 minutes as the default, not a fixed value.
 - A missed live update can now sit uncorrected for up to one full interval (5 minutes by default) instead of 30 seconds before the reconciliation poll catches it — not a safety-relevant delay, since no siren/lockout behaviour depends on this poll.
 - Whether the panel's audible pips are actually caused by this poll's prior cadence is unconfirmed; that open question does not change the correctness of this decision either way.
-- ADR-020 requires the check-in schedule to be independent of this interval in both directions, so changing this setting can never change how quickly a dead session is detected.
+- The check-in schedule must stay independent of this interval in both directions (ADR-021), so changing this setting can never change how quickly a dead session is detected.
 
-### ADR-018: Use interval-only reconnect budgets for panel disconnects
+### ADR-021: Use one busy-versus-dead session model for panel connection health
 
-**Decision:** Drop the attempts settings for panel reconnect entirely; the app always keeps retrying regardless of disconnect type. (Note: ADR-018's own framing of "the wait interval still varies between an ordinary disconnect and a real-trigger disconnect" is narrowed by ADR-019 — one interval now covers every disconnect. ADR-018's removal of the attempts settings and its indefinite-retry requirement stand unchanged.)
-
-**Constraints:**
-- The add-on's config schema must not expose settings that look like they bound behaviour but don't — a genuinely advisory/log-only setting must not be schema-validated.
-- Reconnection after any panel disconnect keeps retrying indefinitely — never a stop condition, regardless of disconnect type.
-- Anyone who previously set the attempts options (via add-on options or their environment-variable equivalents) will need those removed — they are dropped from the schema, not silently ignored.
-
-### ADR-019: Use a single reconnect interval and no line-noise defense for panel disconnects
-
-**Decision:** Retire frame-resync (skipping unexpected/non-protocol bytes) and the asymmetric reconnect interval entirely — supersedes ADR-014. The app assumes it is always reached over the panel's dedicated local-control module (ADR-013) and treats any unexpected data on the connection as a fault to reconnect from, using one configured wait interval regardless of what caused the disconnect.
+**Decision:** Use one model for the whole session: the panel being busy is not the same as the panel being gone. Alarm Panel Connection means we cannot talk to the panel. It does not mean we stubbed our toe while it was still talking.
 
 **Constraints:**
-- Unexpected or non-conforming data on the panel connection must be treated as a fault that triggers a reconnect — not skipped past and parsing resumed.
-- Reconnecting after any panel disconnect uses one configured wait interval; the disconnect's cause (everyday drop vs. one following a real trigger) no longer selects a different interval.
-- Add-on configuration must expose a single reconnect-wait setting, not separate "everyday" and "trigger" interval settings.
-- Product documentation must not describe the app as tolerating a shared or misconfigured module — that stays an install prerequisite (ADR-013), not a runtime accommodation.
-- The app must keep retrying a dropped panel connection indefinitely regardless of this change (ADR-004 / ADR-011 / ADR-018 unaffected).
-- A household still sharing a module with alarm reporting (against the ADR-013 install requirement) gets no code-level protection from this app any more — that risk is knowingly accepted, not detected or warned about.
-
-### ADR-020: Use scheduled check-ins and a patience window for panel session recovery
-
-**Decision:** Send check-ins on a fixed schedule regardless of how busy the panel is, and stop treating one refusal as death. The session is declared dead only when the panel has refused or ignored check-ins continuously for a configured patience period, at which point the app releases its own connection — within a bounded time, abandoning it forcibly if it will not close — and logs in again, retrying for as long as it takes.
-
-**Constraints:**
-- Check-ins must be sent on a fixed schedule measured in elapsed time, and must not be skipped, delayed, or starved because the panel is sending a lot of unprompted activity.
-- The check-in schedule must not be tied to the background reconciliation poll's timing, so changing the poll interval can never change how quickly a dead session is detected.
-- A refused or unanswered check-in must not end the session on its own; the session is declared dead only once the panel has failed to answer properly for longer than the configured patience period.
-- The check-in schedule must stay comfortably shorter than the panel's own tolerance for a connection it has not heard from, so scheduled check-ins alone always keep the session alive without relying on the panel's unprompted activity.
-- The patience period ships defaulting to roughly three consecutive missed check-ins — long enough to ride out an observed activity burst, short enough to recover a dead session in well under a minute.
-- A connection that ends outright — the panel closing it, the panel signalling end of session, or non-conforming data — must still end the session immediately. Patience applies only to a refused or unanswered check-in.
-- Before reconnecting, the app must release its own connection within a bounded time and forcibly abandon it if it does not close cleanly, so the app can never lock itself out of the panel's single connection slot while waiting on a connection it has already given up on.
-- Reconnecting continues to use one configured wait interval and retries indefinitely; no attempt cap and no second interval (ADR-018 / ADR-019 unaffected).
-- The panel-connection signal stays on while the app is being patient and goes off when the session is declared dead, returning only after re-login and a re-read of panel state. Zone and alarm entities are never marked unavailable by any of this (ADR-004).
-- The separate watchdog for refused arm and disarm commands must be left intact — immediate degrade plus its own independent countdown to a fresh login. It must not be merged into, or replaced by, the check-in patience period.
-- The patience period, check-in cadence, and reconnect wait must all be install-time settings, not fixed values in code. Login's own retry budget must be preserved when the check-in retry burst is removed, even though the two currently share one dial.
-- Whether a refusal ever clears while a session is left open is unknown — none has ever been observed outliving the old teardown, because the app always gave up first. The patience period's value is provisional pending live observation.
-- Whether the household's phone app is pointed at the same panel module as the add-on is unresolved, and remains the most likely cause of the long outages seen during investigation; that is an install question this decision does not address.
+- Alarm Panel Connection goes off only when we cannot talk: the panel hung up, it signalled the end of the session, check-ins have failed for the whole patience window, or an arm or disarm was rejected or timed out.
+- A command that already succeeded must not be recorded as a connection failure if a later housekeeping read then misparses.
+- While the panel is sending events, do not pile on extra questions whose answer already arrived as a live update. Required check-ins still go out on their clock even when the line is busy.
+- After login, and again after a reconnect login, still re-read current zone and alarm state before trusting entity state.
+- Never skip unexpected bytes hoping to find the next valid message. If the stream is unusable, close it cleanly and log in again — do not scan forward.
+- Reconnect uses one wait interval, keeps trying with no attempt cap, and must release the old connection within a bounded time so this app cannot sit on the panel's single slot.
+- A refused arm or disarm still turns Connection off immediately and still has its own countdown to a fresh login. That clock must not be merged into check-in patience.
+- Check-in timing must not be tied to the background state-reconciliation poll. Unprompted panel traffic is not proof the session will accept commands.
+- Zone and alarm entities stay visible during all of this; only the app process dying can mark them unavailable.
+- Recovery must not silently re-issue an arm or disarm the household already saw fail.
+- When a read does not parse, log why and enough of the arriving bytes to tell a torn message from a hung-up connection.
+- Patience period, check-in cadence, and reconnect wait are install-time settings, not fixed in code. Login's own retry budget must be kept.
+- A collision resync that succeeds on the first attempt does not turn Connection off — a torn frame is visible in logs, not on that entity.
+- A household still sharing a module with alarm reporting (against ADR-013) gets no skip-and-resync; that is an install violation, not something this app papers over.
+- The command-reject fail-window length stays a live-tuning value, not merged into check-in patience.
+- FakePanel must not be treated as proof that a refusing session starts answering again without re-login.
 
 ## Stop conditions
 
@@ -212,11 +171,6 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - **[ADR-009]** Before treating the area-flags snapshot as auto-detecting Night/Home role names, or hardcoding Part-Arm → HA mode mapping from snapshot bits alone, or treating Away as a Part-Arm slot label: stop and ask a human — Home/Night mapping remains install-time configuration (ADR-008); Away is full arm.
 - **[ADR-009]** Before treating exit/entry (arming/pending) as fully covered by the area-flags snapshot alone: stop and ask a human — the spike only observed Disarmed; live pushes may still be required for those transients.
 - **[ADR-009]** Before treating optional arm-then-re-poll corroboration or wider dual-request area-bitmap layouts as already proven by this ADR: stop and ask a human — those paths were not exercised in the Validated run.
-- **[ADR-011]** Before treating the household connection-entity rename (e.g. Alarm Panel Connection) as already decided by this ADR: stop and ask a human — recovery mechanism only; naming is a separate product rename.
-- **[ADR-011]** Before treating in-tap auto-retry of a failed arm/disarm as already decided: stop and ask a human — ADR-011 explicitly leaves that out of scope.
-- **[ADR-011]** Before hardcoding the command-rejection trust-degrade "still stuck" fail window or mid-run heal retry cadence as final, unchangeable values: stop and ask a human — ADR-011 left those for plan time / live tuning, and ADR-020 closed only the check-in path's dials.
-- **[ADR-011]** Before aborting the mid-run listen loop on unanswered health-check without entering keep-trying recovery: stop and ask a human — that would violate this decision.
-- **[ADR-011]** Before treating live ComIP heal / zombie recovery as already proven by CI/FakePanel alone: stop and ask a human — those remain live-only corroboration.
 - **[ADR-012]** Before rewriting the Texecom Alarm App peer in a language other than Python 3: stop and ask a human — that requires a superseding ADR.
 - **[ADR-013]** Before assuming every Premier Elite installation has two separate IP modules, or skipping the module-identification step for a new install because this one had two: stop and ask a human — this ADR's evidence is from one household's Elite 88, not a universal layout.
 - **[ADR-013]** Before treating a live survive-trigger or HA-Disarm-during-alarm outcome as something FakePanel/CI can prove: stop and ask a human — this ADR's Confirmation keeps those live-only.
@@ -225,26 +179,26 @@ Texecom Alarm: a Home Assistant app that talks to a Texecom Premier Elite panel 
 - **[ADR-015]** Before gating disarm on the ready controls, or disarming because a ready control was turned off while already armed: stop and ask a human — both are forbidden.
 - **[ADR-015]** Before recording a refused arm as anything other than a Home Assistant MQTT event that names the mode and not the reason (for example a sensor, a switch, a notify from the app, or a vague "signal"): stop and ask a human — the kind is decided.
 - **[ADR-015]** Before treating FakePanel/CI as proof that a real Home Assistant shows the switches and can automate on the blocked-arm event: stop and ask a human — that remains live-only.
-- **[ADR-016]** Before making the connection signal depend on the background reconciliation poll's outcome again: stop and ask a human — this ADR requires connectivity to be governed only by check-in failure/disconnect and command-reject/timeout.
-- **[ADR-016]** Before treating live quiet-house false-positive rate or live command-rejection zombie reproduction under this simplified detector as already proven by CI/FakePanel alone: stop and ask a human — those remain live-only corroboration.
-- **[ADR-016]** Before changing or removing ADR-011's stuck-degrade re-login timing: stop and ask a human — ADR-020 performed this check and kept the command-rejection fail window separate and unchanged; merging it into the check-in patience window is specifically forbidden.
 - **[ADR-017]** Before hardcoding the reconciliation poll interval instead of exposing it as a configurable add-on setting: stop and ask a human — this ADR requires it be configurable.
 - **[ADR-017]** Before claiming the panel's audible pips are caused by (or fixed by changing) this poll's interval: stop and ask a human — this ADR leaves that cause unconfirmed.
-- **[ADR-018]** Before reintroducing an attempt-count cap that stops the reconnect loop after N tries: stop and ask a human — this ADR requires reconnection to retry indefinitely regardless of disconnect type.
-- **[ADR-019]** Before reintroducing a byte-skip/resync path that treats unexpected panel data as recoverable rather than as a reconnect-triggering fault: stop and ask a human — this ADR requires unexpected data to end the session and trigger reconnect.
-- **[ADR-019]** Before reintroducing separate reconnect-wait-interval settings for an everyday disconnect vs. a trigger disconnect: stop and ask a human — this ADR requires one configured interval used for every disconnect cause.
-- **[ADR-019]** Before documenting or coding this app as tolerating a household sharing a module with alarm reporting: stop and ask a human — that protection is retired; the dedicated module (ADR-013) is a hard install prerequisite, not something this app defends around.
-- **[ADR-020]** Before merging the check-in patience window and the command-rejection fail window into one timer: stop and ask a human — a panel that answers check-ins while refusing every command would keep resetting a shared clock, so the automatic fresh login would never fire.
-- **[ADR-020]** Before letting inbound panel traffic skip or delay a scheduled check-in, or tying the check-in schedule to the reconciliation poll interval: stop and ask a human — both reintroduce the starvation that makes a patience window expire on a healthy connection.
-- **[ADR-020]** Before treating unprompted panel traffic as evidence the session is healthy for patience-window purposes: stop and ask a human — a session has been observed carrying traffic all day while refusing every command.
-- **[ADR-020]** Before ending the session on a single refused or unanswered check-in, or conversely delaying teardown after an outright disconnect, an end-of-session signal, or non-conforming data: stop and ask a human — patience applies only to refused or unanswered check-ins.
-- **[ADR-020]** Before hardcoding the patience period, the check-in cadence, or the reconnect wait: stop and ask a human — this ADR requires all three as install-time settings.
-- **[ADR-020]** Before removing login's own retry budget along with the check-in retry burst: stop and ask a human — the two currently share one dial and login's retries must be preserved.
-- **[ADR-020]** Before claiming from CI/FakePanel that patience recovers a refusing session: stop and ask a human — the stand-in models a refusal as sticky until re-login, so no hermetic test can demonstrate self-clearing; that is live-only.
-- **[ADR-020]** Before treating the long panel outages seen during investigation as an app defect this decision fixes: stop and ask a human — the competing phone-app module question is unresolved and is an install issue, not something this ADR resolved.
+- **[ADR-021]** Before turning Alarm Panel Connection off because a housekeeping read failed after a command that already succeeded: stop and ask a human — that is a collision to resync, not a lost panel, if first re-login succeeds.
+- **[ADR-021]** Before sending an extra flags (or similar) read immediately after arm/disarm when live events already published the new alarm state: stop and ask a human — that would violate the busy-versus-dead model.
+- **[ADR-021]** Before reintroducing a byte-skip/resync path that treats unexpected panel data as recoverable by scanning forward: stop and ask a human — unexpected bytes must not be skipped.
+- **[ADR-021]** Before reintroducing an attempt-count cap or a second reconnect-wait interval for trigger vs everyday disconnects: stop and ask a human — reconnect retries indefinitely on one interval.
+- **[ADR-021]** Before merging the check-in patience window and the command-rejection fail window into one timer: stop and ask a human — a panel that answers check-ins while refusing commands would never trigger a fresh login.
+- **[ADR-021]** Before letting inbound panel traffic skip or delay a scheduled check-in, or tying the check-in schedule to the reconciliation poll interval: stop and ask a human — both starve check-ins on a healthy busy connection.
+- **[ADR-021]** Before treating unprompted panel traffic as evidence the session is healthy for patience-window purposes: stop and ask a human — a session has been observed carrying traffic all day while refusing every command.
+- **[ADR-021]** Before ending the session on a single refused or unanswered check-in, or conversely delaying teardown after an outright close or end-of-session signal: stop and ask a human — patience applies only to refused or unanswered check-ins.
+- **[ADR-021]** Before hardcoding the patience period, the check-in cadence, or the reconnect wait, or dropping login's own retry budget: stop and ask a human — those are install-time settings, and login retries must stay.
+- **[ADR-021]** Before silently re-issuing an arm or disarm that already failed, as part of heal: stop and ask a human — recovery must not re-fire a failed tap.
+- **[ADR-021]** Before aborting the mid-run listen loop on a dead path without keep-trying recovery: stop and ask a human — that would require a human restart.
+- **[ADR-021]** Before documenting or coding this app as tolerating a household sharing a module with alarm reporting: stop and ask a human — the dedicated module (ADR-013) is the install prerequisite, not a runtime workaround.
+- **[ADR-021]** Before claiming from CI/FakePanel that patience recovers a refusing session, or that a real torn-frame during garage disarm stays quiet on Connection: stop and ask a human — those are live-only.
+- **[ADR-021]** Before treating the long panel outages seen during investigation as an app defect this decision fixes: stop and ask a human — the competing-client / same-module question is unresolved and is an install issue.
+- **[ADR-021]** Before hardcoding the command-rejection fail-window length as a newly final, unchangeable value, or merging it into patience: stop and ask a human — that length stays live-tuning and a separate clock.
 
 ## Testing stance
 
-- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping, silent-death / command-reject / quiet-house detector shapes, keepalive-failure and command-reject connection detection with an isolated reconciliation-poll timeout not falsely degrading connectivity, mid-run health-check → reconnect-heal and trust-fail → corroboration / bounded re-login per ADR-006, ADR-008, ADR-009, ADR-011, ADR-016 and architecture; single-interval reconnect-after-disconnect regression with no resync/skip path per ADR-019; scheduled check-ins not starved by sustained inbound traffic and independent of the reconciliation-poll interval, a refused check-in inside the patience period changing neither the session nor the connection signal, continuous refusal past the window declaring dead → bounded release → reconnect → state re-read, immediate session end on outright close / end-of-session / non-conforming data, bounded release even when the connection will not close cleanly, and the command-rejection watchdog still degrading immediately and escalating on its own timer per ADR-020; ready-to-arm refuse — matching switch off means no arm command and unchanged alarm state, including Home Assistant's command path; disarm still works; switch-off while armed does not disarm — per ADR-015) and a fake MQTT client (three ready switches that start on; blocked-arm MQTT event with mode and without reason — per ADR-015).
-- **CI may not claim:** that patience recovers a refusing session — FakePanel models a refusal as sticky until re-login by construction, so self-clearing cannot be demonstrated hermetically (ADR-020).
-- **Live:** `/accept` owns product validation on the real setup (full Away / Night / Home arm sequences, trigger reconnect, real ComIP, quiet-house and zombie corroboration, mid-run heal under contention, which network module the panel address actually points to per ADR-013, whether real check-in refusals clear inside the patience period and whether the observed long outages were a competing client rather than an app defect per ADR-020, and that a real Home Assistant shows the ready-to-arm switches and can automate on the blocked-arm event per ADR-015); `/ship` may smoke a real target. Green CI is not product accept.
+- **CI:** Use stand-ins / hermetic helpers only — never live household hardware or production accounts. Named stand-ins: FakePanel (zone-state snapshot, area-flags snapshot, mode-byte / Part-Arm mapping; scheduled check-ins not starved by inbound traffic and independent of the reconciliation-poll interval; refused check-in inside patience changes neither session nor Connection; continuous refusal past patience → bounded release → reconnect → state re-read; peer close / end-of-session end the session immediately and turn Connection off; non-Connect bytes are not skipped; arm/disarm NAK or timeout turns Connection off immediately and the command-reject watchdog still escalates on its own timer; successful arm/disarm ACK plus a housekeeping decode miss does not record a command-failure reason and does not publish Connection off if re-login succeeds on attempt 1; post-ACK flags refresh is omitted when live AREA already published the new alarm state, and still runs when it has not; reconnect retries indefinitely at one interval with no attempt cap; a failed arm/disarm is not re-issued by heal; decode failure logs reason and leading hex; isolated reconciliation-poll timeout does not degrade Connection; ready-to-arm refuse per ADR-015) and a fake MQTT client (three ready switches that start on; blocked-arm MQTT event with mode and without reason — per ADR-015).
+- **CI may not claim:** that patience recovers a refusing session — FakePanel models a refusal as sticky until re-login by construction; that a real Premier Elite torn-frame during garage disarm stays quiet on Connection; that the phone app is or is not on the same module (ADR-021).
+- **Live:** `/accept` owns product validation on the real setup (full Away / Night / Home arm sequences, garage-return or equivalent auto-disarm with Connection staying on, trigger reconnect, real ComIP, quiet-house and zombie corroboration, mid-run heal under contention, which network module the panel address actually points to per ADR-013, whether real check-in refusals clear inside the patience period and whether observed long outages were a competing client per ADR-021, and that a real Home Assistant shows the ready-to-arm switches and can automate on the blocked-arm event per ADR-015); `/ship` may smoke a real target. Green CI is not product accept.
