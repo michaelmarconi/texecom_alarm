@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from texecom_alarm.alarm_flags_guard import (
     coerce_flags_payload_after_disarm,
+    flags_round_trip_needed_after_command,
     flags_snapshot_may_replace_live,
 )
 
@@ -49,3 +50,24 @@ def test_flags_guard_blocks_stale_disarmed_after_arm() -> None:
 def test_flags_guard_allows_settled_corrections() -> None:
     assert flags_snapshot_may_replace_live("armed_home", "disarmed") is True
     assert flags_snapshot_may_replace_live("disarmed", "armed_night") is True
+
+
+def test_round_trip_not_needed_when_live_already_has_new_state() -> None:
+    """AREA/LOG already published the new alarm state — do not ask the panel again."""
+    assert flags_round_trip_needed_after_command("arming", after_arm=True) is False
+    assert flags_round_trip_needed_after_command("pending", after_arm=True) is False
+    assert flags_round_trip_needed_after_command("armed_away", after_arm=True) is False
+    assert flags_round_trip_needed_after_command("armed_home", after_arm=True) is False
+    assert flags_round_trip_needed_after_command("triggered", after_arm=True) is False
+    assert flags_round_trip_needed_after_command("disarmed", after_disarm=True) is False
+
+
+def test_round_trip_needed_when_live_has_not_published_new_state() -> None:
+    """Home disarm that omits AREA, and arm while MQTT is still disarmed, still need flags."""
+    assert flags_round_trip_needed_after_command("armed_home", after_disarm=True) is True
+    assert flags_round_trip_needed_after_command("armed_away", after_disarm=True) is True
+    assert flags_round_trip_needed_after_command("triggered", after_disarm=True) is True
+    assert flags_round_trip_needed_after_command("arming", after_disarm=True) is True
+    assert flags_round_trip_needed_after_command(None, after_disarm=True) is True
+    assert flags_round_trip_needed_after_command("disarmed", after_arm=True) is True
+    assert flags_round_trip_needed_after_command(None, after_arm=True) is True

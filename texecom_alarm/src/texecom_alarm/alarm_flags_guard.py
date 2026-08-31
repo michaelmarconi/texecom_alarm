@@ -13,6 +13,25 @@ def coerce_flags_payload_after_disarm(decoded_payload: str) -> str:
     return decoded_payload
 
 
+def flags_round_trip_needed_after_command(
+    current_payload: str | None,
+    *,
+    after_arm: bool = False,
+    after_disarm: bool = False,
+) -> bool:
+    """Return whether to send GetAreaFlags after a successful arm/disarm ACK.
+
+    Live AREA/LOG already carrying the new alarm state is the answer; do not
+    ask the panel again. Home disarm that omits an AREA update still needs the
+    read because MQTT is still on the previous armed, triggered, or exit payload.
+    """
+    if after_disarm:
+        return current_payload != "disarmed"
+    if after_arm:
+        return current_payload is None or current_payload == "disarmed"
+    return True
+
+
 def flags_snapshot_may_replace_live(
     current_payload: str | None,
     decoded_payload: str,

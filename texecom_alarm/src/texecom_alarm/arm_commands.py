@@ -9,6 +9,7 @@ from typing import Protocol
 
 from texecom_alarm.alarm_flags_guard import (
     coerce_flags_payload_after_disarm,
+    flags_round_trip_needed_after_command,
     flags_snapshot_may_replace_live,
 )
 from texecom_alarm.area_state import (
@@ -71,8 +72,24 @@ async def _refresh_alarm_from_flags(
     ha_mode: str | None = None,
     current_alarm_payload: str | None = None,
 ) -> str | None:
-    """Publish GetAreaFlags after a successful arm/disarm ACK when safe (ADR-009)."""
+    """Ask the panel for area flags after a successful arm/disarm ACK only when
+    live AREA/LOG has not already published the new alarm state.
+    """
     if mqtt is None or topic_prefix is None or zone_count is None:
+        return None
+    if not flags_round_trip_needed_after_command(
+        current_alarm_payload,
+        after_arm=is_arm,
+        after_disarm=not is_arm,
+    ):
+        logger.debug(
+            "alarm_flags_round_trip_skipped",
+            extra={
+                "current": current_alarm_payload,
+                "after_arm": is_arm,
+                "after_disarm": not is_arm,
+            },
+        )
         return None
     try:
         area_size = area_size_for_zones(zone_count)
@@ -153,10 +170,11 @@ async def handle_alarm_command(
 ) -> str | None:
     """Translate ARM_*/DISARM MQTT payloads into shared panel commands (ADR-008).
 
-    On success, may refresh alarm MQTT from GetAreaFlags when that would not
-    clobber exit/entry (arming/pending) or publish a stale post-arm disarmed
-    read. Disarm refresh covers the Home disarm omitted-AREA case. Returns the
-    new HA payload when a snapshot was published, else None.
+    On success, ask the panel for area flags only when live AREA/LOG has not
+    already published the new alarm state. That covers Home disarm that omits
+    an AREA update; it does not pile a housekeeping read onto a burst whose
+    answer already arrived. Returns the new HA payload when a snapshot was
+    published, else None.
     """
     text = payload.decode("utf-8") if isinstance(payload, bytes) else payload
     text = text.strip()
