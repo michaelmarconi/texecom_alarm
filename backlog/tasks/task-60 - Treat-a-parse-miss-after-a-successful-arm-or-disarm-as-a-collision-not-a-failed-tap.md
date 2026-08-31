@@ -67,3 +67,10 @@ In `arm_commands.py`, a `ForcedDisconnect` (or decode miss) *after* the panel AC
 
 How we'll know: unit + end-to-end against FakePanel. Command: `cd texecom_alarm && python -m pytest tests/test_arm_commands.py tests/test_panel_trust.py tests/test_e2e_fake_panel.py -q`. FakePanel: ACK arm/disarm then unparseable housekeeping → not command-failure; Connection stays on if re-login succeeds on attempt 1. NAK/timeout of the command still turns Connection off immediately. Never-skip-bytes and patience paths stay green. Do not claim CI proves a real torn-frame.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
