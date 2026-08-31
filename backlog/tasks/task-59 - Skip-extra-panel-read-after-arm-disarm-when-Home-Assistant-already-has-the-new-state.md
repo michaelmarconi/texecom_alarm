@@ -3,10 +3,10 @@ id: TASK-59
 title: >-
   Skip extra panel read after arm/disarm when Home Assistant already has the new
   state
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-31 21:19'
-updated_date: '2026-08-31 21:35'
+updated_date: '2026-08-31 21:45'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -68,6 +68,12 @@ How we'll know: unit + end-to-end against FakePanel. Command: `cd texecom_alarm 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: After a successful arm/disarm ACK, skip GetAreaFlags when live AREA/LOG already published the new alarm state; still read flags when Home disarm omits AREA.
+Changed files: texecom_alarm/src/texecom_alarm/alarm_flags_guard.py, texecom_alarm/src/texecom_alarm/arm_commands.py, texecom_alarm/tests/test_alarm_flags_guard.py, texecom_alarm/tests/test_arm_commands.py, texecom_alarm/tests/test_e2e_fake_panel.py
+Verification: Unit + e2e against FakePanel (`python -m pytest tests/test_arm_commands.py tests/test_alarm_flags_guard.py tests/test_e2e_fake_panel.py -q` — 61 passed). Full DoD: `pytest --cov=texecom_alarm --cov-fail-under=90 -q` (387 passed, 92% coverage), `ruff check` and `ruff format --check` green. FakePanel `area_flags_calls` omitted when live AREA already published armed; still increments and MQTT goes disarmed on Home-disarm omit-AREA.
+Notes/assumptions: Skip uses the existing post-ACK `get_current_alarm_state` re-read (no extra yield). Login/reconnect snapshots and the reconciliation poll were not changed. Skip-and-resync was not restored.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
