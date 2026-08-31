@@ -74,6 +74,9 @@ async def _refresh_alarm_from_flags(
 ) -> str | None:
     """Ask the panel for area flags after a successful arm/disarm ACK only when
     live AREA/LOG has not already published the new alarm state.
+
+    An unreadable reply after the tap already ACK'd is re-raised so the session
+    can log in again; it is not recorded as a failed arm or disarm.
     """
     if mqtt is None or topic_prefix is None or zone_count is None:
         return None
@@ -146,14 +149,14 @@ async def _refresh_alarm_from_flags(
         return None
     except ForcedDisconnect as exc:
         logger.warning(
-            "Panel session ended during area-flags refresh after %s: %s",
+            "Panel session became unreadable during area-flags refresh after %s: %s "
+            "The command already succeeded; this is a collision to resync, not a failed tap.",
             "arm" if is_arm else "disarm",
             exc,
         )
         if trust is not None:
-            reason = REASON_ARM_DISCONNECT if is_arm else REASON_DISARM_DISCONNECT
-            await trust.record_command_failure(reason, ha_mode=ha_mode)
-        return None
+            trust.note_session_collision()
+        raise
 
 
 async def handle_alarm_command(

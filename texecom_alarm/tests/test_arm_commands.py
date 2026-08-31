@@ -293,32 +293,69 @@ async def test_successful_home_disarm_reads_flags_when_live_still_armed() -> Non
 
 
 @pytest.mark.asyncio
-async def test_snapshot_forced_disconnect_records_trust() -> None:
-    """ForcedDisconnect during post-command flags refresh must degrade Connection."""
+async def test_post_ack_flags_forced_disconnect_is_collision_not_failed_disarm() -> None:
+    """After the panel ACK'd disarm, an unreadable flags read is a collision.
+
+    Connection stays on and the miss is re-raised so the session can log in
+    again. The tap itself is not recorded as a failed disarm.
+    """
     from texecom_alarm.panel_trust import PanelTrust
     from texecom_alarm.protocol.client import ForcedDisconnect
 
     panel = MagicMock()
     panel.set_area_disarm = AsyncMock()
-    panel.get_area_flags = AsyncMock(side_effect=ForcedDisconnect("gone"))
+    panel.get_area_flags = AsyncMock(side_effect=ForcedDisconnect("torn frame"))
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
     await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
     trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
 
-    result = await handle_alarm_command(
-        panel,
-        _settings(),
-        "DISARM",
-        mqtt=mqtt,
-        topic_prefix="texecom",
-        zone_count=12,
-        trust=trust,
-    )
+    with pytest.raises(ForcedDisconnect):
+        await handle_alarm_command(
+            panel,
+            _settings(),
+            "DISARM",
+            mqtt=mqtt,
+            topic_prefix="texecom",
+            zone_count=12,
+            trust=trust,
+        )
 
-    assert result is None
-    assert trust.live is False
-    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    panel.set_area_disarm.assert_awaited_once_with()
+    assert trust.live is True
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    assert trust.consume_session_collision() is True
+
+
+@pytest.mark.asyncio
+async def test_post_ack_flags_forced_disconnect_is_collision_not_failed_arm() -> None:
+    """After the panel ACK'd arm, an unreadable flags read is a collision."""
+    from texecom_alarm.panel_trust import PanelTrust
+    from texecom_alarm.protocol.client import ForcedDisconnect
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    panel.get_area_flags = AsyncMock(side_effect=ForcedDisconnect("torn frame"))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+
+    with pytest.raises(ForcedDisconnect):
+        await handle_alarm_command(
+            panel,
+            _settings(),
+            "ARM_AWAY",
+            mqtt=mqtt,
+            topic_prefix="texecom",
+            zone_count=12,
+            trust=trust,
+        )
+
+    panel.set_area_arm.assert_awaited_once_with(0)
+    assert trust.live is True
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    assert trust.consume_session_collision() is True
 
 
 @pytest.mark.asyncio

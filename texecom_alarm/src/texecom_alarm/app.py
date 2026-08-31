@@ -421,6 +421,18 @@ async def _listen_alarm_commands(
             )
             if new_payload is not None:
                 alarm_state.payload = new_payload
+        except ForcedDisconnect as exc:
+            logger.warning(
+                "Panel session became unreadable after an arm or disarm the panel "
+                "already accepted — closing the session so monitoring can log in again. %s",
+                exc,
+            )
+            try:
+                await panel.close()
+            except Exception:
+                logger.exception(
+                    "Could not close the panel connection after an unreadable follow-up read."
+                )
         except Exception:
             logger.exception(
                 "Unexpected failure while handling an MQTT alarm command on topic %s.",
@@ -508,12 +520,16 @@ async def _listen_with_reconnect(
             last_alarm_payload,
         )
         previous_payload = last_alarm_payload
+        collision = False
+        if trust is not None:
+            collision = trust.consume_session_collision()
         last_alarm_payload = await reconnect_after_disconnect(
             panel,
             mqtt,  # type: ignore[arg-type]
             settings=settings,
             zones=zones,
             zone_count=zone_count,
+            collision=collision,
         )
         alarm_state.payload = last_alarm_payload
         if trust is not None:

@@ -53,23 +53,34 @@ async def reconnect_after_disconnect(
     zones: list[Zone],
     zone_count: int,
     sleep: Callable[[float], Awaitable[None]] | None = None,
+    collision: bool = False,
 ) -> str:
-    """Resume after ForcedDisconnect: OFF → spaced retries → LOGIN+snapshots → ON.
+    """Resume after ForcedDisconnect: spaced retries → LOGIN+snapshots → ON.
 
-    Keeps retrying at the one configured delay so MQTT LWT does not blank
-    alarm/zone entities (ADR-004) — there is no attempt cap (ADR-018) and no
-    separate interval for a trigger-caused drop (ADR-019). Does not
-    re-enumerate zones.
+    A hang-up publishes Connection off immediately. A collision (unreadable
+    follow-up after a successful arm/disarm) keeps Connection on if the first
+    re-login succeeds; if that first attempt fails, Connection goes off and
+    the ordinary keep-trying path runs. Keeps retrying at the one configured
+    delay so MQTT LWT does not blank alarm/zone entities — there is no attempt
+    cap and no separate interval for a trigger-caused drop. Does not
+    re-enumerate zones or re-issue a failed arm/disarm.
     """
     topic_prefix = settings.mqtt_topic_prefix
     delay = settings.reconnect_delay_seconds
     sleeper = sleep if sleep is not None else asyncio.sleep
 
-    await publish_panel_link_state(mqtt, topic_prefix=topic_prefix, live=False)
-    logger.info(
-        "Reconnecting to the panel (retrying every %s seconds until it answers).",
-        delay,
-    )
+    if not collision:
+        await publish_panel_link_state(mqtt, topic_prefix=topic_prefix, live=False)
+        logger.info(
+            "Reconnecting to the panel (retrying every %s seconds until it answers).",
+            delay,
+        )
+    else:
+        logger.info(
+            "Re-logging in after an unreadable follow-up read "
+            "(retrying every %s seconds until the panel answers).",
+            delay,
+        )
 
     attempt = 0
     while True:
@@ -108,6 +119,13 @@ async def reconnect_after_disconnect(
             )
             return alarm_payload
         except Exception:
+            if collision and attempt == 1:
+                await publish_panel_link_state(mqtt, topic_prefix=topic_prefix, live=False)
+                logger.info(
+                    "First re-login after an unreadable follow-up read failed — "
+                    "Alarm Panel Connection is off; will keep trying every %s seconds.",
+                    delay,
+                )
             logger.exception(
                 "Reconnect attempt %s failed — will keep trying. "
                 "If this continues, stop other ComIP clients and check panel power/network.",

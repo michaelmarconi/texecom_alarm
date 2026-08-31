@@ -21,7 +21,13 @@ from texecom_alarm.config import Settings
 from texecom_alarm.mqtt.discovery import AVAILABILITY_OFFLINE, AVAILABILITY_ONLINE
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
 from texecom_alarm.protocol.client import PanelClient
-from texecom_alarm.protocol.frame import CMD_GET_AREA_FLAGS
+from texecom_alarm.protocol.frame import (
+    CMD_GET_AREA_FLAGS,
+    CMD_GET_ZONE_STATE,
+    CMD_LOGIN,
+    CMD_SET_AREA_ARM,
+    CMD_SETEVENTMESSAGES,
+)
 
 _MOSQUITTO_IMAGE = "eclipse-mosquitto:2"
 
@@ -788,7 +794,198 @@ async def test_e2e_arm_omits_flags_when_live_area_already_published() -> None:
 
 
 @pytest.mark.asyncio
-async def test_e2e_home_disarm_without_area_still_reads_flags() -> None:
+async def test_e2e_post_ack_unparseable_flags_is_collision_not_failed_tap() -> None:
+    """ACK then unreadable GetAreaFlags: not a failed arm; Connection stays on
+    if the first re-login succeeds; zone and alarm state are re-read.
+    """
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = Settings(
+            panel_host=panel.host,
+            panel_port=panel.port,
+            udl_password="1234",
+            mqtt_host="127.0.0.1",
+            mqtt_port=1883,
+            mqtt_username="",
+            mqtt_password="",
+            mqtt_topic_prefix="texecom",
+            part_arm_1="night",
+            part_arm_2="home",
+            part_arm_3="unused",
+            reconnect_delay_seconds=0.01,
+        )
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(
+            run(
+                settings,
+                panel=client,
+                mqtt=mqtt,
+                idle=stop.wait,
+                idle_timeout=0.2,
+                trust_poll_interval=60.0,
+            )
+        )
+        for _ in range(150):
+            if (
+                mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["ON"]
+                and "texecom/alarm/command" in mqtt.subscribed
+            ):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+        before_status = list(mqtt.payloads_for("texecom/status"))
+        zone_before = mqtt.payloads_for("texecom/zone/1/state")[-1]
+        alarm_before = mqtt.payloads_for("texecom/alarm/state")[-1]
+        cmds_before = list(panel.commands_seen)
+        login_before = panel.commands_seen.count(CMD_LOGIN)
+        setevent_before = panel.seteventmessages_calls
+
+        panel.garbage_next_area_flags = True
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
+        for _ in range(300):
+            resumed = (
+                panel.commands_seen.count(CMD_LOGIN) > login_before
+                and panel.seteventmessages_calls > setevent_before
+                and CMD_GET_ZONE_STATE in panel.commands_seen[len(cmds_before) :]
+                and CMD_GET_AREA_FLAGS in panel.commands_seen[len(cmds_before) :]
+            )
+            if resumed:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        assert task.done() is False
+        link = mqtt.payloads_for("texecom/panel_connection/state")
+        assert "OFF" not in link
+        assert link[-1] == "ON"
+        assert panel.arm_calls == [0]
+        assert panel.commands_seen.count(CMD_SET_AREA_ARM) == 1
+        new_cmds = panel.commands_seen[len(cmds_before) :]
+        assert CMD_LOGIN in new_cmds
+        assert CMD_GET_ZONE_STATE in new_cmds
+        assert CMD_GET_AREA_FLAGS in new_cmds
+        assert CMD_SETEVENTMESSAGES in new_cmds
+        assert mqtt.payloads_for("texecom/status") == before_status or (
+            mqtt.payloads_for("texecom/status")[-1] == AVAILABILITY_ONLINE
+        )
+        assert "offline" not in mqtt.payloads_for("texecom/status")[len(before_status) :]
+        assert mqtt.payloads_for("texecom/zone/1/state")[-1] == zone_before
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == alarm_before
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_arm_nak_still_turns_connection_off_immediately() -> None:
+    """A refused arm still turns Connection off at once and is not re-issued."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = Settings(
+            panel_host=panel.host,
+            panel_port=panel.port,
+            udl_password="1234",
+            mqtt_host="127.0.0.1",
+            mqtt_port=1883,
+            mqtt_username="",
+            mqtt_password="",
+            mqtt_topic_prefix="texecom",
+            part_arm_1="night",
+            part_arm_2="home",
+            part_arm_3="unused",
+            reconnect_delay_seconds=0.01,
+        )
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(
+            run(
+                settings,
+                panel=client,
+                mqtt=mqtt,
+                idle=stop.wait,
+                idle_timeout=0.2,
+                trust_poll_interval=60.0,
+            )
+        )
+        for _ in range(150):
+            if (
+                mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["ON"]
+                and "texecom/alarm/command" in mqtt.subscribed
+            ):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+        before_status = list(mqtt.payloads_for("texecom/status"))
+
+        panel.nak_next_arm = True
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["OFF"]:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+        assert panel.arm_calls == [0]
+        assert panel.commands_seen.count(CMD_SET_AREA_ARM) == 1
+        assert mqtt.payloads_for("texecom/status") == before_status or (
+            mqtt.payloads_for("texecom/status")[-1] == AVAILABILITY_ONLINE
+        )
+        await asyncio.sleep(0.15)
+        assert panel.arm_calls == [0]
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
     """Home disarm that omits AREA still runs GetAreaFlags and publishes disarmed."""
     panel = FakePanel(
         udl_password="1234",
