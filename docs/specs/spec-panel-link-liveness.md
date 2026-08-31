@@ -34,7 +34,7 @@ entities solely because of panel recovery.
 - Resume monitoring automatically when the panel path works again (re-sync state;
   connectivity signal live) without an operator restarting the add-on.
 - Present the connectivity entity in Home Assistant with the friendly name
-  **Alarm Panel Connected** (replacing the current “Panel Link” label).
+  **Alarm Panel Connection** (replacing “Panel Link” / **Alarm Panel Connected**).
 - Preserve correct degraded → live behaviour for obvious panel drops (no regression
   of the existing clean-disconnect recovery path).
 
@@ -59,7 +59,7 @@ entities solely because of panel recovery.
 
 Given a panel session that was reporting live, When the panel path stops
 delivering trustworthy updates without a clean disconnect the household would
-notice, Then **Alarm Panel Connected** shows degraded within a short, fixed bound
+notice, Then **Alarm Panel Connection** shows degraded within a short, fixed bound
 suitable for automation gating (target: on the order of tens of seconds, not
 minutes or hours).
 
@@ -80,24 +80,24 @@ only the connectivity signal indicates staleness.
 
 Given connectivity is degraded after silent panel-path death, When the panel path
 becomes usable again, Then zone and alarm state are re-synced from the panel and
-**Alarm Panel Connected** returns to live — without an operator restarting the
+**Alarm Panel Connection** returns to live — without an operator restarting the
 add-on.
 
 - **How we'll know:** end-to-end test (stand-in: FakePanel); optional manual
   acceptance test on a live silent-death reproduction if needed to corroborate
 
-### AC4: Connectivity entity is named Alarm Panel Connected
+### AC4: Connectivity entity is named Alarm Panel Connection
 
 Given MQTT discovery for the connectivity entity, When the household views it in
-Home Assistant, Then its friendly name is **Alarm Panel Connected** (not
-“Panel Link”).
+Home Assistant, Then its friendly name is **Alarm Panel Connection** (not
+“Panel Link” or **Alarm Panel Connected**).
 
 - **How we'll know:** unit test (discovery payload name assertion)
 
 ### AC5: Clean disconnect path still degrades then recovers
 
 Given an obvious panel drop after a healthy session, When reconnect runs, Then
-**Alarm Panel Connected** goes degraded and later returns to live after successful
+**Alarm Panel Connection** goes degraded and later returns to live after successful
 recovery (no regression vs the existing clean-disconnect behaviour).
 
 - **How we'll know:** end-to-end test (stand-in: FakePanel forced disconnect +
@@ -107,9 +107,11 @@ recovery (no regression vs the existing clean-disconnect behaviour).
 
 ## User Stories
 
-- As Home Assistant automations, I want **Alarm Panel Connected** to mean the
-  panel path is truly live, so I only treat zone/alarm state as current when that
-  signal is on.
+- As Home Assistant automations, I want **Alarm Panel Connection** to mean we can
+  talk to the panel, so I treat zone/alarm state as current when that signal is
+  on — and I do not expect it to go off during the health-check patience window,
+  or during a first-attempt re-login after a successful command whose later
+  housekeeping read did not parse.
 - As the household operator, I want that same signal (and any alerts I wire to it)
   to tell me whether HA’s Texecom picture is trustworthy right now, without
   walking the house or restarting the add-on to check.
@@ -140,29 +142,32 @@ recovery (no regression vs the existing clean-disconnect behaviour).
   cannot assume a second simultaneous session.
 - Degraded detection must be fast enough that automations gating on the signal are
   useful (order of tens of seconds), not reliant on human notice hours later.
-- Friendly name **Alarm Panel Connected** is the household-facing label; changing
-  Entity IDs is not required by this spec unless discovery already forces a rename
-  for correctness (see Spike Candidates).
+- Friendly name **Alarm Panel Connection** is the household-facing label;
+  `unique_id` / Entity ID may change so Home Assistant does not keep the old
+  Connected / Panel Link identity.
 
 ## Open Questions
 
 - ~~Exact numeric bound for “tens of seconds” (e.g. 30 vs 60)~~ **Answered
   2026-08-09:** Lock **30 seconds** as the order-of-tens bound (matches shipping
-  trust-poll / recover window). Friendly-name rename to **Alarm Panel Connection**
-  (and related id clean-up) is owned by Accepted `spec-panel-session-heal.md` —
-  run `/correction` so this spec’s **Alarm Panel Connected** wording aligns.
+  trust-poll / recover window).
+- ~~Friendly name **Alarm Panel Connected** vs **Alarm Panel Connection**~~
+  **Answered 2026-08-31:** This spec uses **Alarm Panel Connection**, matching
+  `spec-panel-session-heal.md` (including id clean-up as needed).
 
 ## Spike Candidates
 
-- ~~How to detect silent panel-path death reliably…~~ **Covered:** ADR-010
-  (command-reject + periodic house-state poll); SPIKE-008 Validated.
+- ~~How to detect silent panel-path death reliably…~~ **Covered:** SPIKE-008
+  Validated.
 - ~~Whether renaming the friendly name alone is enough… vs `unique_id` / Entity ID~~
-  **Answered 2026-08-09 (via `spec-panel-session-heal`):** Clean refactor — name
-  **Alarm Panel Connection** and change ids as needed; no backwards-compat soft
-  path. Align this spec via `/correction`.
+  **Answered 2026-08-09 (via `spec-panel-session-heal`); wording aligned
+  2026-08-31:** Clean refactor — name **Alarm Panel Connection** and change ids
+  as needed; no backwards-compat soft path.
 
 ## Review
 
 | # | Date | Verdict | Issues |
 |---|------|---------|--------|
 | 1 | 2026-08-07 | Clear | — |
+| 2 | 2026-08-31 | Issues found | 1 |
+| 3 | 2026-08-31 | Clear | — |
