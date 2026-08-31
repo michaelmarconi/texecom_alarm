@@ -3,9 +3,10 @@ id: TASK-59
 title: >-
   Skip extra panel read after arm/disarm when Home Assistant already has the new
   state
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-31 21:19'
+updated_date: '2026-08-31 21:34'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -63,3 +64,10 @@ Today `_refresh_alarm_from_flags` always calls `get_area_flags` after ACK, then 
 
 How we'll know: unit + end-to-end against FakePanel. Command: `cd texecom_alarm && python -m pytest tests/test_arm_commands.py tests/test_alarm_flags_guard.py tests/test_e2e_fake_panel.py -q`. FakePanel records whether `GetAreaFlags` ran after ACK. Assert: omitted when live AREA already published the new state; still runs when it has not (Home-disarm omit-AREA). Do not restore skip-and-resync. Live garage-return remains `/accept`.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: claimed
+<!-- SECTION:FINAL_SUMMARY:END -->
