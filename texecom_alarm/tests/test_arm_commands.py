@@ -194,15 +194,10 @@ async def test_successful_arm_does_not_publish_optimistic_state() -> None:
 
 @pytest.mark.asyncio
 async def test_successful_arm_skips_refresh_when_live_is_arming() -> None:
-    """AREA exit/entry wins over a lagging GetAreaFlags settled decode."""
-    from texecom_alarm.area_state import AREA_FLAGS_COUNT, FLAG_PART_ARM_2, FLAG_PART_ARMED
-
-    flags = bytearray(AREA_FLAGS_COUNT)
-    flags[FLAG_PART_ARMED] = 0x01
-    flags[FLAG_PART_ARM_2] = 0x01
+    """AREA already published exit — do not send a flags read whose answer we have."""
     panel = MagicMock()
     panel.set_area_arm = AsyncMock()
-    panel.get_area_flags = AsyncMock(return_value=bytes(flags))
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
     await mqtt.publish("texecom/alarm/state", "arming", retain=True)
@@ -217,8 +212,84 @@ async def test_successful_arm_skips_refresh_when_live_is_arming() -> None:
         zone_count=12,
     )
 
+    panel.get_area_flags.assert_not_awaited()
     assert result is None
     assert mqtt.payloads_for("texecom/alarm/state") == ["arming"]
+
+
+@pytest.mark.asyncio
+async def test_successful_arm_omits_flags_when_live_already_armed() -> None:
+    """Live AREA already published armed_* — skip the post-ACK flags round-trip."""
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_AWAY",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "armed_away",
+        zone_count=12,
+    )
+
+    panel.set_area_arm.assert_awaited_once_with(0)
+    panel.get_area_flags.assert_not_awaited()
+    assert mqtt.payloads_for("texecom/alarm/state") == []
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_successful_disarm_omits_flags_when_live_already_disarmed() -> None:
+    """Live AREA already published disarmed — skip the post-ACK flags round-trip."""
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "disarmed",
+        zone_count=12,
+    )
+
+    panel.set_area_disarm.assert_awaited_once_with()
+    panel.get_area_flags.assert_not_awaited()
+    assert mqtt.payloads_for("texecom/alarm/state") == []
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_successful_home_disarm_reads_flags_when_live_still_armed() -> None:
+    """Home disarm that omits AREA still reads flags and publishes disarmed."""
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/alarm/state", "armed_home", retain=True)
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "armed_home",
+        zone_count=12,
+    )
+
+    panel.get_area_flags.assert_awaited()
+    assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+    assert result == "disarmed"
 
 
 @pytest.mark.asyncio
