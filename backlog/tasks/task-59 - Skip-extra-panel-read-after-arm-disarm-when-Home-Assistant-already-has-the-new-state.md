@@ -3,10 +3,10 @@ id: TASK-59
 title: >-
   Skip extra panel read after arm/disarm when Home Assistant already has the new
   state
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-31 21:19'
-updated_date: '2026-08-31 21:50'
+updated_date: '2026-08-31 21:51'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -40,9 +40,9 @@ Corrective for TASK-7 (left done; this task is the rework).
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 After a successful arm or disarm ACK, FakePanel does not receive GetAreaFlags when live AREA/LOG already published the new alarm state
-- [ ] #2 After a successful Home disarm that omits an AREA update, GetAreaFlags still runs and the alarm entity is updated from that snapshot
-- [ ] #3 Login and reconnect snapshots still run; the reconciliation poll is unchanged
+- [x] #1 After a successful arm or disarm ACK, FakePanel does not receive GetAreaFlags when live AREA/LOG already published the new alarm state
+- [x] #2 After a successful Home disarm that omits an AREA update, GetAreaFlags still runs and the alarm entity is updated from that snapshot
+- [x] #3 Login and reconnect snapshots still run; the reconciliation poll is unchanged
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -75,5 +75,5 @@ Verification: Unit + e2e against FakePanel (`python -m pytest tests/test_arm_com
 Notes/assumptions: Skip uses the existing post-ACK `get_current_alarm_state` re-read (no extra yield). Login/reconnect snapshots and the reconciliation poll were not changed. Skip-and-resync was not restored.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
