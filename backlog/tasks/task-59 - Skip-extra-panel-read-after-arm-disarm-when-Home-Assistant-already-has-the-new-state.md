@@ -6,7 +6,7 @@ title: >-
 status: awaiting-review
 assignee: []
 created_date: '2026-08-31 21:19'
-updated_date: '2026-08-31 21:45'
+updated_date: '2026-08-31 21:50'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -75,5 +75,5 @@ Verification: Unit + e2e against FakePanel (`python -m pytest tests/test_arm_com
 Notes/assumptions: Skip uses the existing post-ACK `get_current_alarm_state` re-read (no extra yield). Login/reconnect snapshots and the reconciliation poll were not changed. Skip-and-resync was not restored.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
