@@ -1,8 +1,8 @@
 # Architecture
 
-<!-- Synthesised by /architecture on 2026-08-30 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md, adr-012-use-python-3-for-the-texecom-alarm-app.md, adr-013-use-dedicated-local-network-module-for-home-assistant-panel-access.md, adr-015-use-ready-to-arm-switches-and-mqtt-blocked-arm-event-for-unready-arm-refusal.md, adr-017-use-a-configurable-5-minute-interval-for-the-panel-reconciliation-poll.md, adr-021-use-one-busy-versus-dead-session-model-for-panel-connection-health.md -->
+<!-- Synthesised by /architecture on 2026-08-31 from: adr-001-use-dynamic-panel-enumeration-for-zone-discovery.md, adr-003-use-mqtt-discovery-not-native-integration-for-entity-surfacing.md, adr-004-use-app-liveness-unavailability-and-trigger-snapshots-for-panel-link-outages.md, adr-006-use-panel-zone-state-snapshot-for-startup-re-sync.md, adr-008-use-confirmed-shared-arm-disarm-with-away-full-arm-and-home-night-part-arm-mapping.md, adr-009-use-panel-area-flags-snapshot-for-alarm-startup-re-sync.md, adr-012-use-python-3-for-the-texecom-alarm-app.md, adr-013-use-dedicated-local-network-module-for-home-assistant-panel-access.md, adr-015-use-ready-to-arm-switches-and-mqtt-blocked-arm-event-for-unready-arm-refusal.md, adr-017-use-a-configurable-5-minute-interval-for-the-panel-reconciliation-poll.md, adr-021-use-one-busy-versus-dead-session-model-for-panel-connection-health.md -->
 
-**Date:** 2026-08-23
+**Date:** 2026-08-31
 **State:** Accepted ✅
 
 ## Overview
@@ -303,7 +303,6 @@ Automated tests never talk to your real alarm or a production MQTT account. A fa
 - **How exit/entry appear in the area-flags snapshot** vs only on live AREA pushes was not observed (ADR-009). Use live AREA until corroborated.
 - **Patience-window default** (~3 missed check-ins) is provisional (ADR-021). Live observation may justify tuning.
 - **Whether the household phone app shares this add-on’s ComIP** is unresolved (ADR-021) — install question, not a new recovery rule.
-- **`spec-panel-session-heal` still describes Connection off while recovering.** ADR-021 keeps it on through a first-attempt collision resync. Aligning that spec is a `/correction` follow-on.
 - **What “alarm reset” means as a product signal** — no distinct Connect event was observed for clearing alarm memory. Treat area returning to armed/disarmed as the practical signal until a dedicated reset is decided.
 
 ## Review
