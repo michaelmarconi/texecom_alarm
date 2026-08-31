@@ -69,5 +69,5 @@ How we'll know: unit + end-to-end against FakePanel. Command: `cd texecom_alarm 
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
