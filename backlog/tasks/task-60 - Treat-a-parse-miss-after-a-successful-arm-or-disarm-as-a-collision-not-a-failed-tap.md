@@ -3,9 +3,10 @@ id: TASK-60
 title: >-
   Treat a parse miss after a successful arm or disarm as a collision, not a
   failed tap
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-31 21:19'
+updated_date: '2026-08-31 21:51'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
