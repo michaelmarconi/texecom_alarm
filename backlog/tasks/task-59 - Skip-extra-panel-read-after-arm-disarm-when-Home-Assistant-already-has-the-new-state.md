@@ -6,7 +6,7 @@ title: >-
 status: in-progress
 assignee: []
 created_date: '2026-08-31 21:19'
-updated_date: '2026-08-31 21:34'
+updated_date: '2026-08-31 21:35'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -69,5 +69,5 @@ How we'll know: unit + end-to-end against FakePanel. Command: `cd texecom_alarm 
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: claimed
+phase: provisioned
 <!-- SECTION:FINAL_SUMMARY:END -->
