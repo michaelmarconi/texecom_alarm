@@ -21,7 +21,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | Backups | n/a | No extra datastore; HA backup of add-on options is sufficient |
 | Official HA Apps store | n/a | Community GitHub repository is the intended path |
 | Store-shaped repository | pass | Root `repository.yaml` + App in `texecom_alarm/`; store URL uses generated `#app` branch |
-| Pre-built images (GHCR) | pending | `0.3.4` not published yet |
+| Pre-built images (GHCR) | pass | `0.3.4` published (`docker manifest inspect` amd64 + arm64; Builder run 33528827986) |
 | RISK-017 fingerprint | pass | Working tree + history rewrite complete (recorded 2026-08-23) |
 | CHANGELOG vs product | pass | `[0.3.4]` records ignoring a queued duplicate Disarm while the panel is busy; `[0.3.2]` records Connection stay-on after a successful tap when flags are starved, plus INFO boot version — abstract household language, no pipeline IDs, no scene-specific events |
 | Licence label consistency | pass | `Dockerfile` OCI label is MIT |
@@ -30,8 +30,8 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 
 ## Deploy
 
-- Authorized: yes — 2026-09-01 (practitioner chose Authorize deploy; skip store rehearsal; force-push `main` to drop household-scene wording from current changelog history)
-- Step performed: pending — bump `0.3.4`; force-push `main`; Tag version `v0.3.4`; Sync `#app`; Builder `v0.3.4`
+- Authorized: yes — 2026-09-01 (practitioner chose Authorize deploy; skip store rehearsal; rewrite `main` so the current changelog history stays abstract)
+- Step performed: yes — bumped to `0.3.4` (`1d9986a`); force-pushed `main` (dropped the 0.3.3-era commits whose changelog named a household scene); Tag version created `v0.3.4`; Sync app branch refreshed `#app` (`version: "0.3.4"` + `image:`). Builder dispatched (`gh workflow run builder.yml --ref v0.3.4 -f version=0.3.4`) — succeeded, GHCR `0.3.4` amd64 + arm64 confirmed. Store Update rehearsal skipped this cut. Local add-on left stopped so household HA can take the panel slot. Tag `v0.3.3` was not moved.
 
 Prior Authorized deploy (kept for history):
 - 0.3.3 — 2026-09-01: published (`v0.3.3`; Builder 33527751875; GHCR amd64 + arm64). Store Update rehearsal skipped. Local add-on left stopped. Tag `v0.3.3` is not moved.
