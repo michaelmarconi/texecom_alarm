@@ -986,6 +986,10 @@ async def test_e2e_arm_nak_still_turns_connection_off_immediately() -> None:
         await asyncio.wait_for(task, timeout=2.0)
     finally:
         await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_home_disarm_without_area_still_reads_flags() -> None:
     """Home disarm that omits AREA still runs GetAreaFlags and publishes disarmed."""
     panel = FakePanel(
         udl_password="1234",
