@@ -1,10 +1,10 @@
 ---
 id: TASK-62
 title: 'Checkpoint: texecom-alarm-app busy-versus-dead session wave'
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-31 21:20'
-updated_date: '2026-09-01 08:37'
+updated_date: '2026-09-01 09:09'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
@@ -17,9 +17,9 @@ ordinal: 56000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 All tests pass (pytest in texecom_alarm/ exits 0)
-- [ ] #2 Lint/format clean (ruff check and ruff format --check exit 0)
-- [ ] #3 Wave e2e: FakePanel omits post-ACK GetAreaFlags when live AREA already published; ACK then unparseable housekeeping is not command-failure and Connection stays on if re-login succeeds on attempt 1; decode-fail logs reason plus leading hex at INFO or WARNING; patience, refused-arm Connection-off, and never-skip-bytes stay green
+- [x] #1 All tests pass (pytest in texecom_alarm/ exits 0)
+- [x] #2 Lint/format clean (ruff check and ruff format --check exit 0)
+- [x] #3 Wave e2e: FakePanel omits post-ACK GetAreaFlags when live AREA already published; ACK then unparseable housekeeping is not command-failure and Connection stays on if re-login succeeds on attempt 1; decode-fail logs reason plus leading hex at INFO or WARNING; patience, refused-arm Connection-off, and never-skip-bytes stay green
 <!-- AC:END -->
 
 ## Final Summary
@@ -33,12 +33,12 @@ verdict: pass
 Notes: Wave ACs and ADR-021 DoD hold on FakePanel/CI; live garage-return torn-frame remains `/accept`.
 
 ## Build phase
-phase: awaiting-review
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 docs/architecture.md session health (ADR-021) is not violated: extra flags read omitted when live events already published; collision after ACK is not a failed tap; Connection on if attempt-1 re-login succeeds
-- [ ] #2 Do not restore skip-and-resync; do not merge check-in patience with the command-reject fail window
-- [ ] #3 FakePanel is not treated as proof that a real Premier Elite torn-frame stays quiet on Connection
+- [x] #1 docs/architecture.md session health (ADR-021) is not violated: extra flags read omitted when live events already published; collision after ACK is not a failed tap; Connection on if attempt-1 re-login succeeds
+- [x] #2 Do not restore skip-and-resync; do not merge check-in patience with the command-reject fail window
+- [x] #3 FakePanel is not treated as proof that a real Premier Elite torn-frame stays quiet on Connection
 <!-- DOD:END -->
