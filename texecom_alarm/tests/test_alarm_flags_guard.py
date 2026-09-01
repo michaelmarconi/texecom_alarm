@@ -63,11 +63,11 @@ def test_round_trip_not_needed_when_live_already_has_new_state() -> None:
 
 
 def test_round_trip_needed_when_live_has_not_published_new_state() -> None:
-    """Home disarm that omits AREA, and arm while MQTT is still disarmed, still need flags."""
+    """Home disarm that omits AREA still needs flags. Arm never does — live AREA carries it."""
     assert flags_round_trip_needed_after_command("armed_home", after_disarm=True) is True
     assert flags_round_trip_needed_after_command("armed_away", after_disarm=True) is True
     assert flags_round_trip_needed_after_command("triggered", after_disarm=True) is True
     assert flags_round_trip_needed_after_command("arming", after_disarm=True) is True
     assert flags_round_trip_needed_after_command(None, after_disarm=True) is True
-    assert flags_round_trip_needed_after_command("disarmed", after_arm=True) is True
-    assert flags_round_trip_needed_after_command(None, after_arm=True) is True
+    assert flags_round_trip_needed_after_command("disarmed", after_arm=True) is False
+    assert flags_round_trip_needed_after_command(None, after_arm=True) is False

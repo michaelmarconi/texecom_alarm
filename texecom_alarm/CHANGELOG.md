@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- After a successful arm, the add-on does not ask the panel for flags while it
+  is busy sending events. Live updates carry exit and armed; a follow-up read
+  there can tear the session. Disarm still reads flags when the card has not
+  yet gone unset.
+
 ## [0.3.4] - 2026-09-01
 
 ### Fixed

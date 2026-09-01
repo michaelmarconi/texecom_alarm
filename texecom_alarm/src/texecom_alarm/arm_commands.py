@@ -106,13 +106,15 @@ async def _refresh_alarm_from_flags(
     ha_mode: str | None = None,
     current_alarm_payload: str | None = None,
 ) -> str | None:
-    """Ask the panel for area flags after a successful arm/disarm ACK only when
-    live AREA/LOG has not already published the new alarm state.
+    """Ask the panel for area flags after a successful disarm ACK only when
+    live AREA/LOG has not already published unset.
 
-    An unreadable reply after the tap already ACK'd is re-raised so the session
-    can log in again; it is not recorded as a failed arm or disarm. A NAK or
-    timeout on this housekeeping read is the panel being busy, not a lost
-    connection — Connection stays as it was.
+    After a successful arm ACK this is a no-op: live AREA carries exit/armed,
+    and a flags read during that burst collides. An unreadable reply after the
+    tap already ACK'd is re-raised so the session can log in again; it is not
+    recorded as a failed arm or disarm. A NAK or timeout on this housekeeping
+    read is the panel being busy, not a lost connection — Connection stays as
+    it was.
     """
     if mqtt is None or topic_prefix is None or zone_count is None:
         return None
@@ -208,11 +210,11 @@ async def handle_alarm_command(
     DISARM when the house is already unset is a no-op: a queued duplicate must
     not send a second SETAREADISARM into the post-ACK event burst.
 
-    On success, ask the panel for area flags only when live AREA/LOG has not
-    already published the new alarm state. That covers Home disarm that omits
-    an AREA update; it does not pile a housekeeping read onto a burst whose
-    answer already arrived. Returns the HA payload to keep shared state in
-    sync when flags were skipped because live AREA already said disarmed.
+    On success, ask the panel for area flags only after disarm when live
+    AREA/LOG has not already published unset. Arm never does that follow-up
+    read: live AREA carries exit/armed, and asking during the post-ACK burst
+    collides. Returns the HA payload to keep shared state in sync when flags
+    were skipped because live AREA already said disarmed.
     """
     text = payload.decode("utf-8") if isinstance(payload, bytes) else payload
     text = text.strip()

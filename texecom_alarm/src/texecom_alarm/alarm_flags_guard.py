@@ -22,13 +22,16 @@ def flags_round_trip_needed_after_command(
     """Return whether to send GetAreaFlags after a successful arm/disarm ACK.
 
     Live AREA/LOG already carrying the new alarm state is the answer; do not
-    ask the panel again. Home disarm that omits an AREA update still needs the
-    read because MQTT is still on the previous armed, triggered, or exit payload.
+    ask the panel again. After a successful arm ACK, never send a flags read:
+    MQTT is often still unset until the exit AREA push, and asking during that
+    burst collides with interleaved events. Home disarm that omits an AREA
+    update still needs the read because MQTT is still on the previous armed,
+    triggered, or exit payload.
     """
+    if after_arm:
+        return False
     if after_disarm:
         return current_payload != "disarmed"
-    if after_arm:
-        return current_payload is None or current_payload == "disarmed"
     return True
 
 

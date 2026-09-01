@@ -26,6 +26,7 @@ from texecom_alarm.protocol.frame import (
     CMD_GET_ZONE_STATE,
     CMD_LOGIN,
     CMD_SET_AREA_ARM,
+    CMD_SET_AREA_DISARM,
     CMD_SETEVENTMESSAGES,
     MSG_AREA,
     MSG_LOG,
@@ -705,12 +706,8 @@ async def test_e2e_mqtt_arm_disarm_commands() -> None:
 
         await mqtt.push_inbound("texecom/alarm/command", "ARM_HOME")
         await _wait_arm(2)
-        # Arm while MQTT is still disarmed still asks for flags. Wait for that
-        # in-flight read so the unknown-command no-op check is stable.
-        for _ in range(100):
-            if panel.commands_seen and panel.commands_seen[-1] == CMD_GET_AREA_FLAGS:
-                break
-            await asyncio.sleep(0.02)
+        await asyncio.sleep(0.05)
+        assert panel.commands_seen[-1] == CMD_SET_AREA_ARM
 
         before_cmds = list(panel.commands_seen)
         await mqtt.push_inbound("texecom/alarm/command", "NOT_A_COMMAND")
@@ -803,8 +800,144 @@ async def test_e2e_arm_omits_flags_when_live_area_already_published() -> None:
 
 
 @pytest.mark.asyncio
+async def test_e2e_arm_omits_flags_when_mqtt_still_disarmed() -> None:
+    """Home arm ACK must not ask flags while MQTT is still unset — that burst collides."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel, mqtt_port=1883)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        for _ in range(150):
+            if "texecom/alarm/command" in mqtt.subscribed and mqtt.payloads_for(
+                "texecom/alarm/state"
+            ):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+
+        flags_before = panel.area_flags_calls
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_HOME")
+        for _ in range(100):
+            if panel.last_arm_mode == 2:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+        assert panel.last_arm_mode == 2
+        await asyncio.sleep(0.15)
+        assert panel.area_flags_calls == flags_before
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_home_arm_does_not_consume_unreadable_flags_trap() -> None:
+    """Home arm while MQTT is still unset must not send GetAreaFlags.
+
+    If it did, the next flags reply is jammed non-Connect bytes (the live
+    post-arm collision). Connection must stay on because that read never
+    happens — the trap stays armed.
+    """
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel, mqtt_port=1883)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(
+            run(
+                settings,
+                panel=client,
+                mqtt=mqtt,
+                idle=stop.wait,
+                idle_timeout=0.2,
+                trust_poll_interval=60.0,
+            )
+        )
+        for _ in range(150):
+            if (
+                mqtt.payloads_for("texecom/panel_connection/state")[-1:] == ["ON"]
+                and "texecom/alarm/command" in mqtt.subscribed
+                and mqtt.payloads_for("texecom/alarm/state")[-1:] == ["disarmed"]
+            ):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+
+        flags_before = panel.area_flags_calls
+        panel.garbage_next_area_flags = True
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_HOME")
+        for _ in range(100):
+            if panel.last_arm_mode == 2:
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+        assert panel.last_arm_mode == 2
+        await asyncio.sleep(0.2)
+
+        assert task.done() is False
+        assert panel.area_flags_calls == flags_before
+        assert panel.garbage_next_area_flags is True
+        link = mqtt.payloads_for("texecom/panel_connection/state")
+        assert "OFF" not in link
+        assert link[-1] == "ON"
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
 async def test_e2e_post_ack_unparseable_flags_is_collision_not_failed_tap() -> None:
-    """ACK then unreadable GetAreaFlags: not a failed arm; Connection stays on
+    """ACK then unreadable GetAreaFlags: not a failed disarm; Connection stays on
     if the first re-login succeeds; zone and alarm state are re-read.
     """
     panel = FakePanel(
@@ -862,15 +995,20 @@ async def test_e2e_post_ack_unparseable_flags_is_collision_not_failed_tap() -> N
                     raise exc
             await asyncio.sleep(0.02)
         assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+        await panel.inject_area_message(area_number=1, state=7)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/alarm/state")[-1:] == ["armed_home"]:
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_home"
         before_status = list(mqtt.payloads_for("texecom/status"))
         zone_before = mqtt.payloads_for("texecom/zone/1/state")[-1]
-        alarm_before = mqtt.payloads_for("texecom/alarm/state")[-1]
         cmds_before = list(panel.commands_seen)
         login_before = panel.commands_seen.count(CMD_LOGIN)
         setevent_before = panel.seteventmessages_calls
 
         panel.garbage_next_area_flags = True
-        await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
+        await mqtt.push_inbound("texecom/alarm/command", "DISARM")
         for _ in range(300):
             resumed = (
                 panel.commands_seen.count(CMD_LOGIN) > login_before
@@ -890,8 +1028,8 @@ async def test_e2e_post_ack_unparseable_flags_is_collision_not_failed_tap() -> N
         link = mqtt.payloads_for("texecom/panel_connection/state")
         assert "OFF" not in link
         assert link[-1] == "ON"
-        assert panel.arm_calls == [0]
-        assert panel.commands_seen.count(CMD_SET_AREA_ARM) == 1
+        assert panel.disarm_calls == 1
+        assert panel.commands_seen.count(CMD_SET_AREA_DISARM) == 1
         new_cmds = panel.commands_seen[len(cmds_before) :]
         assert CMD_LOGIN in new_cmds
         assert CMD_GET_ZONE_STATE in new_cmds
@@ -902,7 +1040,6 @@ async def test_e2e_post_ack_unparseable_flags_is_collision_not_failed_tap() -> N
         )
         assert "offline" not in mqtt.payloads_for("texecom/status")[len(before_status) :]
         assert mqtt.payloads_for("texecom/zone/1/state")[-1] == zone_before
-        assert mqtt.payloads_for("texecom/alarm/state")[-1] == alarm_before
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)
