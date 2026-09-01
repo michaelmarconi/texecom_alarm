@@ -21,17 +21,17 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | Backups | n/a | No extra datastore; HA backup of add-on options is sufficient |
 | Official HA Apps store | n/a | Community GitHub repository is the intended path |
 | Store-shaped repository | pass | Root `repository.yaml` + App in `texecom_alarm/`; store URL uses generated `#app` branch |
-| Pre-built images (GHCR) | pending | `0.3.0` is published; busy-versus-dead follow-on (post-ACK flags skip, collision vs failed tap, decode-miss log) is on `main` after `v0.3.0` and is not in GHCR yet |
+| Pre-built images (GHCR) | pass | `0.3.1` published (`docker manifest inspect` amd64 + aarch64; Builder run 33493188974) |
 | RISK-017 fingerprint | pass | Working tree + history rewrite complete (recorded 2026-08-23) |
-| CHANGELOG vs product | pending | `[Unreleased]` is empty; household notes for the follow-on belong in the next cut (likely `0.3.1`) |
+| CHANGELOG vs product | pass | `[0.3.1]` records quieter post-arm session handling and unread-message logs — household language, no pipeline IDs |
 | Licence label consistency | pass | `Dockerfile` OCI label is MIT |
-| Version bump policy | pending | Do not ship the follow-on as another `0.3.0`; needs a new Supervisor version |
-| Store Update rehearsal | pending | Prior pass 2026-08-29 `0.2.0` → `0.3.0`. A new cut needs `./scripts/ha-store-upgrade-smoke.sh` FROM `0.3.0` TO the new version — not a local rebuild |
+| Version bump policy | pass | 0.3.0 → 0.3.1 (patch) — robustness follow-on, no new Configuration settings |
+| Store Update rehearsal | pass | 2026-09-01: `STORE_UPGRADE_SMOKE_PASS from=0.3.0 to=0.3.1` on `d05f66f6_texecom_alarm` — real panel login, zone enumeration, MQTT discovery before and after Update |
 
 ## Deploy
 
-- Authorized: no — waiting on authorize for a new cut after `0.3.0` (busy-versus-dead follow-on on `main` is not in the published `0.3.0` image)
-- Step performed: no for this cut
+- Authorized: yes — 2026-09-01 (practitioner chose Authorize deploy)
+- Step performed: yes — bumped to `0.3.1` (`bdfe239`); pushed `main`; Tag version created `v0.3.1`; Sync app branch refreshed `#app` (`version: "0.3.1"` + `image:`). Builder dispatched (`gh workflow run builder.yml --ref v0.3.1 -f version=0.3.1`) — succeeded, GHCR `0.3.1` amd64 + aarch64 confirmed. Store Update rehearsal `STORE_UPGRADE_SMOKE_PASS from=0.3.0 to=0.3.1`. Local add-on left stopped so household HA can take the panel slot.
 
 Prior Authorized deploy (kept for history):
 - 0.3.0 — 2026-08-29: bumped (`a99eaf4`); pushed `main`; Tag version `v0.3.0`; `#app` synced; Builder dispatched; GHCR `0.3.0` amd64 + arm64 confirmed. Store Update rehearsal `STORE_UPGRADE_SMOKE_PASS from=0.2.0 to=0.3.0`.
