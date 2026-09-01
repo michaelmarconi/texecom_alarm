@@ -57,6 +57,47 @@ async def test_arm_payloads_call_set_area_arm_with_settings_mode(
 
 
 @pytest.mark.asyncio
+async def test_disarm_when_already_disarmed_does_not_call_panel() -> None:
+    """A second DISARM while the house is already unset must not talk to the panel."""
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        get_current_alarm_state=lambda: "disarmed",
+    )
+
+    panel.set_area_disarm.assert_not_awaited()
+    panel.get_area_flags.assert_not_awaited()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_disarm_while_arming_still_calls_panel() -> None:
+    """Cancel-during-exit still has to reach the panel — the house is not unset yet."""
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "arming",
+        zone_count=12,
+    )
+
+    panel.set_area_disarm.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
 async def test_disarm_payload_calls_set_area_disarm() -> None:
     panel = MagicMock()
     panel.set_area_arm = AsyncMock()
@@ -245,8 +286,13 @@ async def test_successful_arm_omits_flags_when_live_already_armed() -> None:
 @pytest.mark.asyncio
 async def test_successful_disarm_omits_flags_when_live_already_disarmed() -> None:
     """Live AREA already published disarmed — skip the post-ACK flags round-trip."""
+    live = {"payload": "armed_away"}
+
+    async def disarm_then_live_disarmed() -> None:
+        live["payload"] = "disarmed"
+
     panel = MagicMock()
-    panel.set_area_disarm = AsyncMock()
+    panel.set_area_disarm = AsyncMock(side_effect=disarm_then_live_disarmed)
     panel.get_area_flags = AsyncMock(return_value=bytes(72))
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
@@ -257,14 +303,53 @@ async def test_successful_disarm_omits_flags_when_live_already_disarmed() -> Non
         "DISARM",
         mqtt=mqtt,
         topic_prefix="texecom",
-        get_current_alarm_state=lambda: "disarmed",
+        get_current_alarm_state=lambda: live["payload"],
         zone_count=12,
     )
 
     panel.set_area_disarm.assert_awaited_once_with()
     panel.get_area_flags.assert_not_awaited()
     assert mqtt.payloads_for("texecom/alarm/state") == []
-    assert result is None
+    assert result == "disarmed"
+
+
+@pytest.mark.asyncio
+async def test_second_disarm_after_ack_does_not_call_panel() -> None:
+    """Queued duplicate DISARM must not TX after the first ACK settled the house."""
+    live = {"payload": "armed_away"}
+
+    async def disarm_then_live_disarmed() -> None:
+        live["payload"] = "disarmed"
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock(side_effect=disarm_then_live_disarmed)
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+
+    first = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: live["payload"],
+        zone_count=12,
+    )
+    if first is not None:
+        live["payload"] = first
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: live["payload"],
+        zone_count=12,
+    )
+
+    panel.set_area_disarm.assert_awaited_once_with()
 
 
 @pytest.mark.asyncio
@@ -385,7 +470,7 @@ async def test_successful_disarm_publishes_area_flags_snapshot() -> None:
 @pytest.mark.asyncio
 async def test_disarm_refresh_rereads_live_state_after_ack() -> None:
     """Guard must see post-ACK MQTT (e.g. arming), not the pre-command snapshot."""
-    live_state = {"payload": "disarmed"}
+    live_state = {"payload": "armed_away"}
 
     async def disarm_then_arming() -> None:
         live_state["payload"] = "arming"

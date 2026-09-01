@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A second Disarm while the house is already unset is ignored, so a queued
+  duplicate does not talk to the panel while it is busy sending events.
+
+## [0.3.3] - 2026-09-01
+
+### Fixed
+
+- A second Disarm while the house is already unset is ignored, so a queued
+  duplicate does not talk to the panel while it is busy sending events.
+
 ## [0.3.2] - 2026-09-01
 
 ### Added
@@ -18,8 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - After a successful disarm (or arm), a flags follow-up that times out or is
   rejected no longer turns **Alarm Panel Connection** off. The tap already
-  succeeded; the panel is busy, not gone. Live AREA that arrived during the
-  ACK is used so the extra flags read is skipped on a garage-return burst.
+  succeeded; the panel is busy, not gone. Live events that arrived during the
+  ACK are used so the extra flags read is skipped while the panel is busy.
 
 ## [0.3.1] - 2026-09-01
 

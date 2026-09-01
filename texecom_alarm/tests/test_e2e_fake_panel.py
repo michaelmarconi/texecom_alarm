@@ -717,6 +717,13 @@ async def test_e2e_mqtt_arm_disarm_commands() -> None:
         await asyncio.sleep(0.1)
         assert panel.commands_seen == before_cmds
 
+        await panel.inject_area_message(area_number=1, state=3)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/alarm/state")[-1:] == ["armed_away"]:
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_away"
+
         disarm_before = panel.disarm_calls
         await mqtt.push_inbound("texecom/alarm/command", "DISARM")
         for _ in range(100):
@@ -1223,6 +1230,74 @@ async def test_e2e_garage_return_disarm_keeps_connection_on_when_flags_starved()
                 break
             await asyncio.sleep(0.05)
         assert panel.keepalive_attempts > keepalive_before
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_duplicate_disarm_does_not_tx_second_setareadisarm() -> None:
+    """Garage-return 2026-09-01 13:31: two DISARM MQTT payloads, one panel TX.
+
+    A second SETAREADISARM into the post-ACK M burst is a decode miss. The
+    first ACK already unset the house; the duplicate must not go on the wire.
+    """
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
+        zone_count=12,
+    )
+    panel.garbage_on_disarm_after_first = True
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel, mqtt_port=1883)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        await _wait_e2e_command_surface(task, mqtt)
+
+        await panel.inject_area_message(area_number=1, state=3)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_away":
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_away"
+
+        panel.interleave_messages_before_disarm = [
+            _GARAGE_RETURN_AREA_DISARMED,
+            _GARAGE_RETURN_LOG_MODE_ACTION,
+        ]
+        await mqtt.push_inbound("texecom/alarm/command", "DISARM")
+        await mqtt.push_inbound("texecom/alarm/command", "DISARM")
+        for _ in range(150):
+            if (
+                mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+                or mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+            ):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        await asyncio.sleep(0.15)
+        assert panel.disarm_calls == 1
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+        assert "OFF" not in mqtt.payloads_for("texecom/panel_connection/state")
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)
@@ -1996,7 +2071,7 @@ async def test_e2e_unready_arm_skips_panel_and_publishes_blocked_event(
 
 @pytest.mark.asyncio
 async def test_e2e_disarm_still_sent_when_all_ready_switches_off() -> None:
-    """All three ready switches OFF: DISARM still reaches FakePanel."""
+    """All three ready switches OFF: DISARM still reaches the panel when the house is armed."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR")],
@@ -2005,6 +2080,12 @@ async def test_e2e_disarm_still_sent_when_all_ready_switches_off() -> None:
     await panel.start()
     try:
         mqtt, task, stop = await _boot_e2e_app(panel)
+        await panel.inject_area_message(area_number=1, state=3)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/alarm/state")[-1:] == ["armed_away"]:
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_away"
         for mode in ("away", "home", "night"):
             await mqtt.push_inbound(f"texecom/ready/{mode}/command", "OFF")
         for _ in range(50):
