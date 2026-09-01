@@ -205,17 +205,23 @@ async def handle_alarm_command(
 ) -> str | None:
     """Translate ARM_*/DISARM MQTT payloads into shared panel commands (ADR-008).
 
+    DISARM when the house is already unset is a no-op: a queued duplicate must
+    not send a second SETAREADISARM into the post-ACK event burst.
+
     On success, ask the panel for area flags only when live AREA/LOG has not
     already published the new alarm state. That covers Home disarm that omits
     an AREA update; it does not pile a housekeeping read onto a burst whose
-    answer already arrived. Returns the new HA payload when a snapshot was
-    published, else None.
+    answer already arrived. Returns the HA payload to keep shared state in
+    sync when flags were skipped because live AREA already said disarmed.
     """
     text = payload.decode("utf-8") if isinstance(payload, bytes) else payload
     text = text.strip()
     current = get_current_alarm_state() if get_current_alarm_state is not None else None
 
     if text == PAYLOAD_DISARM:
+        if current == "disarmed":
+            logger.debug("alarm_command_disarm_ignored already=disarmed")
+            return None
         logger.debug("alarm_command_disarm")
         try:
             await panel.set_area_disarm()
@@ -245,7 +251,7 @@ async def handle_alarm_command(
             return None
         # Re-read live state after ACK — AREA may already be queued from the wait.
         current_after = _payload_after_ack(panel, settings, get_current_alarm_state, current)
-        return await _refresh_alarm_from_flags(
+        refreshed = await _refresh_alarm_from_flags(
             panel,
             settings,
             mqtt=mqtt,
@@ -255,6 +261,11 @@ async def handle_alarm_command(
             is_arm=False,
             current_alarm_payload=current_after,
         )
+        if refreshed is not None:
+            return refreshed
+        # Flags skipped because live AREA already answered; keep shared state in
+        # sync so a queued second DISARM does not TX into the post-ACK burst.
+        return current_after if current_after == "disarmed" else None
 
     ha_mode = _PAYLOAD_TO_HA_MODE.get(text)
     if ha_mode is None:

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A second Disarm while the house is already unset is ignored, so a queued
+  duplicate does not talk to the panel during the busy garage-return burst.
+
 ## [0.3.2] - 2026-09-01
 
 ### Added

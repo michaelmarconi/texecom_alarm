@@ -130,6 +130,9 @@ class FakePanel:
         self.garbage_next_area_flags = False
         self.last_disarm_body: bytes | None = None
         self.disarm_calls = 0
+        # Second SETAREADISARM writes a jammed concatenated-M burst (live garage
+        # 2026-09-01 13:31) so a duplicate TX is a decode miss, not a quiet ACK.
+        self.garbage_on_disarm_after_first = False
         self._handlers: dict[int, Callable[[Frame], bytes]] = {
             CMD_LOGIN: self._handle_login,
             CMD_GETDATETIME: self._handle_getdatetime,
@@ -300,6 +303,16 @@ class FakePanel:
                 "fake_panel_ate_area_flags_attempt_with_messages",
                 extra={"burst": burst},
             )
+            return
+
+        if (
+            cmd == CMD_SET_AREA_DISARM
+            and self.garbage_on_disarm_after_first
+            and self.disarm_calls > 1
+        ):
+            # Concatenated tM frames from the 13:31 garage-return decode miss.
+            writer.write(bytes.fromhex("744d0799080148744d085903040005744d085a03020047"))
+            await writer.drain()
             return
 
         if cmd == CMD_SET_AREA_DISARM and self.interleave_messages_before_disarm:

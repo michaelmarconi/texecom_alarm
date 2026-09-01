@@ -477,6 +477,43 @@ async def test_retained_alarm_command_is_ignored() -> None:
 
 
 @pytest.mark.asyncio
+async def test_queued_second_disarm_does_not_call_panel() -> None:
+    """Two DISARM MQTT payloads in a row: only the first tap reaches the panel."""
+    from texecom_alarm.app import _listen_alarm_commands
+    from texecom_alarm.mqtt.discovery import alarm_command_topic
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.set_area_arm = AsyncMock()
+    panel.get_area_flags = AsyncMock(return_value=bytes(72))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    settings = _command_settings()
+    command_topic = alarm_command_topic("texecom")
+    alarm_state = _SharedAlarmState(payload="armed_away")
+    task = asyncio.create_task(
+        _listen_alarm_commands(
+            panel,
+            mqtt,
+            settings=settings,
+            command_topic=command_topic,
+            alarm_state=alarm_state,
+            zone_count=12,
+        )
+    )
+    await mqtt.push_inbound(command_topic, "DISARM")
+    await mqtt.push_inbound(command_topic, "DISARM")
+    for _ in range(50):
+        if panel.set_area_disarm.await_count >= 1 and alarm_state.payload == "disarmed":
+            break
+        await asyncio.sleep(0.02)
+    await asyncio.sleep(0.05)
+    panel.set_area_disarm.assert_awaited_once()
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
 async def test_run_clears_retained_command_topic_after_subscribe() -> None:
     """After subscribe, publish empty retained payload to clear leftover commands."""
     panel = FakePanel(
