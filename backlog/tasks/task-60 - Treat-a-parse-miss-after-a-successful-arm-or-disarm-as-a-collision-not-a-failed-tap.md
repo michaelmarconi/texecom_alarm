@@ -6,7 +6,7 @@ title: >-
 status: awaiting-review
 assignee: []
 created_date: '2026-08-31 21:19'
-updated_date: '2026-09-01 00:12'
+updated_date: '2026-09-01 05:26'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -78,5 +78,5 @@ Verification: How we'll know `python -m pytest tests/test_arm_commands.py tests/
 Notes/assumptions: FakePanel does not prove a real Premier Elite torn-frame stays quiet on Connection. GetAreaFlags NAK/timeout after ACK still records as command failure (existing behaviour; only ForcedDisconnect/decode miss is collision). `recv_message` now raises ForcedDisconnect after a torn-down session (same as send_command) so closing from the command path wakes listen into reconnect instead of aborting the app.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
