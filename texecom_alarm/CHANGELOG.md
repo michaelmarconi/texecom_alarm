@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-09-01
+
 ### Fixed
 
 - After a successful arm, the add-on does not ask the panel for flags while it
