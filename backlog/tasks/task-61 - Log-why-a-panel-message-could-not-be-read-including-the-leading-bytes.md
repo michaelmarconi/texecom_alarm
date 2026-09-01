@@ -1,10 +1,10 @@
 ---
 id: TASK-61
 title: 'Log why a panel message could not be read, including the leading bytes'
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-31 21:20'
-updated_date: '2026-09-01 05:55'
+updated_date: '2026-09-01 08:28'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -62,6 +62,12 @@ How we'll know: unit tests capturing log records (no live panel). Command: `cd t
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Decode misses now log reason and leading hex together at WARNING; unexpected bytes still end the session without skip-and-resync, and +++ stays a distinct hang-up path.
+Changed files: texecom_alarm/src/texecom_alarm/protocol/client.py, texecom_alarm/src/texecom_alarm/protocol/frame.py, texecom_alarm/tests/test_protocol_client.py, texecom_alarm/tests/test_protocol_frame.py
+Verification: Unit tests capturing log records (no live panel). `cd texecom_alarm && python -m pytest tests/test_protocol_client.py tests/test_protocol_frame.py -q` → 58 passed. Full DoD: `pytest --cov=texecom_alarm --cov-fail-under=90 -q` → 402 passed, 92.28% coverage; `ruff check` and `ruff format --check` clean.
+Notes/assumptions: Log event is `panel_decode_miss reason=%s leading_hex=%s` at WARNING (not TRACE). Reasons: `not 't'`, `bad length`, `bad CRC`, `unknown type`. Leading hex is the first 32 buffer bytes. `+++` still raises ForcedDisconnect with its existing message and does not emit `panel_decode_miss`. Skip-and-resync was not restored.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
