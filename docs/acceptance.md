@@ -1,6 +1,6 @@
 # Acceptance
 
-**Date:** 2026-08-27
+**Date:** 2026-09-01
 **State:** Accepted ✅
 <!-- State is exactly one of: Draft 📝 | Accepted ✅ | Deferred ⏸️ -->
 
@@ -19,6 +19,7 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 | 5 | Simplified config panel | ✅ pass | Reconnect settings collapsed to one; two labels rewritten in plain language during the walk |
 | 6 | Rejected keepalive heals like a timeout | ✅ pass | Verified via merged automated end-to-end test; live corroboration skipped this round (practitioner's call) |
 | 7 | Transient keepalive hiccup no longer forces an unnecessary reconnect | ✅ pass | Verified via merged automated end-to-end test (executor + independent review re-run + checkpoint verifier); live corroboration skipped (practitioner's call — not reliably triggerable on demand) |
+| 8 | Busy-versus-dead while the phone app arms | ✅ pass | Sim add-on 0.3.0 on the local module saw iOS arm → Away → disarm; Connection stayed up. Household HA card still to walk |
 
 ## Scenario: Replacement still live
 
@@ -97,6 +98,17 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 - **How we know:** Pass if a within-budget bad reply never flips Connection, and a budget-exhausted run still reconnects. Fail if either a harmless hiccup forces a reconnect, or a real dead session goes undetected.
 - **Result:** pass — this scenario's `how we'll know` is automated end-to-end only (no manual reproduction step); the real household panel wasn't reachable from this session (a precisely PIR-timed keepalive collision against live hardware "isn't reliably triggerable on demand anyway" — same call as the 27 Aug entry above), so the merged test evidence plus the TASK-48 checkpoint stand in.
 
+## Scenario: Busy-versus-dead while the phone app arms
+
+**Status:** Pass ✅
+
+- **What we're proving:** Alarm Panel Connection means we cannot talk to the panel — not that the panel is busy with another client’s arm or disarm. Zone and alarm entities stay visible.
+- **Examples:** Given this add-on holds the dedicated local module, When the Texecom iOS app arms and then disarms, Then MQTT follows arming → armed Away → disarmed, check-ins keep succeeding, and Connection does not go off.
+- **You:** Armed and disarmed from the Texecom iOS app (household HA was stopped so this sim could hold the local module). Confirmed this is not the household-card walk.
+- **I check:** Add-on logs on `local_texecom_alarm` 0.3.0 (`panel_host=192.168.1.51`).
+- **How we know:** Pass if live AREA events publish the right alarm states and the session stays up. Fail if Connection goes off, the session drops, or alarm MQTT never follows the phone app.
+- **Result:** pass — 10:26:07 remote command then MQTT `arming`; 10:26:16 full arm MQTT `armed_away`; 10:26:51 remote command then MQTT `disarmed`. Keepalives continued. No hang-up, reconnect, or decode miss. Zones then followed the walk back upstairs. Not a substitute for watching the card on household Home Assistant.
+
 ## How it went
 
 - Home Assistant was already up; the add-on had just been rebuilt from the UI and was started.
@@ -107,10 +119,12 @@ A Home Assistant add-on that replaces the prior MQTT bridge for a Texecom Premie
 - 26 Aug: re-entered accept to cover the connection-simplification wave (ADR-016–019, TASK-39–44), which landed after the 24 Aug walk and changed the config panel. Walked the config panel live against the real household panel (`local_texecom_alarm`, `panel_host=192.168.1.51`); the live-reconnect scenario (physically interrupting the panel connection to watch Alarm Panel Connection recover) was deliberately left to the merged tasks' test suites rather than walked live this round.
 - 27 Aug: re-entered accept to cover the keepalive-NAK reconnect fix (TASK-45/46) that closed out a real household incident (a rejected `GETDATETIME` was miscounted as a healthy check-in, freezing motion detection behind an "ON" connection signal). Booted the sim (`local_texecom_alarm` started, `panel_host` empty this session — no `TEXECOM_PANEL_HOST` set), then accepted on the merged automated evidence rather than reconfiguring for a live NAK reproduction, which isn't reliably triggerable on demand anyway.
 - 27 Aug (later): re-entered accept again to cover the keepalive-retry-budget fix (TASK-47/48) — a same-day follow-up incident where the TASK-45/46 NAK fix over-corrected into a reconnect storm on ordinary PIR bursts. Rebuilt and started `local_texecom_alarm` (0.2.0 → 0.2.1, `panel_host` still empty this session), confirmed it starts clean and only refuses to run for the expected missing-panel-target reason, then accepted on the merged automated evidence (executor + independent review re-run + checkpoint verifier) rather than a live reproduction, for the same reason as the entry above.
+- 1 Sep: re-entered accept after the busy-versus-dead session wave. Booted sim HA (`local_texecom_alarm` 0.3.0 on the live local module). Coming-home / ordinary-arm from the household HA card could not be walked — those apps were stopped so this sim could hold the panel’s only slot, and the card the household uses is not this sim. Practitioner armed and disarmed from the Texecom iOS app instead: this add-on stayed up and published `arming` → `armed_away` → `disarmed` with Connection still on. **Still need to check live household Home Assistant** (card state, Connection name, coming home via garage) once this release is installed there.
 
 ## Still open
 
 - [x] HomeKit/iOS refuse when a ready switch is off — cannot walk until this add-on is on household HA (limitation accepted)
+- [x] Household HA card walk (coming home, ordinary arm, Connection name) — still required once this release is on household HA; not walked 1 Sep because household HA was stopped (limitation accepted for closing this record)
 
 ## Review
 
