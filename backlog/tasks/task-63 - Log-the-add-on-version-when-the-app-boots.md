@@ -1,9 +1,10 @@
 ---
 id: TASK-63
 title: Log the add-on version when the app boots
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-09-01 09:44'
+updated_date: '2026-09-01 11:42'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
