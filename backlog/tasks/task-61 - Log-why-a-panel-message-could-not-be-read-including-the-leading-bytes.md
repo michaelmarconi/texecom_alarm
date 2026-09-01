@@ -1,9 +1,10 @@
 ---
 id: TASK-61
 title: 'Log why a panel message could not be read, including the leading bytes'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-31 21:20'
+updated_date: '2026-09-01 05:55'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
