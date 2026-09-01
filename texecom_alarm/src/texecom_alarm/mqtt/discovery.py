@@ -1,0 +1,349 @@
+"""HA MQTT discovery payload builders for zone binary_sensors and alarm panel."""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import Protocol
+
+from texecom_alarm.config import Settings
+from texecom_alarm.zones import Zone, zone_display_name, zone_slug
+
+logger = logging.getLogger(__name__)
+
+AVAILABILITY_ONLINE = "online"
+AVAILABILITY_OFFLINE = "offline"
+
+ALARM_OBJECT_ID = "texecom_alarm_arm_status"
+CONNECTIVITY_OBJECT_ID = "texecom_alarm_panel_connection"
+PANEL_LINK_ON = "ON"
+PANEL_LINK_OFF = "OFF"
+
+# Shared across zone, alarm, panel-connection, and ready-to-arm discovery so HA groups one device.
+MQTT_DEVICE: dict[str, object] = {
+    "identifiers": ["texecom_alarm"],
+    "name": "Texecom Alarm",
+    "manufacturer": "Texecom",
+    "model": "Premier Elite",
+}
+
+# HA card order when the MQTT platform respects supported_features list order.
+_ARM_FEATURE_ORDER = ("arm_home", "arm_night", "arm_away")
+
+
+class MqttPublisher(Protocol):
+    async def publish(
+        self,
+        topic: str,
+        payload: str | bytes,
+        *,
+        retain: bool = False,
+        qos: int = 0,
+    ) -> None: ...
+
+
+def availability_topic(topic_prefix: str) -> str:
+    return f"{topic_prefix}/status"
+
+
+def zone_object_id(zone: Zone) -> str:
+    """object_id: texecom_alarm_{slug}_zone_{N} (slug from panel name; empty → zone)."""
+    return f"texecom_alarm_{zone_slug(zone.name, zone_number=zone.number)}_zone_{zone.number}"
+
+
+def zone_unique_id(zone: Zone) -> str:
+    """unique_id: texecom_alarm_zone_{N} — stable across panel name changes."""
+    return f"texecom_alarm_zone_{zone.number}"
+
+
+def zone_state_topic(topic_prefix: str, zone_number: int) -> str:
+    return f"{topic_prefix}/zone/{zone_number}/state"
+
+
+def zone_discovery_topic(object_id: str) -> str:
+    return f"homeassistant/binary_sensor/{object_id}/config"
+
+
+def alarm_state_topic(topic_prefix: str) -> str:
+    return f"{topic_prefix}/alarm/state"
+
+
+def alarm_command_topic(topic_prefix: str) -> str:
+    return f"{topic_prefix}/alarm/command"
+
+
+def alarm_attributes_topic(topic_prefix: str) -> str:
+    return f"{topic_prefix}/alarm/attributes"
+
+
+def alarm_discovery_topic(object_id: str = ALARM_OBJECT_ID) -> str:
+    return f"homeassistant/alarm_control_panel/{object_id}/config"
+
+
+def connectivity_state_topic(topic_prefix: str) -> str:
+    return f"{topic_prefix}/panel_connection/state"
+
+
+def connectivity_discovery_topic(object_id: str = CONNECTIVITY_OBJECT_ID) -> str:
+    return f"homeassistant/binary_sensor/{object_id}/config"
+
+
+def zone_discovery_payload(zone: Zone, *, topic_prefix: str) -> dict[str, object]:
+    object_id = zone_object_id(zone)
+    return {
+        "name": zone_display_name(zone.name, zone_number=zone.number),
+        "unique_id": zone_unique_id(zone),
+        "object_id": object_id,
+        # Modern HA ignores topic/object_id for entity_id; name would win otherwise.
+        "default_entity_id": f"binary_sensor.{object_id}",
+        "device": MQTT_DEVICE,
+        "state_topic": zone_state_topic(topic_prefix, zone.number),
+        "availability_topic": availability_topic(topic_prefix),
+        "payload_available": AVAILABILITY_ONLINE,
+        "payload_not_available": AVAILABILITY_OFFLINE,
+        "payload_on": "1",
+        "payload_off": "0",
+    }
+
+
+def alarm_discovery_payload(
+    *,
+    topic_prefix: str,
+    settings: Settings | None = None,
+) -> dict[str, object]:
+    if settings is None:
+        supported = list(_ARM_FEATURE_ORDER)
+    else:
+        supported = settings.supported_arm_features()
+    return {
+        "name": "Texecom Alarm",
+        "unique_id": ALARM_OBJECT_ID,
+        "object_id": ALARM_OBJECT_ID,
+        "default_entity_id": f"alarm_control_panel.{ALARM_OBJECT_ID}",
+        "device": MQTT_DEVICE,
+        "state_topic": alarm_state_topic(topic_prefix),
+        "command_topic": alarm_command_topic(topic_prefix),
+        "json_attributes_topic": alarm_attributes_topic(topic_prefix),
+        "availability_topic": availability_topic(topic_prefix),
+        "payload_available": AVAILABILITY_ONLINE,
+        "payload_not_available": AVAILABILITY_OFFLINE,
+        "code_arm_required": False,
+        "code_disarm_required": False,
+        "supported_features": supported,
+    }
+
+
+def connectivity_discovery_payload(*, topic_prefix: str) -> dict[str, object]:
+    return {
+        "name": "Alarm Panel Connection",
+        "unique_id": CONNECTIVITY_OBJECT_ID,
+        "object_id": CONNECTIVITY_OBJECT_ID,
+        "default_entity_id": f"binary_sensor.{CONNECTIVITY_OBJECT_ID}",
+        "device": MQTT_DEVICE,
+        "state_topic": connectivity_state_topic(topic_prefix),
+        "availability_topic": availability_topic(topic_prefix),
+        "payload_available": AVAILABILITY_ONLINE,
+        "payload_not_available": AVAILABILITY_OFFLINE,
+        "device_class": "connectivity",
+        "payload_on": PANEL_LINK_ON,
+        "payload_off": PANEL_LINK_OFF,
+    }
+
+
+async def publish_zone_discovery(
+    mqtt: MqttPublisher,
+    zones: list[Zone],
+    *,
+    topic_prefix: str,
+) -> None:
+    """Publish retained discovery configs and mark the app online (ADR-004 LWT peer)."""
+    avail = availability_topic(topic_prefix)
+    await mqtt.publish(avail, AVAILABILITY_ONLINE, retain=True)
+    logger.debug("mqtt_availability_online", extra={"topic": avail})
+
+    for zone in zones:
+        object_id = zone_object_id(zone)
+        topic = zone_discovery_topic(object_id)
+        payload = zone_discovery_payload(zone, topic_prefix=topic_prefix)
+        body = json.dumps(payload, separators=(",", ":"))
+        await mqtt.publish(topic, body, retain=True)
+        logger.debug(
+            "mqtt_discovery_published",
+            extra={"topic": topic, "zone": zone.number, "object_id": object_id},
+        )
+
+
+async def publish_alarm_discovery(
+    mqtt: MqttPublisher,
+    *,
+    topic_prefix: str,
+    settings: Settings | None = None,
+) -> None:
+    """Publish retained alarm_control_panel discovery (ADR-003)."""
+    topic = alarm_discovery_topic()
+    payload = alarm_discovery_payload(topic_prefix=topic_prefix, settings=settings)
+    body = json.dumps(payload, separators=(",", ":"))
+    await mqtt.publish(topic, body, retain=True)
+    logger.debug(
+        "mqtt_alarm_discovery_published",
+        extra={"topic": topic, "object_id": ALARM_OBJECT_ID},
+    )
+
+
+async def publish_connectivity_discovery(
+    mqtt: MqttPublisher,
+    *,
+    topic_prefix: str,
+) -> None:
+    """Publish retained panel-connection connectivity binary_sensor discovery (ADR-004)."""
+    topic = connectivity_discovery_topic()
+    payload = connectivity_discovery_payload(topic_prefix=topic_prefix)
+    body = json.dumps(payload, separators=(",", ":"))
+    await mqtt.publish(topic, body, retain=True)
+    logger.debug(
+        "mqtt_connectivity_discovery_published",
+        extra={"topic": topic, "object_id": CONNECTIVITY_OBJECT_ID},
+    )
+
+
+READY_MODES = ("away", "home", "night")
+READY_ON = "ON"
+READY_OFF = "OFF"
+
+
+def ready_object_id(mode: str) -> str:
+    return f"texecom_alarm_ready_{mode}"
+
+
+def ready_state_topic(topic_prefix: str, mode: str) -> str:
+    return f"{topic_prefix}/ready/{mode}/state"
+
+
+def ready_command_topic(topic_prefix: str, mode: str) -> str:
+    return f"{topic_prefix}/ready/{mode}/command"
+
+
+def ready_discovery_topic(object_id: str) -> str:
+    return f"homeassistant/switch/{object_id}/config"
+
+
+def ready_discovery_payload(mode: str, *, topic_prefix: str) -> dict[str, object]:
+    object_id = ready_object_id(mode)
+    return {
+        "name": f"Ready to arm {mode.capitalize()}",
+        "unique_id": object_id,
+        "object_id": object_id,
+        "default_entity_id": f"switch.{object_id}",
+        "device": MQTT_DEVICE,
+        "state_topic": ready_state_topic(topic_prefix, mode),
+        "command_topic": ready_command_topic(topic_prefix, mode),
+        "availability_topic": availability_topic(topic_prefix),
+        "payload_available": AVAILABILITY_ONLINE,
+        "payload_not_available": AVAILABILITY_OFFLINE,
+        "payload_on": READY_ON,
+        "payload_off": READY_OFF,
+    }
+
+
+async def publish_ready_state(
+    mqtt: MqttPublisher,
+    *,
+    topic_prefix: str,
+    mode: str,
+    on: bool,
+) -> None:
+    """Publish retained ready-to-arm switch state (ON/OFF)."""
+    topic = ready_state_topic(topic_prefix, mode)
+    payload = READY_ON if on else READY_OFF
+    await mqtt.publish(topic, payload, retain=True)
+    logger.debug(
+        "mqtt_ready_state_published",
+        extra={"topic": topic, "mode": mode, "payload": payload},
+    )
+
+
+async def publish_ready_to_arm_discovery(
+    mqtt: MqttPublisher,
+    *,
+    topic_prefix: str,
+) -> None:
+    """Publish retained switch discovery and initial ON state (ADR-015)."""
+    for mode in READY_MODES:
+        object_id = ready_object_id(mode)
+        topic = ready_discovery_topic(object_id)
+        payload = ready_discovery_payload(mode, topic_prefix=topic_prefix)
+        body = json.dumps(payload, separators=(",", ":"))
+        await mqtt.publish(topic, body, retain=True)
+        logger.debug(
+            "mqtt_ready_discovery_published",
+            extra={"topic": topic, "object_id": object_id, "mode": mode},
+        )
+        await publish_ready_state(mqtt, topic_prefix=topic_prefix, mode=mode, on=True)
+
+
+# HA MQTT event entity for a refused arm (ADR-015).
+# Discovery: homeassistant/event/texecom_alarm_blocked_arm/config (retained)
+# State topic: {prefix}/blocked_arm/event (not retained)
+# Payload: {"event_type": "away"|"home"|"night"} — mode only, no reason.
+BLOCKED_ARM_OBJECT_ID = "texecom_alarm_blocked_arm"
+BLOCKED_ARM_EVENT_TYPES = READY_MODES
+
+
+def blocked_arm_object_id() -> str:
+    return BLOCKED_ARM_OBJECT_ID
+
+
+def blocked_arm_state_topic(topic_prefix: str) -> str:
+    return f"{topic_prefix}/blocked_arm/event"
+
+
+def blocked_arm_discovery_topic(object_id: str = BLOCKED_ARM_OBJECT_ID) -> str:
+    return f"homeassistant/event/{object_id}/config"
+
+
+def blocked_arm_discovery_payload(*, topic_prefix: str) -> dict[str, object]:
+    object_id = BLOCKED_ARM_OBJECT_ID
+    return {
+        "name": "Blocked arm",
+        "unique_id": object_id,
+        "object_id": object_id,
+        "default_entity_id": f"event.{object_id}",
+        "device": MQTT_DEVICE,
+        "state_topic": blocked_arm_state_topic(topic_prefix),
+        "availability_topic": availability_topic(topic_prefix),
+        "payload_available": AVAILABILITY_ONLINE,
+        "payload_not_available": AVAILABILITY_OFFLINE,
+        "event_types": list(BLOCKED_ARM_EVENT_TYPES),
+    }
+
+
+async def publish_blocked_arm_discovery(
+    mqtt: MqttPublisher,
+    *,
+    topic_prefix: str,
+) -> None:
+    """Publish retained MQTT event discovery for refused arms (ADR-015)."""
+    topic = blocked_arm_discovery_topic()
+    payload = blocked_arm_discovery_payload(topic_prefix=topic_prefix)
+    body = json.dumps(payload, separators=(",", ":"))
+    await mqtt.publish(topic, body, retain=True)
+    logger.debug(
+        "mqtt_blocked_arm_discovery_published",
+        extra={"topic": topic, "object_id": BLOCKED_ARM_OBJECT_ID},
+    )
+
+
+async def publish_blocked_arm_event(
+    mqtt: MqttPublisher,
+    *,
+    topic_prefix: str,
+    mode: str,
+) -> None:
+    """Publish a one-shot blocked-arm event naming ``mode``; not retained, no reason."""
+    topic = blocked_arm_state_topic(topic_prefix)
+    body = json.dumps({"event_type": mode}, separators=(",", ":"))
+    await mqtt.publish(topic, body, retain=False)
+    logger.debug(
+        "mqtt_blocked_arm_event_published",
+        extra={"topic": topic, "mode": mode},
+    )

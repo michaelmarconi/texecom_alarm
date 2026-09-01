@@ -1,0 +1,74 @@
+configuration:
+  panel_host:
+    name: Panel host
+    description: IP address or hostname of the panel’s network module on your LAN.
+  panel_port:
+    name: Panel port
+    description: Network port for the panel connection (default 10001).
+  udl_password:
+    name: Panel UDL password
+    description: >-
+      Password used to log in to the panel. Default is often 1234 — ask your
+      installer if login fails.
+  mqtt_host:
+    name: MQTT host
+    description: Your MQTT broker (for example core-mosquitto).
+  mqtt_port:
+    name: MQTT port
+    description: MQTT broker port (default 1883).
+  mqtt_username:
+    name: MQTT username
+    description: Optional. Leave blank if your broker does not need a login.
+  mqtt_password:
+    name: MQTT password
+    description: Optional. Leave blank if unused.
+  mqtt_topic_prefix:
+    name: MQTT topic prefix
+    description: Root name for topics this add-on publishes (default texecom).
+  part_arm_1:
+    name: Part-Arm slot 1
+    description: >-
+      Which Home Assistant button (Home or Night) this Part-Arm slot should
+      use — or Unused if that slot is not set up on your panel. Away is always
+      full arm and is not listed here.
+  part_arm_2:
+    name: Part-Arm slot 2
+    description: >-
+      Which Home Assistant button (Home or Night) this Part-Arm slot should
+      use — or Unused if that slot is not set up on your panel. Away is always
+      full arm and is not listed here.
+  part_arm_3:
+    name: Part-Arm slot 3
+    description: >-
+      Which Home Assistant button (Home or Night) this Part-Arm slot should
+      use — or Unused if that slot is not set up on your panel. Away is always
+      full arm and is not listed here.
+  reconnect_delay_seconds:
+    name: Reconnection delay
+    description: >-
+      Seconds to wait before retrying after any panel disconnect (default 5).
+      Must be at least 2 seconds so the panel can free its connection slot.
+  reconciliation_poll_interval_seconds:
+    name: Recheck interval
+    description: >-
+      How often the add-on double-checks the alarm state against the panel
+      and corrects it if they disagree (default 300 seconds / 5 minutes).
+      Doesn't affect Alarm Panel Connection — that's driven by keepalives
+      instead.
+  checkin_interval_seconds:
+    name: Check-in interval
+    description: >-
+      How often the add-on checks in with the panel to confirm the connection
+      is still alive (default 15 seconds). Stays on a fixed schedule
+      regardless of how busy the panel is.
+  checkin_patience_seconds:
+    name: Check-in patience
+    description: >-
+      How long a refused or unanswered check-in is tolerated before the
+      add-on treats the session as dead and reconnects (default 45 seconds
+      — about three check-ins). Must be at least the check-in interval.
+  log_level:
+    name: Log level
+    description: >-
+      WARNING (quiet), INFO (everyday), DEBUG (more detail), or TRACE (full
+      panel traffic for tricky connection issues).
