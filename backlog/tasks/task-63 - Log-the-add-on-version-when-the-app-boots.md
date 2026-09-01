@@ -1,10 +1,10 @@
 ---
 id: TASK-63
 title: Log the add-on version when the app boots
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-09-01 09:44'
-updated_date: '2026-09-01 11:50'
+updated_date: '2026-09-01 11:51'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -28,9 +28,9 @@ ordinal: 57000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A successful boot logs the add-on version at INFO, visible at the default log level
-- [ ] #2 The logged version matches the package version
-- [ ] #3 The line is emitted after log level is applied, not as a TRACE-only or pre-config leak
+- [x] #1 A successful boot logs the add-on version at INFO, visible at the default log level
+- [x] #2 The logged version matches the package version
+- [x] #3 The line is emitted after log level is applied, not as a TRACE-only or pre-config leak
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -60,5 +60,5 @@ Verification: PYTHONPATH=src pytest tests/test_app_mqtt.py -q → 21 passed; pyt
 Notes/assumptions: The line is emitted from main() immediately after configure_logging, not from run(), so reconnects do not repeat it. Default log_level=INFO is what the test drives.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
