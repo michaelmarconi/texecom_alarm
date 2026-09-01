@@ -1,9 +1,10 @@
 ---
 id: TASK-62
 title: 'Checkpoint: texecom-alarm-app busy-versus-dead session wave'
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-08-31 21:20'
+updated_date: '2026-09-01 08:34'
 labels:
   - 'container:texecom-alarm-app'
   - 'type:checkpoint'
