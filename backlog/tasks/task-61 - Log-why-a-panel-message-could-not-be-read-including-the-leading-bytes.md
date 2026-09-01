@@ -58,3 +58,10 @@ When `try_decode_frame` yields no frame and the session is ended (unexpected byt
 
 How we'll know: unit tests capturing log records (no live panel). Command: `cd texecom_alarm && python -m pytest tests/test_protocol_client.py tests/test_protocol_frame.py -q`. Inject non-Connect bytes; assert a non-TRACE log contains a reason and leading hex; session still ForcedDisconnect without skipping bytes. FakePanel e2e already forbids skip-and-resync — keep that green at the checkpoint.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
