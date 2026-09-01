@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-01
+
+### Changed
+
+- After a successful arm or disarm, the add-on no longer asks the panel again
+  for alarm flags when live events already updated the card, so the session
+  stays quieter while the panel is busy.
+
+### Fixed
+
+- A garbled follow-up read after a successful arm or disarm is treated as a
+  session collision (reconnect; **Alarm Panel Connection** stays on if the
+  first re-login works), not as a failed tap that turns Connection off.
+- When a panel message cannot be read, the log now includes why and the
+  leading bytes, so a torn message can be told from a hang-up.
+
 ## [0.3.0] - 2026-08-29
 
 ### Added
