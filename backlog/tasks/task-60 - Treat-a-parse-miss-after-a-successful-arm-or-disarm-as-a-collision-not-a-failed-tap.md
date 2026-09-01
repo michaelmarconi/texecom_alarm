@@ -3,10 +3,10 @@ id: TASK-60
 title: >-
   Treat a parse miss after a successful arm or disarm as a collision, not a
   failed tap
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-08-31 21:19'
-updated_date: '2026-08-31 21:51'
+updated_date: '2026-09-01 00:12'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -71,6 +71,12 @@ How we'll know: unit + end-to-end against FakePanel. Command: `cd texecom_alarm 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Post-ACK housekeeping parse miss is a collision (resync, Connection stays on if attempt 1 succeeds), not a failed arm/disarm.
+Changed files: texecom_alarm/src/texecom_alarm/arm_commands.py, texecom_alarm/src/texecom_alarm/panel_trust.py, texecom_alarm/src/texecom_alarm/reconnect.py, texecom_alarm/src/texecom_alarm/app.py, texecom_alarm/src/texecom_alarm/protocol/client.py, texecom_alarm/tests/test_arm_commands.py, texecom_alarm/tests/test_panel_trust.py, texecom_alarm/tests/test_e2e_fake_panel.py, texecom_alarm/tests/fake_panel.py
+Verification: How we'll know `python -m pytest tests/test_arm_commands.py tests/test_panel_trust.py tests/test_e2e_fake_panel.py -q` → 90 passed. DoD: `pytest --cov=texecom_alarm --cov-fail-under=90 -q` → 392 passed, 92% coverage; `ruff check` and `ruff format --check` clean.
+Notes/assumptions: FakePanel does not prove a real Premier Elite torn-frame stays quiet on Connection. GetAreaFlags NAK/timeout after ACK still records as command failure (existing behaviour; only ForcedDisconnect/decode miss is collision). `recv_message` now raises ForcedDisconnect after a torn-down session (same as send_command) so closing from the command path wakes listen into reconnect instead of aborting the app.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
