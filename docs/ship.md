@@ -21,7 +21,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | Backups | n/a | No extra datastore; HA backup of add-on options is sufficient |
 | Official HA Apps store | n/a | Community GitHub repository is the intended path |
 | Store-shaped repository | pass | Root `repository.yaml` + App in `texecom_alarm/`; store URL uses generated `#app` branch |
-| Pre-built images (GHCR) | pending | `0.3.1` published. `0.3.2` cut locally; GHCR not confirmed yet |
+| Pre-built images (GHCR) | pass | `0.3.2` published (`docker manifest inspect` amd64 + arm64; Builder run 33506407255) |
 | RISK-017 fingerprint | pass | Working tree + history rewrite complete (recorded 2026-08-23) |
 | CHANGELOG vs product | pass | `[0.3.2]` records garage-return Connection stay-on and INFO boot version — household language, no pipeline IDs |
 | Licence label consistency | pass | `Dockerfile` OCI label is MIT |
@@ -31,7 +31,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 ## Deploy
 
 - Authorized: yes — 2026-09-01 (practitioner chose Authorize deploy; skip store rehearsal)
-- Step performed: in progress — bumped to `0.3.2`
+- Step performed: yes — bumped to `0.3.2` (`de1d51c`); pushed `main`; Tag version created `v0.3.2`; Sync app branch refreshed `#app` (`version: "0.3.2"` + `image:`). Builder dispatched (`gh workflow run builder.yml --ref v0.3.2 -f version=0.3.2`) — succeeded, GHCR `0.3.2` amd64 + arm64 confirmed. Store Update rehearsal skipped this cut. Local add-on left stopped so household HA can take the panel slot.
 
 Prior Authorized deploy (kept for history):
 - 0.3.1 — 2026-09-01: bumped (`bdfe239`); pushed `main`; Tag version created `v0.3.1`; Sync app branch refreshed `#app` (`version: "0.3.1"` + `image:`). Builder dispatched (`gh workflow run builder.yml --ref v0.3.1 -f version=0.3.1`) — succeeded, GHCR `0.3.1` amd64 + aarch64 confirmed. Store Update rehearsal `STORE_UPGRADE_SMOKE_PASS from=0.3.0 to=0.3.1`. Local add-on left stopped so household HA can take the panel slot.
