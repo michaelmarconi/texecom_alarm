@@ -16,6 +16,7 @@ from texecom_alarm.area_state import (
     HOUSE_AREA_NUMBER,
     area_size_for_zones,
     decode_area_ha_state,
+    mqtt_payload_for_area_state,
     publish_alarm_state,
 )
 from texecom_alarm.config import Settings
@@ -30,7 +31,7 @@ from texecom_alarm.panel_trust import (
     PanelTrust,
 )
 from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient, ProtocolError
-from texecom_alarm.protocol.frame import AREA_FLAGS_COUNT
+from texecom_alarm.protocol.frame import AREA_FLAGS_COUNT, MSG_AREA
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,39 @@ class MqttPublisher(Protocol):
     ) -> None: ...
 
 
+def _alarm_payload_from_queued_area(panel: object, settings: Settings) -> str | None:
+    """Read live AREA already queued during the ACK wait, then put frames back.
+
+    Garage return sends AREA disarmed as interleaved ``M`` frames while disarm
+    is in flight. Those sit on the command queue until the listen loop runs,
+    so MQTT still looks armed when we decide whether to ask for flags.
+    """
+    if not isinstance(panel, PanelClient):
+        return None
+    frames = panel.take_queued_messages()
+    latest: str | None = None
+    for frame in frames:
+        body = frame.body
+        if body and body[0] == MSG_AREA and len(body) >= 3 and body[1] == HOUSE_AREA_NUMBER:
+            decoded = mqtt_payload_for_area_state(body[2], settings)
+            if decoded is not None:
+                latest = decoded
+    for frame in frames:
+        panel.enqueue_unsolicited(frame)
+    return latest
+
+
+def _payload_after_ack(
+    panel: object,
+    settings: Settings,
+    get_current_alarm_state: Callable[[], str | None] | None,
+    fallback: str | None,
+) -> str | None:
+    current = get_current_alarm_state() if get_current_alarm_state is not None else fallback
+    queued = _alarm_payload_from_queued_area(panel, settings)
+    return queued if queued is not None else current
+
+
 async def _refresh_alarm_from_flags(
     panel: PanelClient,
     settings: Settings,
@@ -76,7 +110,9 @@ async def _refresh_alarm_from_flags(
     live AREA/LOG has not already published the new alarm state.
 
     An unreadable reply after the tap already ACK'd is re-raised so the session
-    can log in again; it is not recorded as a failed arm or disarm.
+    can log in again; it is not recorded as a failed arm or disarm. A NAK or
+    timeout on this housekeeping read is the panel being busy, not a lost
+    connection — Connection stays as it was.
     """
     if mqtt is None or topic_prefix is None or zone_count is None:
         return None
@@ -129,23 +165,19 @@ async def _refresh_alarm_from_flags(
         return decoded
     except ProtocolError as exc:
         logger.warning(
-            "Panel rejected area-flags refresh after %s: %s",
+            "Area-flags refresh after %s was rejected: %s "
+            "The command already succeeded; this is not a failed tap.",
             "arm" if is_arm else "disarm",
             exc,
         )
-        if trust is not None:
-            reason = REASON_ARM_NAK if is_arm else REASON_DISARM_NAK
-            await trust.record_command_failure(reason, ha_mode=ha_mode)
         return None
     except TimeoutError as exc:
         logger.warning(
-            "Area-flags refresh after %s timed out: %s",
+            "Area-flags refresh after %s timed out: %s "
+            "The command already succeeded; the panel was busy, not gone.",
             "arm" if is_arm else "disarm",
             exc,
         )
-        if trust is not None:
-            reason = REASON_ARM_TIMEOUT if is_arm else REASON_DISARM_TIMEOUT
-            await trust.record_command_failure(reason, ha_mode=ha_mode)
         return None
     except ForcedDisconnect as exc:
         logger.warning(
@@ -211,11 +243,8 @@ async def handle_alarm_command(
             if trust is not None:
                 await trust.record_command_failure(REASON_DISARM_DISCONNECT)
             return None
-        # Re-read live state after ACK — AREA/trust may have moved MQTT during the command.
-        if get_current_alarm_state is not None:
-            current_after = get_current_alarm_state()
-        else:
-            current_after = current
+        # Re-read live state after ACK — AREA may already be queued from the wait.
+        current_after = _payload_after_ack(panel, settings, get_current_alarm_state, current)
         return await _refresh_alarm_from_flags(
             panel,
             settings,
@@ -321,7 +350,7 @@ async def handle_alarm_command(
             )
         return None
     # Re-read live state after ACK — AREA may have pushed arming during the command.
-    current_after = get_current_alarm_state() if get_current_alarm_state is not None else current
+    current_after = _payload_after_ack(panel, settings, get_current_alarm_state, current)
     return await _refresh_alarm_from_flags(
         panel,
         settings,

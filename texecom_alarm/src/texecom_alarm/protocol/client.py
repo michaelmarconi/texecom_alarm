@@ -103,6 +103,20 @@ class PanelClient:
         self._io_lock = asyncio.Lock()
         self._pending_cmd: int | None = None
 
+    def take_queued_messages(self) -> list[Frame]:
+        """Remove and return unsolicited ``'M'`` frames queued during a command wait."""
+        frames: list[Frame] = []
+        while True:
+            try:
+                frames.append(self._message_queue.get_nowait())
+            except asyncio.QueueEmpty:
+                break
+        return frames
+
+    def enqueue_unsolicited(self, frame: Frame) -> None:
+        """Put an unsolicited frame back for the listen loop to apply."""
+        self._message_queue.put_nowait(frame)
+
     def _not_connected_error(self, *, action: str) -> Exception:
         """ProtocolError if never connected; ForcedDisconnect after a torn-down session."""
         if self._had_transport:

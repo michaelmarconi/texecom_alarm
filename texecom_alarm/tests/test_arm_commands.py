@@ -439,8 +439,8 @@ async def test_successful_arm_home_publishes_part_arm_snapshot() -> None:
 
 
 @pytest.mark.asyncio
-async def test_snapshot_nak_after_disarm_records_trust_without_retry() -> None:
-    """Snapshot failure after ACK degrades trust; must not re-issue disarm."""
+async def test_flags_nak_after_disarm_ack_does_not_retry_disarm() -> None:
+    """Housekeeping NAK after a successful disarm ACK must not send disarm again."""
     from texecom_alarm.panel_trust import PanelTrust
 
     panel = MagicMock()
@@ -459,11 +459,77 @@ async def test_snapshot_nak_after_disarm_records_trust_without_retry() -> None:
         topic_prefix="texecom",
         zone_count=12,
         trust=trust,
+        get_current_alarm_state=lambda: "armed_away",
     )
 
     panel.set_area_disarm.assert_awaited_once_with()
-    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
-    assert trust.live is False
+    panel.get_area_flags.assert_awaited()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_flags_nak_after_disarm_ack_does_not_turn_connection_off() -> None:
+    """Disarm already ACK'd; a rejected flags read is busy, not a failed disarm."""
+    from texecom_alarm.panel_trust import PanelTrust
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.get_area_flags = AsyncMock(side_effect=ProtocolError("GetAreaFlags NAK"))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+    await trust.note_keepalive_ok()
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        zone_count=12,
+        trust=trust,
+        get_current_alarm_state=lambda: "armed_away",
+    )
+
+    panel.set_area_disarm.assert_awaited_once_with()
+    panel.get_area_flags.assert_awaited()
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    assert trust.live is True
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_flags_timeout_after_disarm_ack_does_not_turn_connection_off() -> None:
+    """Disarm already ACK'd; a starved flags read is busy, not a failed disarm."""
+    from texecom_alarm.panel_trust import PanelTrust
+
+    panel = MagicMock()
+    panel.set_area_disarm = AsyncMock()
+    panel.get_area_flags = AsyncMock(
+        side_effect=TimeoutError("Panel at 192.168.1.51:10001 did not answer GetAreaFlags in time.")
+    )
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+    await trust.note_keepalive_ok()
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "DISARM",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        zone_count=12,
+        trust=trust,
+        get_current_alarm_state=lambda: "armed_away",
+    )
+
+    panel.set_area_disarm.assert_awaited_once_with()
+    panel.get_area_flags.assert_awaited()
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    assert trust.live is True
     assert result is None
 
 

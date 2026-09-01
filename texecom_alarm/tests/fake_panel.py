@@ -88,6 +88,15 @@ class FakePanel:
         # and retry with the same sequence (TASK-47 / 2026-08-27 near-miss shape).
         # Cleared on successful re-LOGIN.
         self.eat_keepalive_attempts_with_message = 0
+        # Counts down: while > 0, answer GetAreaFlags with a burst of unsolicited
+        # 'M' zone pushes and no response — garage-return shape where the flags
+        # follow-up is starved by live events after a successful disarm ACK.
+        # Cleared on successful re-LOGIN.
+        self.eat_area_flags_attempts_with_messages = 0
+        self.eat_area_flags_burst = 8
+        # Unsolicited 'M' bodies emitted immediately before the SETAREADISARM
+        # reply (live AREA/LOG during the ACK wait). Consumed on that disarm.
+        self.interleave_messages_before_disarm: list[bytes] = []
         self.interleave_message_before_response: bytes | None = None
         self.stale_sequence_before_response = False
         self.wrong_cmd_before_response = False
@@ -281,6 +290,25 @@ class FakePanel:
             await writer.drain()
             logger.debug("fake_panel_injected_garbage", extra={"bytes": junk.hex()})
 
+        if cmd == CMD_GET_AREA_FLAGS and self.eat_area_flags_attempts_with_messages > 0:
+            self.eat_area_flags_attempts_with_messages -= 1
+            burst = max(1, self.eat_area_flags_burst)
+            for i in range(burst):
+                writer.write(encode_frame(TYPE_MESSAGE, 0, bytes([MSG_ZONE, 1 + (i % 8), 0x01])))
+            await writer.drain()
+            logger.debug(
+                "fake_panel_ate_area_flags_attempt_with_messages",
+                extra={"burst": burst},
+            )
+            return
+
+        if cmd == CMD_SET_AREA_DISARM and self.interleave_messages_before_disarm:
+            bodies = self.interleave_messages_before_disarm
+            self.interleave_messages_before_disarm = []
+            for msg_body in bodies:
+                writer.write(encode_frame(TYPE_MESSAGE, 0, msg_body))
+            await writer.drain()
+
         if self.interleave_message_before_response is not None:
             msg_body = self.interleave_message_before_response
             self.interleave_message_before_response = None
@@ -319,6 +347,8 @@ class FakePanel:
             self.nak_keepalive = False
             self.wrong_shape_keepalive_replies = 0
             self.eat_keepalive_attempts_with_message = 0
+            self.eat_area_flags_attempts_with_messages = 0
+            self.interleave_messages_before_disarm = []
             # Fresh login clears soft-zombie trust-poll NAK (ADR-011 bounded re-login).
             self.nak_area_flags_until_relogin = False
             self.garbage_next_area_flags = False

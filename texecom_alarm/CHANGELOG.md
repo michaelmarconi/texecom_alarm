@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- After a successful disarm (or arm), a flags follow-up that times out or is
+  rejected no longer turns **Alarm Panel Connection** off. The tap already
+  succeeded; the panel is busy, not gone. Live AREA that arrived during the
+  ACK is used so the extra flags read is skipped on a garage-return burst.
+
 ## [0.3.1] - 2026-09-01
 
 ### Changed

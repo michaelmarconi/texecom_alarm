@@ -27,6 +27,8 @@ from texecom_alarm.protocol.frame import (
     CMD_LOGIN,
     CMD_SET_AREA_ARM,
     CMD_SETEVENTMESSAGES,
+    MSG_AREA,
+    MSG_LOG,
 )
 
 _MOSQUITTO_IMAGE = "eclipse-mosquitto:2"
@@ -1048,6 +1050,179 @@ async def test_e2e_home_disarm_without_area_still_reads_flags() -> None:
         assert panel.disarm_calls >= 1
         assert panel.area_flags_calls > flags_before
         assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+# Live 2026-09-01 garage return: AREA disarmed (3-byte M) then LOG (9-byte M)
+# interleaved during SETAREADISARM, then ACK. Hex matches the household dump.
+_GARAGE_RETURN_AREA_DISARMED = bytes([MSG_AREA, 1, 0])
+_GARAGE_RETURN_LOG_MODE_ACTION = bytes.fromhex("052a05010195992a68")
+assert _GARAGE_RETURN_LOG_MODE_ACTION[0] == MSG_LOG
+
+
+async def _wait_e2e_command_surface(task: asyncio.Task[None], mqtt: RecordingMqttPublisher) -> None:
+    for _ in range(150):
+        if "texecom/alarm/command" in mqtt.subscribed and mqtt.payloads_for("texecom/alarm/state"):
+            return
+        if task.done():
+            exc = task.exception()
+            if exc is not None:
+                raise exc
+        await asyncio.sleep(0.02)
+    raise AssertionError("add-on did not subscribe to alarm commands in time")
+
+
+@pytest.mark.asyncio
+async def test_e2e_garage_return_area_during_disarm_ack_skips_flags_read() -> None:
+    """Live AREA disarmed arrives during the disarm ACK wait — do not ask flags."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel, mqtt_port=1883)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        await _wait_e2e_command_surface(task, mqtt)
+
+        await panel.inject_area_message(area_number=1, state=3)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_away":
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_away"
+
+        flags_before = panel.area_flags_calls
+        panel.interleave_messages_before_disarm = [
+            _GARAGE_RETURN_AREA_DISARMED,
+            _GARAGE_RETURN_LOG_MODE_ACTION,
+        ]
+        await mqtt.push_inbound("texecom/alarm/command", "DISARM")
+        for _ in range(150):
+            if panel.disarm_calls >= 1 and mqtt.payloads_for("texecom/alarm/state")[-1] == (
+                "disarmed"
+            ):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+
+        assert panel.disarm_calls >= 1
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+        await asyncio.sleep(0.15)
+        assert panel.area_flags_calls == flags_before
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_garage_return_disarm_keeps_connection_on_when_flags_starved() -> None:
+    """Garage-return 2026-09-01: disarm ACK succeeds, then GetAreaFlags is eaten
+    by zone events. Connection must stay on — the panel is busy, not gone.
+    """
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[
+            FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00),
+            FakeZone(number=42, zone_type=2, name="GARAGE MIR", status=0x00),
+        ],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = Settings(
+            panel_host=panel.host,
+            panel_port=panel.port,
+            udl_password="1234",
+            mqtt_host="127.0.0.1",
+            mqtt_port=1883,
+            mqtt_username="",
+            mqtt_password="",
+            mqtt_topic_prefix="texecom",
+            part_arm_1="night",
+            part_arm_2="home",
+            part_arm_3="unused",
+            checkin_interval_seconds=0.4,
+            checkin_patience_seconds=1.2,
+        )
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.2,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        await _wait_e2e_command_surface(task, mqtt)
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+
+        await panel.inject_area_message(area_number=1, state=3)
+        for _ in range(100):
+            if mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_away":
+                break
+            await asyncio.sleep(0.02)
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_away"
+
+        keepalive_before = panel.keepalive_attempts
+        panel.interleave_messages_before_disarm = [
+            _GARAGE_RETURN_AREA_DISARMED,
+            _GARAGE_RETURN_LOG_MODE_ACTION,
+        ]
+        panel.eat_area_flags_attempts_with_messages = 2
+        panel.eat_area_flags_burst = 10
+        await mqtt.push_inbound("texecom/alarm/command", "DISARM")
+
+        for _ in range(200):
+            if panel.disarm_calls >= 1 and (
+                mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+                or mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+            ):
+                break
+            if task.done():
+                exc = task.exception()
+                if exc is not None:
+                    raise exc
+            await asyncio.sleep(0.02)
+        # Let both GetAreaFlags attempts exhaust (0.2s timeout × 2).
+        await asyncio.sleep(0.55)
+
+        assert panel.disarm_calls >= 1
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+        assert "OFF" not in mqtt.payloads_for("texecom/panel_connection/state")
+        for _ in range(100):
+            if panel.keepalive_attempts > keepalive_before:
+                break
+            await asyncio.sleep(0.05)
+        assert panel.keepalive_attempts > keepalive_before
 
         stop.set()
         await asyncio.wait_for(task, timeout=2.0)
