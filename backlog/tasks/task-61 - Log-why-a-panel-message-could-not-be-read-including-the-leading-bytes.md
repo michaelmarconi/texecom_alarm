@@ -4,7 +4,7 @@ title: 'Log why a panel message could not be read, including the leading bytes'
 status: awaiting-review
 assignee: []
 created_date: '2026-08-31 21:20'
-updated_date: '2026-09-01 08:28'
+updated_date: '2026-09-01 08:33'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -69,5 +69,5 @@ Verification: Unit tests capturing log records (no live panel). `cd texecom_alar
 Notes/assumptions: Log event is `panel_decode_miss reason=%s leading_hex=%s` at WARNING (not TRACE). Reasons: `not 't'`, `bad length`, `bad CRC`, `unknown type`. Leading hex is the first 32 buffer bytes. `+++` still raises ForcedDisconnect with its existing message and does not emit `panel_decode_miss`. Skip-and-resync was not restored.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
