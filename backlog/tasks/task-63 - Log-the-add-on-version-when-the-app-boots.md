@@ -49,3 +49,10 @@ After log level is applied at process start, emit one INFO line that includes th
 
 How we'll know: unit test capturing log records (no live panel). Command: `cd texecom_alarm && python -m pytest tests/test_app_mqtt.py -q`. Drive `main()` with settings loaded and asyncio.run stubbed; after `configure_logging`, assert an INFO record contains `__version__`. Default INFO must show it; TRACE-only is a fail.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
