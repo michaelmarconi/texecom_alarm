@@ -3,10 +3,10 @@ id: TASK-60
 title: >-
   Treat a parse miss after a successful arm or disarm as a collision, not a
   failed tap
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-31 21:19'
-updated_date: '2026-09-01 05:26'
+updated_date: '2026-09-01 05:51'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -41,9 +41,9 @@ Corrective for TASK-7 (left done; this task is the rework). FakePanel is not pro
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 After a successful arm or disarm ACK, a housekeeping parse miss is not recorded as arm/disarm command failure
-- [ ] #2 Connection stays on when the first re-login after that miss succeeds; zone and alarm state are re-read from the panel
-- [ ] #3 A refused or timed-out arm or disarm still turns Connection off immediately and is not re-issued by heal
+- [x] #1 After a successful arm or disarm ACK, a housekeeping parse miss is not recorded as arm/disarm command failure
+- [x] #2 Connection stays on when the first re-login after that miss succeeds; zone and alarm state are re-read from the panel
+- [x] #3 A refused or timed-out arm or disarm still turns Connection off immediately and is not re-issued by heal
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -78,5 +78,5 @@ Verification: How we'll know `python -m pytest tests/test_arm_commands.py tests/
 Notes/assumptions: FakePanel does not prove a real Premier Elite torn-frame stays quiet on Connection. GetAreaFlags NAK/timeout after ACK still records as command failure (existing behaviour; only ForcedDisconnect/decode miss is collision). `recv_message` now raises ForcedDisconnect after a torn-down session (same as send_command) so closing from the command path wakes listen into reconnect instead of aborting the app.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
