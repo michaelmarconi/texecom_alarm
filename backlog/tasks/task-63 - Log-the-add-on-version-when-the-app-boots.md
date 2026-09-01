@@ -4,7 +4,7 @@ title: Log the add-on version when the app boots
 status: awaiting-review
 assignee: []
 created_date: '2026-09-01 09:44'
-updated_date: '2026-09-01 11:48'
+updated_date: '2026-09-01 11:50'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -60,5 +60,5 @@ Verification: PYTHONPATH=src pytest tests/test_app_mqtt.py -q → 21 passed; pyt
 Notes/assumptions: The line is emitted from main() immediately after configure_logging, not from run(), so reconnects do not repeat it. Default log_level=INFO is what the test drives.
 
 ## Build phase
-phase: awaiting-review
+phase: awaiting-merge-signoff
 <!-- SECTION:FINAL_SUMMARY:END -->
