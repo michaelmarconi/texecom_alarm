@@ -22,6 +22,13 @@ ordinal: 56000
 - [ ] #3 Wave e2e: FakePanel omits post-ACK GetAreaFlags when live AREA already published; ACK then unparseable housekeeping is not command-failure and Connection stays on if re-login succeeds on attempt 1; decode-fail logs reason plus leading hex at INFO or WARNING; patience, refused-arm Connection-off, and never-skip-bytes stay green
 <!-- AC:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 docs/architecture.md session health (ADR-021) is not violated: extra flags read omitted when live events already published; collision after ACK is not a failed tap; Connection on if attempt-1 re-login succeeds
