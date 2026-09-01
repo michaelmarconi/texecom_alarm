@@ -105,6 +105,10 @@ class PanelTrust:
         self._degraded_since: float | None = None
         self._last_failure_reason: str | None = None
         self._last_failure_ha_mode: str | None = None
+        # Set when a follow-up read after a successful arm/disarm could not be
+        # parsed. Reconnect consumes this so a first-attempt re-login can keep
+        # Connection on instead of treating the tap as failed.
+        self._session_collision = False
         # Separate from _degraded_since/_mark_degraded on purpose (ADR-020): a
         # refused/unanswered check-in must never touch Connection/_live by
         # itself, only this streak-since timestamp, kept fully independent of
@@ -175,6 +179,20 @@ class PanelTrust:
             return False
         return (self._clock() - self._checkin_failure_since) >= self._checkin_patience
 
+    def note_session_collision(self) -> None:
+        """Remember that a successful tap's follow-up read could not be parsed.
+
+        Does not record a command failure and does not flip Connection off —
+        reconnect decides that from whether the first re-login succeeds.
+        """
+        self._session_collision = True
+
+    def consume_session_collision(self) -> bool:
+        """Return and clear the pending post-ACK parse-miss flag."""
+        flagged = self._session_collision
+        self._session_collision = False
+        return flagged
+
     async def reset_after_reconnect(self) -> None:
         """Clear degrade memory and republish panel-link ON after recovery.
 
@@ -192,6 +210,7 @@ class PanelTrust:
         self._last_failure_reason = None
         self._last_failure_ha_mode = None
         self._checkin_failure_since = None
+        self._session_collision = False
         await publish_panel_link_state(
             self._mqtt,
             topic_prefix=self._topic_prefix,

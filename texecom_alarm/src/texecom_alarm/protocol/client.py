@@ -340,7 +340,7 @@ class PanelClient:
         if not self._message_queue.empty():
             return self._message_queue.get_nowait()
         if self._reader is None:
-            raise ProtocolError("Not connected to the panel — cannot wait for zone/area messages.")
+            raise self._not_connected_error(action="wait for zone/area messages")
         wait_timeout = self.response_timeout if timeout is None else timeout
         deadline = asyncio.get_running_loop().time() + wait_timeout
         # Poll in short slices so MQTT-driven send_command can acquire _io_lock.

@@ -34,6 +34,9 @@ from texecom_alarm.panel_trust import (
     PanelTrust,
 )
 from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient, ProtocolError
+from texecom_alarm.protocol.frame import CMD_GET_AREA_FLAGS, CMD_GET_ZONE_STATE, CMD_LOGIN
+from texecom_alarm.reconnect import reconnect_after_disconnect
+from texecom_alarm.zones import Zone
 
 
 def _settings(panel: FakePanel | None = None, **overrides: object) -> Settings:
@@ -272,6 +275,123 @@ async def test_disarm_on_a_dead_socket_records_a_command_failure() -> None:
         assert _extra(warnings[-1])["reason"] == REASON_DISARM_DISCONNECT
         # Availability still belongs to the process alone (ADR-004).
         assert mqtt.payloads_for(availability_topic("texecom"))[-1] == AVAILABILITY_ONLINE
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_session_collision_does_not_record_a_command_failure() -> None:
+    """An unreadable follow-up after a successful tap is not a failed arm/disarm."""
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = _trust(mqtt)
+    await trust.note_keepalive_ok()
+
+    trust.note_session_collision()
+
+    assert trust.live is True
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    assert trust.consume_session_collision() is True
+    assert trust.consume_session_collision() is False
+
+
+@pytest.mark.asyncio
+async def test_collision_resync_keeps_connection_on_when_first_relogin_succeeds() -> None:
+    """First re-login after a post-ACK parse miss must not publish Connection off."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = PanelClient(
+            panel.host, panel.port, udl_password="1234", login_delay=0.0, response_timeout=0.5
+        )
+        await client.connect()
+        await client.login()
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+        settings = _settings(panel, reconnect_delay_seconds=0.01)
+        zones = [Zone(number=1, zone_type=1, name="DOOR")]
+        cmds_before = list(panel.commands_seen)
+
+        async def instant_sleep(_delay: float) -> None:
+            return None
+
+        await reconnect_after_disconnect(
+            client,
+            mqtt,
+            settings=settings,
+            zones=zones,
+            zone_count=12,
+            sleep=instant_sleep,
+            collision=True,
+        )
+
+        link = mqtt.payloads_for("texecom/panel_connection/state")
+        assert "OFF" not in link
+        assert link[-1] == "ON"
+        new_cmds = panel.commands_seen[len(cmds_before) :]
+        assert CMD_LOGIN in new_cmds
+        assert CMD_GET_ZONE_STATE in new_cmds
+        assert CMD_GET_AREA_FLAGS in new_cmds
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_collision_resync_turns_connection_off_when_first_relogin_fails() -> None:
+    """If the first collision re-login fails, Connection goes off and keep-trying continues."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = PanelClient(
+            panel.host, panel.port, udl_password="1234", login_delay=0.0, response_timeout=0.5
+        )
+        await client.connect()
+        await client.login()
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+        settings = _settings(panel, reconnect_delay_seconds=0.01)
+        zones = [Zone(number=1, zone_type=1, name="DOOR")]
+
+        fails_left = {"n": 1}
+        real_connect = client.connect
+
+        async def flaky_connect() -> None:
+            if fails_left["n"] > 0:
+                fails_left["n"] -= 1
+                raise OSError("connection refused")
+            await real_connect()
+
+        client.connect = flaky_connect  # type: ignore[method-assign]
+
+        async def instant_sleep(_delay: float) -> None:
+            return None
+
+        await reconnect_after_disconnect(
+            client,
+            mqtt,
+            settings=settings,
+            zones=zones,
+            zone_count=12,
+            sleep=instant_sleep,
+            collision=True,
+        )
+
+        link = mqtt.payloads_for("texecom/panel_connection/state")
+        assert "OFF" in link
+        assert link[-1] == "ON"
         await client.close()
     finally:
         await panel.stop()

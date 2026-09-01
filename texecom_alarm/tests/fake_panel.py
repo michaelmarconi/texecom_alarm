@@ -116,6 +116,9 @@ class FakePanel:
         self.arm_calls: list[int] = []
         self.nak_next_arm = False
         self.nak_next_disarm = False
+        # One-shot: next GetAreaFlags is answered with non-Connect bytes (no
+        # valid reply), so the client must treat the stream as unusable.
+        self.garbage_next_area_flags = False
         self.last_disarm_body: bytes | None = None
         self.disarm_calls = 0
         self._handlers: dict[int, Callable[[Frame], bytes]] = {
@@ -251,6 +254,12 @@ class FakePanel:
             await writer.drain()
             return
 
+        if cmd == CMD_GET_AREA_FLAGS and self.garbage_next_area_flags:
+            self.garbage_next_area_flags = False
+            writer.write(b"ATH0\rATZ\r")
+            await writer.drain()
+            return
+
         if cmd == CMD_LOGIN and self.drop_login_responses > 0:
             self.drop_login_responses -= 1
             logger.debug("fake_panel_dropped_login_response")
@@ -312,6 +321,7 @@ class FakePanel:
             self.eat_keepalive_attempts_with_message = 0
             # Fresh login clears soft-zombie trust-poll NAK (ADR-011 bounded re-login).
             self.nak_area_flags_until_relogin = False
+            self.garbage_next_area_flags = False
             return bytes([CMD_LOGIN, ACK])
         return bytes([CMD_LOGIN, 0x15])
 
