@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from tests.fake_panel import FakePanel, FakeZone
 from tests.recording_mqtt import RecordingMqttPublisher
 
+from texecom_alarm import __version__
 from texecom_alarm.app import _listen_zone_messages, _SharedAlarmState, main, run
 from texecom_alarm.config import Settings
+from texecom_alarm.logging_setup import configure_logging
 from texecom_alarm.mqtt.discovery import AVAILABILITY_OFFLINE, AVAILABILITY_ONLINE
 from texecom_alarm.mqtt.publisher import AiomqttPublisher
 from texecom_alarm.protocol.client import PanelClient
@@ -333,6 +336,61 @@ def test_main_invokes_asyncio_run() -> None:
         coro = run_mock.call_args.args[0]
         assert asyncio.iscoroutine(coro)
         coro.close()
+
+
+@pytest.fixture
+def restore_root_logging() -> None:
+    """Keep a real configure_logging call from leaking handlers into later tests."""
+    root = logging.getLogger()
+    before_level = root.level
+    before_handlers = list(root.handlers)
+    yield
+    root.handlers.clear()
+    for handler in before_handlers:
+        root.addHandler(handler)
+    root.setLevel(before_level)
+
+
+def test_main_logs_package_version_at_info(restore_root_logging: None) -> None:
+    """A Supervisor log dump at the default level names the running release."""
+    settings = Settings(
+        panel_host="10.0.0.2",
+        panel_port=10001,
+        udl_password="1234",
+        mqtt_host="mqtt.local",
+        mqtt_port=1883,
+        mqtt_username="",
+        mqtt_password="",
+        mqtt_topic_prefix="texecom",
+        part_arm_1="unused",
+        part_arm_2="unused",
+        part_arm_3="unused",
+        log_level="INFO",
+    )
+    records: list[logging.LogRecord] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    capture = _Capture(level=logging.NOTSET)
+
+    def _configure_then_capture(log_level: str) -> None:
+        configure_logging(log_level)
+        logging.getLogger().addHandler(capture)
+
+    with (
+        patch("texecom_alarm.app.load_settings", return_value=settings),
+        patch("texecom_alarm.app.configure_logging", side_effect=_configure_then_capture),
+        patch("texecom_alarm.app.asyncio.run") as run_mock,
+    ):
+        main()
+        coro = run_mock.call_args.args[0]
+        coro.close()
+
+    version_records = [r for r in records if __version__ in r.getMessage()]
+    assert version_records, "boot must log the package version after log level is applied"
+    assert all(r.levelno == logging.INFO for r in version_records)
 
 
 @pytest.mark.asyncio

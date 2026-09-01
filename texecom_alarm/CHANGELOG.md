@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- On start, the add-on logs its version at the default log level so a Supervisor
+  log dump identifies which release is running.
+
 ### Fixed
 
 - After a successful disarm (or arm), a flags follow-up that times out or is

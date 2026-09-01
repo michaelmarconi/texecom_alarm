@@ -7,6 +7,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from texecom_alarm import __version__
 from texecom_alarm.area_state import handle_area_message, publish_area_state_snapshot
 from texecom_alarm.arm_commands import handle_alarm_command
 from texecom_alarm.config import Settings, load_settings, warn_if_factory_udl
@@ -861,6 +862,7 @@ def main() -> None:
         )
         raise SystemExit(1) from exc
     configure_logging(cfg.log_level)
+    logger.info("Texecom Alarm add-on version %s", __version__)
     try:
         asyncio.run(run(cfg))
     except Exception as exc:
