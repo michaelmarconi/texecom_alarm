@@ -1,6 +1,6 @@
 """Texecom Alarm App — panel ↔ MQTT bridge (implementation pending /plan)."""
 
-__version__ = "0.3.2"
+__version__ = "0.3.4"
 
 
 def healthcheck() -> str:
