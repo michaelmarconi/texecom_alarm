@@ -24,6 +24,7 @@ from texecom_alarm.protocol.frame import (
     TYPE_MESSAGE,
     TYPE_RESPONSE,
     Frame,
+    decode_miss_detail,
     encode_command,
     try_decode_frame,
 )
@@ -485,7 +486,7 @@ class PanelClient:
             return frame.body[1:]
 
     async def _recv_frame(self, *, timeout: float) -> Frame:
-        """Read the next valid frame; unexpected bytes end the session (ADR-019)."""
+        """Read the next valid frame; unexpected bytes are logged and end the session."""
         reader = self._reader
         if reader is None:
             raise self._not_connected_error(action="read from the session")
@@ -514,6 +515,12 @@ class PanelClient:
                             "real trigger are mainly expected when Home Assistant shares the "
                             "alarm-reporting module — not on a dedicated local ComIP."
                         )
+                    reason, leading_hex = decode_miss_detail(self._buf)
+                    logger.warning(
+                        "panel_decode_miss reason=%s leading_hex=%s",
+                        reason,
+                        leading_hex,
+                    )
                     del self._buf[:consumed]
                     raise ForcedDisconnect(
                         f"Panel at {self.host}:{self.port} sent data outside the Connect "

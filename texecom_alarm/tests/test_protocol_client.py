@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import pytest
 from tests.fake_panel import FakePanel, FakeZone
 
+from texecom_alarm.logging_setup import TRACE_LEVEL
 from texecom_alarm.protocol.client import ForcedDisconnect, PanelClient, ProtocolError
 from texecom_alarm.protocol.frame import (
     CMD_GET_AREA_FLAGS,
@@ -16,6 +18,8 @@ from texecom_alarm.protocol.frame import (
     CMD_SETEVENTMESSAGES,
     MSG_AREA,
     MSG_ZONE,
+    TYPE_RESPONSE,
+    encode_frame,
 )
 
 
@@ -85,12 +89,96 @@ async def test_send_command_requires_connection() -> None:
 
 @pytest.mark.asyncio
 async def test_injected_garbage_raises_forced_disconnect(panel: FakePanel) -> None:
-    """ADR-019: unexpected bytes on the wire fault the session instead of being skipped."""
+    """Unexpected bytes on the wire fault the session instead of being skipped."""
     client = await _logged_in_client(panel)
     panel.inject_before_next_response(b"ATH0\rATZ\r")
     with pytest.raises(ForcedDisconnect):
         await client.keepalive()
     await client.close()
+
+
+def _decode_miss_records(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    return [
+        rec
+        for rec in caplog.records
+        if rec.levelno >= logging.INFO
+        and rec.levelno != TRACE_LEVEL
+        and "panel_decode_miss" in rec.getMessage()
+    ]
+
+
+@pytest.mark.asyncio
+async def test_unreadable_panel_bytes_log_reason_and_leading_hex_together(
+    panel: FakePanel, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A non-Connect payload must show why it failed and the arriving hex in one everyday log."""
+    caplog.set_level(logging.INFO)
+    junk = b"ATH0\rATZ\r"
+    client = await _logged_in_client(panel)
+    panel.inject_before_next_response(junk)
+    with pytest.raises(ForcedDisconnect, match="outside the Connect|Unexpected bytes"):
+        await client.keepalive()
+    await client.close()
+
+    hits = _decode_miss_records(caplog)
+    assert hits, "decode miss must be logged at INFO or WARNING, not TRACE-only"
+    assert len(hits) == 1
+    message = hits[0].getMessage()
+    assert hits[0].levelno in (logging.INFO, logging.WARNING)
+    assert "not 't'" in message
+    compact_hex = junk.hex()
+    assert compact_hex in message.replace(" ", "")
+    assert "reason=" in message and "leading_hex=" in message
+
+
+@pytest.mark.asyncio
+async def test_unreadable_panel_bytes_do_not_scan_forward_to_a_valid_frame(
+    panel: FakePanel,
+) -> None:
+    """Non-Connect bytes end the session; a valid reply sitting after them is not parsed."""
+    client = await _logged_in_client(panel)
+    panel.inject_before_next_response(b"X")
+    with pytest.raises(ForcedDisconnect):
+        await client.keepalive()
+    await client.close()
+    # If the client had skipped the junk byte, keepalive would have consumed the
+    # valid GETDATETIME reply that FakePanel still writes after the injection.
+    assert panel.keepalive_attempts == 1
+
+
+@pytest.mark.asyncio
+async def test_end_of_session_marker_is_not_logged_as_an_unreadable_frame(
+    panel: FakePanel, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The panel's +++ hang-up must stay a distinct log from a torn Connect frame."""
+    caplog.set_level(logging.INFO)
+    client = await _logged_in_client(panel)
+    panel.plusplusplus_on_next_command = True
+    with pytest.raises(ForcedDisconnect, match=r"\+\+\+"):
+        await client.keepalive()
+    await client.close()
+    assert _decode_miss_records(caplog) == []
+
+
+@pytest.mark.asyncio
+async def test_torn_connect_frame_logs_as_unreadable_not_as_end_of_session(
+    panel: FakePanel, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A Connect header with a bad CRC is a torn message, not the panel hanging up."""
+    caplog.set_level(logging.INFO)
+    torn = bytearray(encode_frame(TYPE_RESPONSE, sequence=0, body=bytes([CMD_GETDATETIME, 0x06])))
+    torn[-1] ^= 0xFF
+    client = await _logged_in_client(panel)
+    panel.inject_before_next_response(bytes(torn))
+    with pytest.raises(ForcedDisconnect, match="outside the Connect|Unexpected bytes"):
+        await client.keepalive()
+    await client.close()
+    hits = _decode_miss_records(caplog)
+    assert hits, "torn frame must be logged at INFO or WARNING"
+    message = hits[0].getMessage()
+    assert "bad CRC" in message
+    assert "+++" not in message
+    assert bytes(torn[:8]).hex() in message.replace(" ", "")
 
 
 @pytest.mark.asyncio

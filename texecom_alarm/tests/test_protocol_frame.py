@@ -11,6 +11,7 @@ from texecom_alarm.protocol.frame import (
     TYPE_MESSAGE,
     TYPE_RESPONSE,
     Frame,
+    decode_miss_detail,
     encode_command,
     encode_frame,
     try_decode_frame,
@@ -93,3 +94,40 @@ def test_try_decode_unknown_type_after_valid_crc() -> None:
     header_and_body = bytes([HEADER_START, ord("Z"), length, 0]) + body
     raw = bytearray(header_and_body + bytes([crc8(header_and_body)]))
     assert try_decode_frame(raw) == (None, 1)
+
+
+def test_decode_miss_reason_not_t_includes_leading_hex() -> None:
+    reason, leading_hex = decode_miss_detail(bytearray(b"ATH0\rATZ\r"))
+    assert reason == "not 't'"
+    assert "41544830" in leading_hex.replace(" ", "")
+
+
+def test_decode_miss_reason_bad_length() -> None:
+    buf = bytearray([HEADER_START, TYPE_RESPONSE, 3, 0])
+    reason, leading_hex = decode_miss_detail(buf)
+    assert reason == "bad length"
+    assert leading_hex.replace(" ", "").startswith("74")
+
+
+def test_decode_miss_reason_bad_crc() -> None:
+    raw = bytearray(encode_frame(TYPE_RESPONSE, sequence=0, body=bytes([1, 0x06])))
+    raw[-1] ^= 0xFF
+    reason, leading_hex = decode_miss_detail(raw)
+    assert reason == "bad CRC"
+    assert leading_hex.replace(" ", "").startswith("74")
+
+
+def test_decode_miss_reason_unknown_type() -> None:
+    body = b"\x01"
+    length = len(body) + 5
+    header_and_body = bytes([HEADER_START, ord("Z"), length, 0]) + body
+    raw = bytearray(header_and_body + bytes([crc8(header_and_body)]))
+    reason, leading_hex = decode_miss_detail(raw)
+    assert reason == "unknown type"
+    assert leading_hex.replace(" ", "").startswith("74")
+
+
+def test_decode_miss_reason_end_of_session_marker_is_distinct() -> None:
+    reason, leading_hex = decode_miss_detail(bytearray(b"+++junk"))
+    assert reason == "+++"
+    assert "2b2b2b" in leading_hex.replace(" ", "")
