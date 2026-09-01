@@ -1,10 +1,10 @@
 ---
 id: TASK-61
 title: 'Log why a panel message could not be read, including the leading bytes'
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-08-31 21:20'
-updated_date: '2026-09-01 08:33'
+updated_date: '2026-09-01 08:34'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -35,9 +35,9 @@ ordinal: 55000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A decode miss logs reason and leading hex together at INFO or WARNING, not TRACE-only
-- [ ] #2 Unexpected bytes still end the session without scanning forward for the next valid message
-- [ ] #3 End-of-session +++ remains distinguishable in logs from a torn Connect frame
+- [x] #1 A decode miss logs reason and leading hex together at INFO or WARNING, not TRACE-only
+- [x] #2 Unexpected bytes still end the session without scanning forward for the next valid message
+- [x] #3 End-of-session +++ remains distinguishable in logs from a torn Connect frame
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -69,5 +69,5 @@ Verification: Unit tests capturing log records (no live panel). `cd texecom_alar
 Notes/assumptions: Log event is `panel_decode_miss reason=%s leading_hex=%s` at WARNING (not TRACE). Reasons: `not 't'`, `bad length`, `bad CRC`, `unknown type`. Leading hex is the first 32 buffer bytes. `+++` still raises ForcedDisconnect with its existing message and does not emit `panel_decode_miss`. Skip-and-resync was not restored.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
