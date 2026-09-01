@@ -1,10 +1,10 @@
 ---
 id: TASK-63
 title: Log the add-on version when the app boots
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-09-01 09:44'
-updated_date: '2026-09-01 11:42'
+updated_date: '2026-09-01 11:48'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:S'
@@ -53,6 +53,12 @@ How we'll know: unit test capturing log records (no live panel). Command: `cd te
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Successful boot now logs the package version at INFO after log level is applied, matching `texecom_alarm.__version__`.
+Changed files: texecom_alarm/src/texecom_alarm/app.py, texecom_alarm/tests/test_app_mqtt.py, texecom_alarm/CHANGELOG.md
+Verification: PYTHONPATH=src pytest tests/test_app_mqtt.py -q → 21 passed; pytest --cov=texecom_alarm --cov-fail-under=90 -q → 407 passed, 92.67% coverage; ruff check + ruff format --check on touched files → clean.
+Notes/assumptions: The line is emitted from main() immediately after configure_logging, not from run(), so reconnects do not repeat it. Default log_level=INFO is what the test drives.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
