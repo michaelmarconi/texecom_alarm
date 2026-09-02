@@ -1,6 +1,6 @@
 # Ship
 
-**Date:** 2026-09-01
+**Date:** 2026-09-02
 **State:** Draft 📝
 <!-- Terminals: N/A | Accepted ✅ | Deferred ⏸️ -->
 **Applicability:** yes
@@ -12,7 +12,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | Item | Status | Notes |
 |------|--------|-------|
 | Docs-ready Accepted | pass | `docs/docs-ready.md` Accepted 2026-08-27 |
-| Product accept | pass | `docs/acceptance.md` Accepted 2026-09-01; iOS arm/disarm on the local module published `arming` → `armed_away` → `disarmed` with Connection still on. Household HA card walk still required as live smoke |
+| Product accept | pass | `docs/acceptance.md` Accepted 2026-09-01. Busy-wait wave (TASK-64–66) was not walked live from this host; household Update + live smoke is the exposure path |
 | Secrets in runtime config | pass | Unchanged: UDL / MQTT username+password are Supervisor options (`password` schema) |
 | Secrets hygiene (captures) | pass | `docs/captures/` gitignored; no pcaps in tree |
 | Support path | pass | GitHub issues (templates), `SECURITY.md`, `CONTRIBUTING.md` |
@@ -21,19 +21,20 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | Backups | n/a | No extra datastore; HA backup of add-on options is sufficient |
 | Official HA Apps store | n/a | Community GitHub repository is the intended path |
 | Store-shaped repository | pass | Root `repository.yaml` + App in `texecom_alarm/`; store URL uses generated `#app` branch |
-| Pre-built images (GHCR) | pass | `0.3.5` published (`docker manifest inspect` amd64 + arm64; Builder run 33531480774) |
+| Pre-built images (GHCR) | pending | `0.3.6` bumped on `main`; waiting for Tag version + Builder + GHCR amd64/arm64 |
 | RISK-017 fingerprint | pass | Working tree + history rewrite complete (recorded 2026-08-23) |
-| CHANGELOG vs product | pass | `[0.3.5]` records skipping the post-arm flags read while the panel is busy; abstract household language, no pipeline IDs, no scene-specific events |
+| CHANGELOG vs product | pass | `[0.3.6]` records chatty Arm/Disarm retry as a fresh request and Connection staying on; abstract household language, no pipeline IDs |
 | Licence label consistency | pass | `Dockerfile` OCI label is MIT |
-| Version bump policy | pass | 0.3.4 → 0.3.5 (patch) — no flags read after a successful arm. No new Configuration settings |
-| Store Update rehearsal | skipped | Practitioner asked to skip rehearsal this cut so the live panel stays free for household Update. Last pass remains 2026-09-01 `STORE_UPGRADE_SMOKE_PASS from=0.3.0 to=0.3.1`. Cannot Accept ship without a 0.3.5 rehearsal pass |
+| Version bump policy | pass | 0.3.5 → 0.3.6 (patch) — chatty Arm/Disarm retries as a new request; Connection stays on. No new Configuration settings |
+| Store Update rehearsal | pending | Last pass remains 2026-09-01 `STORE_UPGRADE_SMOKE_PASS from=0.3.0 to=0.3.1`. 0.3.5 rehearsal was skipped. Cannot Accept ship without a rehearsal pass for this cut |
 
 ## Deploy
 
-- Authorized: yes — 2026-09-01 (practitioner chose commit, bump, and publish so household HA can Update and re-test on the live panel; skip store rehearsal)
-- Step performed: yes — bumped to `0.3.5` (`a065651`); pushed `main`; Tag version created `v0.3.5`; Sync app branch refreshed `#app` (`version: "0.3.5"` + `image:`). Builder dispatched (`gh workflow run builder.yml --ref v0.3.5 -f version=0.3.5`) — succeeded, GHCR `0.3.5` amd64 + arm64 confirmed. Store Update rehearsal skipped this cut. Local add-on left stopped so household HA can take the panel slot.
+- Authorized: yes — 2026-09-02 (practitioner chose bump and publish so household HA can Update; live smoke is household `--target`, not sim `/accept`)
+- Step performed: bump to `0.3.6` in this commit; push / tag / Builder follow
 
 Prior Authorized deploy (kept for history):
+- 0.3.5 — 2026-09-01: bumped (`a065651`); pushed `main`; Tag version created `v0.3.5`; Sync app branch refreshed `#app`. Builder succeeded, GHCR `0.3.5` amd64 + arm64. Store Update rehearsal skipped this cut. Local add-on left stopped so household HA can take the panel slot.
 - 0.3.4 — 2026-09-01: bumped (`1d9986a`); force-pushed `main`; Tag version `v0.3.4`; `#app` synced; Builder 33528827986; GHCR amd64 + arm64. Store Update rehearsal skipped. Local add-on left stopped. Tag `v0.3.3` was not moved.
 - 0.3.3 — 2026-09-01: published (`v0.3.3`; Builder 33527751875; GHCR amd64 + arm64). Store Update rehearsal skipped. Local add-on left stopped. Tag `v0.3.3` is not moved.
 - 0.3.2 — 2026-09-01: bumped (`de1d51c`); pushed `main`; Tag version created `v0.3.2`; Sync app branch refreshed `#app` (`version: "0.3.2"` + `image:`). Builder dispatched (`gh workflow run builder.yml --ref v0.3.2 -f version=0.3.2`) — succeeded, GHCR `0.3.2` amd64 + arm64 confirmed. Store Update rehearsal skipped this cut. Local add-on left stopped so household HA can take the panel slot.
@@ -45,7 +46,7 @@ Prior Accepted ship (kept for history):
 
 ## Live smoke
 
-- `/run --target`: pending — household Home Assistant (not sim `localhost:7123`). Ordinary arm / disarm, including a second Home arm, and Connection name on the household card.
+- `/run --target`: pending — household Home Assistant (not sim `localhost:7123`). Ordinary arm / disarm, including a chatty wait where Connection should stay on, and Connection name on the household card.
 
 ## Review
 | # | Date | Verdict | Issues |
