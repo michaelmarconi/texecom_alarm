@@ -1,9 +1,10 @@
 ---
 id: TASK-64
 title: Retry a chatty Arm/Disarm timeout as a new request
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-09-02 10:51'
+updated_date: '2026-09-02 11:11'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
