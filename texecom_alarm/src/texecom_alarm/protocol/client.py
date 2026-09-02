@@ -68,8 +68,12 @@ class ForcedDisconnect(Exception):
     """Panel ended the session (``+++`` or peer close)."""
 
 
+class _BusyCommandTimeout(TimeoutError):
+    """The command wait expired while ordinary panel event frames were still arriving."""
+
+
 class PanelClient:
-    """TCP Connect-protocol session with same-sequence retries; faults end the session."""
+    """TCP Connect-protocol session; a chatty Arm/Disarm timeout retries as a new request."""
 
     def __init__(
         self,
@@ -392,10 +396,13 @@ class PanelClient:
         retries: int = 1,
         retry_if: Callable[[bytes], bool] | None = None,
     ) -> bytes:
-        """Send ``cmd`` and return its reply, retrying with the same sequence on:
+        """Send ``cmd`` and return its reply, retrying on:
 
-        - a timeout (no reply within ``response_timeout``, including an attempt
-          entirely eaten by interleaved unsolicited ``'M'`` traffic), or
+        - a timeout (no reply within ``response_timeout``). A silent wait
+          retries the same sequence. If Arm or Disarm timed out while ordinary
+          unsolicited event frames arrived during that wait, the retry is a
+          new request (new sequence) — the timed-out sequence is not reused.
+          Event frames do not extend the ``retries`` budget.
         - a reply that arrives but fails ``retry_if`` (e.g. the wrong shape) —
           when ``retry_if`` is given, it shares the same ``retries`` budget as
           timeouts. If the budget is exhausted, the last (still-invalid) reply
@@ -439,16 +446,33 @@ class PanelClient:
                     )
                     try:
                         payload = await self._await_response(cmd, seq)
-                    except TimeoutError:
+                    except TimeoutError as exc:
                         attempt += 1
                         if attempt > retries:
                             raise TimeoutError(
                                 self.timeout_message(cmd, host=self.host, port=self.port)
                             ) from None
-                        logger.debug(
-                            "panel_command_retry",
-                            extra={"cmd": cmd, "seq": seq, "attempt": attempt},
-                        )
+                        if isinstance(exc, _BusyCommandTimeout) and cmd in (
+                            CMD_SET_AREA_ARM,
+                            CMD_SET_AREA_DISARM,
+                        ):
+                            prev_seq = seq
+                            seq = self._next_seq()
+                            frame = encode_command(cmd, body, sequence=seq)
+                            logger.debug(
+                                "panel_command_retry_new_request",
+                                extra={
+                                    "cmd": cmd,
+                                    "prev_seq": prev_seq,
+                                    "seq": seq,
+                                    "attempt": attempt,
+                                },
+                            )
+                        else:
+                            logger.debug(
+                                "panel_command_retry",
+                                extra={"cmd": cmd, "seq": seq, "attempt": attempt},
+                            )
                         continue
                     if retry_if is not None and retry_if(payload):
                         attempt += 1
@@ -468,20 +492,33 @@ class PanelClient:
         self._seq = (self._seq + 1) % 256
         return seq
 
+    def _command_wait_timeout(self, cmd: int, saw_event_during_wait: bool) -> TimeoutError:
+        message = self.timeout_message(cmd, host=self.host, port=self.port)
+        if saw_event_during_wait:
+            return _BusyCommandTimeout(message)
+        return TimeoutError(message)
+
     async def _await_response(self, expected_cmd: int, expected_seq: int) -> bytes:
         deadline = asyncio.get_running_loop().time() + self.response_timeout
+        # Only frames that arrive during this wait mark it busy. Leftover
+        # events from an earlier command stay on the queue and must not count.
+        saw_event_during_wait = False
         while True:
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
-                raise TimeoutError(
-                    self.timeout_message(expected_cmd, host=self.host, port=self.port)
-                )
-            frame = await self._recv_frame(timeout=remaining)
+                raise self._command_wait_timeout(expected_cmd, saw_event_during_wait)
+            try:
+                frame = await self._recv_frame(timeout=remaining)
+            except TimeoutError:
+                if saw_event_during_wait:
+                    raise self._command_wait_timeout(expected_cmd, True) from None
+                raise
             if frame.msg_type == TYPE_MESSAGE:
                 logger.debug(
                     "panel_interleaved_message",
                     extra={"seq": frame.sequence, "body": frame.body.hex()},
                 )
+                saw_event_during_wait = True
                 self._message_queue.put_nowait(frame)
                 continue
             if frame.msg_type != TYPE_RESPONSE:

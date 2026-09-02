@@ -609,6 +609,83 @@ async def test_set_area_disarm_sends_cmd_8_with_01() -> None:
         await panel.stop()
 
 
+async def _arm_or_disarm(client: PanelClient, kind: str) -> None:
+    if kind == "disarm":
+        await client.set_area_disarm()
+        return
+    await client.set_area_arm(0)
+
+
+def _arm_disarm_sequences(panel: FakePanel, kind: str) -> list[int]:
+    return panel.disarm_sequences if kind == "disarm" else panel.arm_sequences
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["disarm", "arm"])
+async def test_chatty_arm_disarm_timeout_retries_as_new_request(
+    panel: FakePanel, kind: str
+) -> None:
+    """If Arm or Disarm times out while live event frames arrive, the next try is a new request."""
+    client = await _logged_in_client(panel, response_timeout=0.15)
+    panel.eat_arm_disarm_attempts_with_messages = 1
+    await _arm_or_disarm(client, kind)
+    sequences = _arm_disarm_sequences(panel, kind)
+    assert len(sequences) == 2
+    assert sequences[0] != sequences[1]
+    await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["disarm", "arm"])
+async def test_chatty_arm_disarm_retry_stays_within_existing_budget(
+    panel: FakePanel, kind: str
+) -> None:
+    """Events during the wait do not keep retrying past the existing command retry budget."""
+    client = await _logged_in_client(panel, response_timeout=0.1)
+    panel.eat_arm_disarm_attempts_with_messages = 10
+    with pytest.raises(TimeoutError):
+        await _arm_or_disarm(client, kind)
+    sequences = _arm_disarm_sequences(panel, kind)
+    assert len(sequences) == 2
+    assert sequences[0] != sequences[1]
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_silent_disarm_timeout_does_not_retry_as_new_request(panel: FakePanel) -> None:
+    """A wait with no reply and no new events retries the same request, not a fresh one."""
+    client = await _logged_in_client(panel, response_timeout=0.15)
+    panel.drop_next_command_responses = 1
+    await client.set_area_disarm()
+    assert panel.disarm_sequences == [panel.disarm_sequences[0], panel.disarm_sequences[0]]
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_leftover_events_from_earlier_command_do_not_make_disarm_busy(
+    panel: FakePanel,
+) -> None:
+    """Live updates left over from an earlier command are not events during this wait."""
+    client = await _logged_in_client(panel, response_timeout=0.15)
+    panel.interleave_message_before_response = bytes([MSG_ZONE, 1, 0x01])
+    await client.keepalive()
+    panel.drop_next_command_responses = 1
+    await client.set_area_disarm()
+    assert panel.disarm_sequences == [panel.disarm_sequences[0], panel.disarm_sequences[0]]
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_disarm_nak_is_immediate_without_retry(panel: FakePanel) -> None:
+    """A refused Disarm is not retried as a new request."""
+    client = await _logged_in_client(panel)
+    panel.nak_next_disarm = True
+    with pytest.raises(ProtocolError, match="NAK"):
+        await client.set_area_disarm()
+    assert panel.disarm_sequences == [panel.disarm_sequences[0]]
+    await client.close()
+
+
 @pytest.mark.asyncio
 async def test_send_command_requires_authenticated_except_login(panel: FakePanel) -> None:
     """Connected but not logged in must refuse non-LOGIN commands."""
