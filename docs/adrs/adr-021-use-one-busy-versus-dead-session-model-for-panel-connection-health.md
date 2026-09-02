@@ -1,6 +1,6 @@
 # ADR-021: Use One Busy-Versus-Dead Session Model for Panel Connection Health
 
-**Status:** Accepted ✅
+**Status:** ~~Accepted~~ Superseded by [ADR-022](adr-022-use-one-busy-versus-dead-session-model-including-late-command-replies-for-panel-connection-health.md)
 **Date:** 2026-08-30
 **Supersedes:** ADR-011, ADR-016, ADR-018, ADR-019, ADR-020
 
