@@ -3,10 +3,10 @@ id: TASK-65
 title: >-
   Keep Connection on through busy Arm/Disarm retries; off on silence, refuse, or
   exhausted retries
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-09-02 10:51'
-updated_date: '2026-09-02 11:56'
+updated_date: '2026-09-02 12:08'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -56,6 +56,12 @@ Files likely affected: texecom_alarm/src/texecom_alarm/protocol/client.py (modif
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Connection stays on through a chatty Arm/Disarm new-request retry that then ACKs; NAK, silent timeout, and exhausted busy retries turn it off immediately on the refused-command clock, and heal does not re-send that tap.
+Changed files: texecom_alarm/src/texecom_alarm/arm_commands.py, texecom_alarm/src/texecom_alarm/panel_trust.py, texecom_alarm/src/texecom_alarm/protocol/client.py, texecom_alarm/tests/test_e2e_fake_panel.py, texecom_alarm/tests/test_panel_trust.py, texecom_alarm/CHANGELOG.md
+Verification: how we'll know python -m pytest tests/test_e2e_fake_panel.py tests/test_panel_trust.py -q → 68 passed; DoD pytest --cov=texecom_alarm --cov-fail-under=90 -q → 425 passed, 92.91% coverage; ruff check . && ruff format --check . → clean.
+Notes/assumptions: Busy new-sequence retry was already in PanelClient.send_command (TASK-64); this task locked Connection recording around that path. FakePanel was unchanged (eat_arm_disarm_attempts_with_messages / drop_next_command_responses). CI does not claim a real Premier Elite trigger-then-Disarm flood stays quiet on Connection.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
