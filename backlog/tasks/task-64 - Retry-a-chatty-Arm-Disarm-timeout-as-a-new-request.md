@@ -52,5 +52,5 @@ Files likely affected: texecom_alarm/src/texecom_alarm/protocol/client.py (modif
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ## Build phase
-phase: provisioned
+phase: executing
 <!-- SECTION:FINAL_SUMMARY:END -->
