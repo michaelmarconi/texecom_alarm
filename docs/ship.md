@@ -21,17 +21,17 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | Backups | n/a | No extra datastore; HA backup of add-on options is sufficient |
 | Official HA Apps store | n/a | Community GitHub repository is the intended path |
 | Store-shaped repository | pass | Root `repository.yaml` + App in `texecom_alarm/`; store URL uses generated `#app` branch |
-| Pre-built images (GHCR) | pending | `0.3.6` bumped on `main`; waiting for Tag version + Builder + GHCR amd64/arm64 |
+| Pre-built images (GHCR) | pass | `0.3.6` published (`docker manifest inspect` amd64 + arm64; Builder run 33630276344) |
 | RISK-017 fingerprint | pass | Working tree + history rewrite complete (recorded 2026-08-23) |
 | CHANGELOG vs product | pass | `[0.3.6]` records chatty Arm/Disarm retry as a fresh request and Connection staying on; abstract household language, no pipeline IDs |
 | Licence label consistency | pass | `Dockerfile` OCI label is MIT |
 | Version bump policy | pass | 0.3.5 → 0.3.6 (patch) — chatty Arm/Disarm retries as a new request; Connection stays on. No new Configuration settings |
-| Store Update rehearsal | pending | Last pass remains 2026-09-01 `STORE_UPGRADE_SMOKE_PASS from=0.3.0 to=0.3.1`. 0.3.5 rehearsal was skipped. Cannot Accept ship without a rehearsal pass for this cut |
+| Store Update rehearsal | skipped | Practitioner cannot `/accept` from this host; panel stays free for household Update. Last pass remains 2026-09-01 `STORE_UPGRADE_SMOKE_PASS from=0.3.0 to=0.3.1`. Cannot Accept ship without a 0.3.6 rehearsal pass |
 
 ## Deploy
 
 - Authorized: yes — 2026-09-02 (practitioner chose bump and publish so household HA can Update; live smoke is household `--target`, not sim `/accept`)
-- Step performed: bump to `0.3.6` in this commit; push / tag / Builder follow
+- Step performed: yes — bumped to `0.3.6` (`946a86b`); pushed `main`; Tag version created `v0.3.6`; Sync app branch refreshed `#app` (`version: "0.3.6"` + `image:`). Builder dispatched (`gh workflow run builder.yml --ref v0.3.6 -f version=0.3.6`) — succeeded, GHCR `0.3.6` amd64 + arm64 confirmed. Store Update rehearsal skipped this cut. Local add-on left stopped so household HA can take the panel slot.
 
 Prior Authorized deploy (kept for history):
 - 0.3.5 — 2026-09-01: bumped (`a065651`); pushed `main`; Tag version created `v0.3.5`; Sync app branch refreshed `#app`. Builder succeeded, GHCR `0.3.5` amd64 + arm64. Store Update rehearsal skipped this cut. Local add-on left stopped so household HA can take the panel slot.
