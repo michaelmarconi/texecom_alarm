@@ -3,9 +3,10 @@ id: TASK-65
 title: >-
   Keep Connection on through busy Arm/Disarm retries; off on silence, refuse, or
   exhausted retries
-status: ready
+status: in-progress
 assignee: []
 created_date: '2026-09-02 10:51'
+updated_date: '2026-09-02 11:56'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
