@@ -21,6 +21,13 @@ ordinal: 60000
 - [ ] #3 FakePanel e2e: timeout-with-events then new-request ACK keeps Connection on; silent timeout and NAK still turn Connection off immediately
 <!-- AC:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: executing
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 Session health in docs/architecture.md matches ADR-022: busy Arm/Disarm wait retries as a new request; Connection off on refuse, silent timeout, or exhausted retries
