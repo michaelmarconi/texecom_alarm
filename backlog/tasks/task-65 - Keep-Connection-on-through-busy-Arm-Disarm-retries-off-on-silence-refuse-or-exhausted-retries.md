@@ -6,7 +6,7 @@ title: >-
 status: awaiting-review
 assignee: []
 created_date: '2026-09-02 10:51'
-updated_date: '2026-09-02 12:08'
+updated_date: '2026-09-02 12:14'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -63,5 +63,5 @@ Verification: how we'll know python -m pytest tests/test_e2e_fake_panel.py tests
 Notes/assumptions: Busy new-sequence retry was already in PanelClient.send_command (TASK-64); this task locked Connection recording around that path. FakePanel was unchanged (eat_arm_disarm_attempts_with_messages / drop_next_command_responses). CI does not claim a real Premier Elite trigger-then-Disarm flood stays quiet on Connection.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
