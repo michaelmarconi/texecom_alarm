@@ -47,3 +47,10 @@ Corrective for TASK-7 (left done; this task is the rework).
 <!-- SECTION:PLAN:BEGIN -->
 Files likely affected: texecom_alarm/src/texecom_alarm/protocol/client.py (modify), texecom_alarm/tests/test_protocol_client.py (modify), texecom_alarm/tests/test_arm_commands.py (modify), texecom_alarm/tests/fake_panel.py (modify). 1. During the command wait, record whether at least one well-formed unsolicited event frame arrived. 2. On timeout: if that wait was silent, raise TimeoutError as today (same sequence is not retried as a 'busy' retry). 3. On timeout with events: do not reuse the timed-out sequence; allocate a new sequence and resend within the existing retry budget (retries=1 stays). 4. Keep NAK immediate; do not skip unexpected bytes. Test strategy: how we'll know = unit against the protocol client (stand-in: FakePanel / recorded frames); command: cd texecom_alarm && python -m pytest tests/test_protocol_client.py tests/test_arm_commands.py -q. Assert a Disarm (or Arm) whose first wait only sees event frames then retries with a different sequence; a silent timeout does not invent a new-sequence busy retry.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build phase
+phase: provisioned
+<!-- SECTION:FINAL_SUMMARY:END -->
