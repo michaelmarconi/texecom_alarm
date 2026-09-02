@@ -3,10 +3,10 @@ id: TASK-65
 title: >-
   Keep Connection on through busy Arm/Disarm retries; off on silence, refuse, or
   exhausted retries
-status: awaiting-review
+status: done
 assignee: []
 created_date: '2026-09-02 10:51'
-updated_date: '2026-09-02 12:14'
+updated_date: '2026-09-02 12:18'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -42,9 +42,9 @@ Corrective for TASK-7 (left done; this task is the rework). FakePanel is not pro
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Arm or Disarm timeout while events arrive does not turn Connection off if a new-request retry then gets a reply
-- [ ] #2 NAK or a silent timeout still turns Connection off immediately and still uses the refused-command countdown, not hello patience
-- [ ] #3 Using up the busy-retry budget with no reply turns Connection off; heal does not re-send that failed tap
+- [x] #1 Arm or Disarm timeout while events arrive does not turn Connection off if a new-request retry then gets a reply
+- [x] #2 NAK or a silent timeout still turns Connection off immediately and still uses the refused-command countdown, not hello patience
+- [x] #3 Using up the busy-retry budget with no reply turns Connection off; heal does not re-send that failed tap
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -63,5 +63,5 @@ Verification: how we'll know python -m pytest tests/test_e2e_fake_panel.py tests
 Notes/assumptions: Busy new-sequence retry was already in PanelClient.send_command (TASK-64); this task locked Connection recording around that path. FakePanel was unchanged (eat_arm_disarm_attempts_with_messages / drop_next_command_responses). CI does not claim a real Premier Elite trigger-then-Disarm flood stays quiet on Connection.
 
 ## Build phase
-phase: merging
+phase: done
 <!-- SECTION:FINAL_SUMMARY:END -->
