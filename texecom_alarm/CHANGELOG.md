@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - If Arm or Disarm gets no reply while the panel is still sending ordinary
-  updates, the add-on retries that tap as a fresh request instead of repeating
-  the timed-out one.
+  updates, the add-on retries that tap as a fresh request and **Alarm Panel
+  Connection** stays on. Connection goes off at once if the panel refuses,
+  if the wait is silent, or if those retries get no reply.
 
 ## [0.3.5] - 2026-09-01
 

@@ -402,7 +402,9 @@ class PanelClient:
           retries the same sequence. If Arm or Disarm timed out while ordinary
           unsolicited event frames arrived during that wait, the retry is a
           new request (new sequence) — the timed-out sequence is not reused.
-          Event frames do not extend the ``retries`` budget.
+          Event frames do not extend the ``retries`` budget. A successful
+          retry returns normally so Connection stays on; using up the budget
+          raises ``TimeoutError`` so the caller can turn Connection off.
         - a reply that arrives but fails ``retry_if`` (e.g. the wrong shape) —
           when ``retry_if`` is given, it shares the same ``retries`` budget as
           timeouts. If the budget is exhausted, the last (still-invalid) reply

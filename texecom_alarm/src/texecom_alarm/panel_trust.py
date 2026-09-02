@@ -252,7 +252,13 @@ class PanelTrust:
         *,
         ha_mode: str | None = None,
     ) -> None:
-        """Immediate degrade on arm/disarm NAK or timeout (even if keepalive OK)."""
+        """Immediate degrade on arm/disarm NAK or timeout (even if keepalive OK).
+
+        Chatty Arm/Disarm waits are retried before this is called. This path is
+        a refuse, a silent wait, or a used-up retry budget — not an in-flight
+        busy retry. The refused-command fail window starts here; it is not
+        hello patience.
+        """
         now = self._clock()
         self._last_command_fail_at = now
         self._last_failure_reason = reason

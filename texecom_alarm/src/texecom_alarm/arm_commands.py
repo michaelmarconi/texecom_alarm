@@ -241,6 +241,9 @@ async def handle_alarm_command(
                 exc,
             )
             if trust is not None:
+                # Chatty waits are retried as a new request inside the client.
+                # Reaching here means the wait was silent or those retries were
+                # used up — we cannot talk, so Connection goes off now.
                 await trust.record_command_failure(REASON_DISARM_TIMEOUT)
             return None
         except ForcedDisconnect as exc:
@@ -337,6 +340,9 @@ async def handle_alarm_command(
             exc,
         )
         if trust is not None:
+            # Chatty waits are retried as a new request inside the client.
+            # Reaching here means the wait was silent or those retries were
+            # used up — we cannot talk, so Connection goes off now.
             await trust.record_command_failure(REASON_ARM_TIMEOUT, ha_mode=ha_mode)
         live_state = get_current_alarm_state() if get_current_alarm_state is not None else None
         if mqtt is not None and topic_prefix is not None and live_state is not None:
