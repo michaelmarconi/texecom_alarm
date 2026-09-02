@@ -1411,3 +1411,41 @@ async def test_command_watchdog_fail_window_independent_of_checkin_patience() ->
     clock["t"] = 11.0
     await _send_scheduled_checkin(panel, trust)
     assert trust.needs_session_relogin() is True
+
+
+@pytest.mark.asyncio
+async def test_arm_timeout_uses_command_fail_window_not_checkin_patience() -> None:
+    """A silent or exhausted Arm timeout degrades Connection on the
+    refused-command clock. A long hello-patience window must not delay that
+    countdown.
+    """
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    clock = {"t": 0.0}
+    trust = _trust(
+        mqtt,
+        fail_window=10.0,
+        checkin_patience=10_000.0,
+        clock=lambda: clock["t"],
+    )
+    await trust.note_keepalive_ok()
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock(side_effect=TimeoutError("arm timed out"))
+    panel.keepalive = AsyncMock(return_value=b"\x00" * 6)
+
+    await handle_alarm_command(
+        panel, _settings(), "ARM_AWAY", mqtt=mqtt, topic_prefix="texecom", trust=trust
+    )
+    assert trust.live is False
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    assert trust.needs_session_relogin() is False
+
+    clock["t"] = 5.0
+    await _send_scheduled_checkin(panel, trust)
+    assert trust.needs_session_relogin() is False
+
+    clock["t"] = 11.0
+    await _send_scheduled_checkin(panel, trust)
+    assert trust.needs_session_relogin() is True
