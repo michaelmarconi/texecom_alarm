@@ -1,10 +1,10 @@
 ---
 id: TASK-64
 title: Retry a chatty Arm/Disarm timeout as a new request
-status: in-progress
+status: awaiting-review
 assignee: []
 created_date: '2026-09-02 10:51'
-updated_date: '2026-09-02 11:11'
+updated_date: '2026-09-02 11:49'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -51,6 +51,12 @@ Files likely affected: texecom_alarm/src/texecom_alarm/protocol/client.py (modif
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Build result
+Summary: Chatty Arm/Disarm timeouts retry as a new request (new sequence) within retries=1; silent timeouts keep same-sequence retry and leftover events from an earlier command do not count as busy.
+Changed files: texecom_alarm/src/texecom_alarm/protocol/client.py, texecom_alarm/tests/test_protocol_client.py, texecom_alarm/tests/fake_panel.py, texecom_alarm/CHANGELOG.md
+Verification: cd texecom_alarm && python -m pytest tests/test_protocol_client.py tests/test_arm_commands.py -q → 86 passed; python -m pytest --cov=texecom_alarm --cov-fail-under=90 -q → 421 passed, 92.69% coverage; ruff check . && ruff format --check . → clean. Disarm/Arm whose first wait only sees event frames retry with a different sequence; a silent timeout (including leftover queued events) does not invent a new-sequence busy retry; budget stays two attempts.
+Notes/assumptions: New-sequence busy retry applies only to SETAREAARM/SETAREADISARM (task/ADR scope); other commands keep same-sequence timeout retry. Alarm Panel Connection, hello patience, reconnect, and byte-skip were not changed. test_arm_commands.py unchanged because retries live in PanelClient.
+
 ## Build phase
-phase: executing
+phase: awaiting-review
 <!-- SECTION:FINAL_SUMMARY:END -->
