@@ -123,13 +123,20 @@ class FakePanel:
         self.last_arm_mode: int | None = None
         self.last_arm_body: bytes | None = None
         self.arm_calls: list[int] = []
+        self.arm_sequences: list[int] = []
         self.nak_next_arm = False
         self.nak_next_disarm = False
+        # Counts down: while > 0, answer SETAREAARM / SETAREADISARM with only
+        # unsolicited event frames and no command reply — the panel is busy
+        # sending live updates. The client must time out that wait and retry
+        # as a new request (new sequence), not the timed-out one.
+        self.eat_arm_disarm_attempts_with_messages = 0
         # One-shot: next GetAreaFlags is answered with non-Connect bytes (no
         # valid reply), so the client must treat the stream as unusable.
         self.garbage_next_area_flags = False
         self.last_disarm_body: bytes | None = None
         self.disarm_calls = 0
+        self.disarm_sequences: list[int] = []
         # Second SETAREADISARM writes a jammed concatenated-M burst (live garage
         # 2026-09-01 13:31) so a duplicate TX is a decode miss, not a quiet ACK.
         self.garbage_on_disarm_after_first = False
@@ -293,6 +300,17 @@ class FakePanel:
             await writer.drain()
             logger.debug("fake_panel_injected_garbage", extra={"bytes": junk.hex()})
 
+        if (
+            cmd in (CMD_SET_AREA_ARM, CMD_SET_AREA_DISARM)
+            and self.eat_arm_disarm_attempts_with_messages > 0
+        ):
+            self.eat_arm_disarm_attempts_with_messages -= 1
+            for i in range(3):
+                writer.write(encode_frame(TYPE_MESSAGE, 0, bytes([MSG_ZONE, 1 + i, 0x01])))
+            await writer.drain()
+            logger.debug("fake_panel_ate_arm_disarm_attempt_with_messages")
+            return
+
         if cmd == CMD_GET_AREA_FLAGS and self.eat_area_flags_attempts_with_messages > 0:
             self.eat_area_flags_attempts_with_messages -= 1
             burst = max(1, self.eat_area_flags_burst)
@@ -361,6 +379,7 @@ class FakePanel:
             self.wrong_shape_keepalive_replies = 0
             self.eat_keepalive_attempts_with_message = 0
             self.eat_area_flags_attempts_with_messages = 0
+            self.eat_arm_disarm_attempts_with_messages = 0
             self.interleave_messages_before_disarm = []
             # Fresh login clears soft-zombie trust-poll NAK (ADR-011 bounded re-login).
             self.nak_area_flags_until_relogin = False
@@ -445,6 +464,7 @@ class FakePanel:
     def _handle_set_area_arm(self, frame: Frame) -> bytes:
         body = frame.body[1:]
         self.last_arm_body = body
+        self.arm_sequences.append(frame.sequence)
         if body:
             self.last_arm_mode = body[0]
             self.arm_calls.append(body[0])
@@ -456,6 +476,7 @@ class FakePanel:
     def _handle_set_area_disarm(self, frame: Frame) -> bytes:
         self.last_disarm_body = frame.body[1:]
         self.disarm_calls += 1
+        self.disarm_sequences.append(frame.sequence)
         if self.nak_next_disarm:
             self.nak_next_disarm = False
             return bytes([CMD_SET_AREA_DISARM, NAK])
