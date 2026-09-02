@@ -4,7 +4,7 @@ title: Retry a chatty Arm/Disarm timeout as a new request
 status: awaiting-review
 assignee: []
 created_date: '2026-09-02 10:51'
-updated_date: '2026-09-02 11:49'
+updated_date: '2026-09-02 11:54'
 labels:
   - 'container:texecom-alarm-app'
   - 'size:M'
@@ -58,5 +58,5 @@ Verification: cd texecom_alarm && python -m pytest tests/test_protocol_client.py
 Notes/assumptions: New-sequence busy retry applies only to SETAREAARM/SETAREADISARM (task/ADR scope); other commands keep same-sequence timeout retry. Alarm Panel Connection, hello patience, reconnect, and byte-skip were not changed. test_arm_commands.py unchanged because retries live in PanelClient.
 
 ## Build phase
-phase: awaiting-review
+phase: merging
 <!-- SECTION:FINAL_SUMMARY:END -->
