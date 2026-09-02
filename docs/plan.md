@@ -1,6 +1,6 @@
 # Plan
 
-**State:** Approved ✅
+**State:** Draft 📝
 
 ---
 
@@ -8,7 +8,7 @@
 
 | Component | Effort | Status | Notes |
 |---|---|---|---|
-| texecom-alarm-app | L | planned ✅ | TASK-1–58 done. Busy-versus-dead wave TASK-59–61 + checkpoint TASK-62 (ADR-021; corrective for TASK-7 post-ACK flags + command-failure on housekeeping parse miss; coverage for decode-fail reason + leading hex at INFO/WARNING). |
+| texecom-alarm-app | L | planned ✅ | TASK-1–63 done. ADR-022 corrective wave TASK-64–65 + checkpoint TASK-66 (busy Arm/Disarm timeout retries as a new request; Connection off only on refuse, silent timeout, or exhausted retries). ADR-023 is a constraint (ordinary Disarm, no Reset), not a task. |
 
 ---
 
