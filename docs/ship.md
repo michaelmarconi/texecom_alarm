@@ -21,7 +21,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 | Backups | n/a | No extra datastore; HA backup of add-on options is sufficient |
 | Official HA Apps store | n/a | Community GitHub repository is the intended path |
 | Store-shaped repository | pass | Root `repository.yaml` + App in `texecom_alarm/`; store URL uses generated `#app` branch |
-| Pre-built images (GHCR) | pending | `0.3.6` published. `0.3.7` not confirmed yet |
+| Pre-built images (GHCR) | pass | `0.3.7` published (`docker manifest inspect` amd64 + arm64; Builder run 33746886134) |
 | RISK-017 fingerprint | pass | Working tree + history rewrite complete (recorded 2026-08-23) |
 | CHANGELOG vs product | pass | `[0.3.7]` records duplicate-arm ignore, post-ACK resync, and lagging-unset reconnect; abstract household language, no pipeline IDs |
 | Licence label consistency | pass | `Dockerfile` OCI label is MIT |
@@ -31,7 +31,7 @@ Risk-scaled for a LAN panel App (UDL + MQTT credentials in Supervisor options; n
 ## Deploy
 
 - Authorized: yes — 2026-09-03 (practitioner chose bump and publish so household HA can Update; skip store rehearsal; live smoke is household `--target`, not sim `/accept`)
-- Step performed: pending — bump `0.3.7`; push `main`; Tag version `v0.3.7`; Sync `#app`; Builder `v0.3.7`
+- Step performed: yes — bumped to `0.3.7` (`607d564`); pushed `main`; Tag version created `v0.3.7`; Sync app branch refreshed `#app` (`version: "0.3.7"` + `image:`). Builder dispatched (`gh workflow run builder.yml --ref v0.3.7 -f version=0.3.7`) — succeeded, GHCR `0.3.7` amd64 + arm64 confirmed. Store Update rehearsal skipped this cut. Local add-on left stopped so household HA can take the panel slot.
 
 Prior Authorized deploy (kept for history):
 - 0.3.6 — 2026-09-02: bumped (`946a86b`); pushed `main`; Tag version created `v0.3.6`; Sync app branch refreshed `#app`. Builder 33630276344; GHCR amd64 + arm64. Store Update rehearsal skipped. Local add-on left stopped.
