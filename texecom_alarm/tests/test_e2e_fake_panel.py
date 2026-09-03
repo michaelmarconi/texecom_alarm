@@ -738,7 +738,7 @@ async def test_e2e_mqtt_arm_disarm_commands() -> None:
 
 @pytest.mark.asyncio
 async def test_e2e_arm_omits_flags_when_live_area_already_published() -> None:
-    """After ACK, FakePanel must not see GetAreaFlags when AREA already published armed."""
+    """AREA armed_* interleaved before arm ACK means no post-ACK GetAreaFlags."""
     panel = FakePanel(
         udl_password="1234",
         zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
@@ -760,26 +760,12 @@ async def test_e2e_arm_omits_flags_when_live_area_already_published() -> None:
         await client.login()
 
         task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
-        for _ in range(150):
-            if "texecom/alarm/command" in mqtt.subscribed and mqtt.payloads_for(
-                "texecom/alarm/state"
-            ):
-                break
-            if task.done():
-                exc = task.exception()
-                if exc is not None:
-                    raise exc
-            await asyncio.sleep(0.02)
-        assert "texecom/alarm/command" in mqtt.subscribed
-
-        await panel.inject_area_message(area_number=1, state=3)
-        for _ in range(100):
-            if mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_away":
-                break
-            await asyncio.sleep(0.02)
-        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "armed_away"
+        await _wait_e2e_command_surface(task, mqtt)
 
         flags_before = panel.area_flags_calls
+        # Push AREA armed_away just before the arm ACK so live state settles
+        # during the command wait — flags must not be asked again after ACK.
+        panel.interleave_message_before_response = bytes([MSG_AREA, 1, 3])
         await mqtt.push_inbound("texecom/alarm/command", "ARM_AWAY")
         for _ in range(100):
             if panel.last_arm_mode == 0:
@@ -1736,6 +1722,56 @@ async def test_e2e_duplicate_disarm_does_not_tx_second_setareadisarm() -> None:
         await asyncio.sleep(0.15)
         assert panel.disarm_calls == 1
         assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+        assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+        assert "OFF" not in mqtt.payloads_for("texecom/panel_connection/state")
+
+        stop.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_e2e_duplicate_arm_does_not_tx_second_setareaarm() -> None:
+    """Two ARM_NIGHT MQTT payloads must yield one panel arm TX.
+
+    A second SETAREAARM into the exit M burst is a decode miss. With
+    garbage_on_arm_after_first, a duplicate TX would jam the stream; the
+    duplicate must not go on the wire and Connection must stay on.
+    """
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="FRONT DOOR", status=0x00)],
+        zone_count=12,
+    )
+    panel.garbage_on_arm_after_first = True
+    await panel.start()
+    try:
+        mqtt = RecordingMqttPublisher()
+        settings = _settings(panel, mqtt_port=1883)
+        stop = asyncio.Event()
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+
+        task = asyncio.create_task(run(settings, panel=client, mqtt=mqtt, idle=stop.wait))
+        await _wait_e2e_command_surface(task, mqtt)
+
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_NIGHT")
+        await mqtt.push_inbound("texecom/alarm/command", "ARM_NIGHT")
+        for _ in range(150):
+            if len(panel.arm_calls) >= 1 or task.done():
+                break
+            await asyncio.sleep(0.02)
+
+        await asyncio.sleep(0.2)
+        assert panel.arm_calls == [1]
         assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
         assert "OFF" not in mqtt.payloads_for("texecom/panel_connection/state")
 

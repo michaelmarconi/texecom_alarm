@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from tests.fake_panel import FakePanel, FakeZone
@@ -1310,3 +1310,234 @@ async def test_mqtt_publish_error_does_not_abort_listen() -> None:
     with pytest.raises(asyncio.CancelledError):
         await task
     assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+
+
+@pytest.mark.asyncio
+async def test_reconnect_keeps_arming_when_flags_look_disarmed() -> None:
+    """Reconnect still reads flags but must not publish Off over arming."""
+    from texecom_alarm.reconnect import reconnect_after_disconnect
+
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        await mqtt.publish("texecom/alarm/state", "arming", retain=True)
+        settings = _settings(panel)
+        zones = [Zone(number=1, zone_type=1, name="DOOR")]
+
+        async def instant_sleep(delay: float) -> None:
+            return None
+
+        payload = await reconnect_after_disconnect(
+            client,
+            mqtt,
+            settings=settings,
+            zones=zones,
+            zone_count=12,
+            sleep=instant_sleep,
+            current_alarm_payload="arming",
+        )
+        assert payload == "arming"
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "arming"
+        assert CMD_GET_AREA_FLAGS in panel.commands_seen
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_listen_protocol_violation_after_arm_ack_while_disarmed_is_collision() -> None:
+    """CRC after Arm ACK while MQTT is still Off must be a resync, not a failed tap."""
+    from texecom_alarm.app import _listen_panel_messages
+    from texecom_alarm.panel_trust import PanelTrust
+    from texecom_alarm.protocol.client import ForcedDisconnect
+
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+    trust.note_arm_acked("night")
+
+    panel = AsyncMock()
+
+    async def _recv(*, timeout: float = 1.0) -> object:
+        raise ForcedDisconnect("Panel at 127.0.0.1:10001 sent data outside the Connect protocol.")
+
+    panel.recv_message = _recv
+    settings = _static_settings()
+    await _listen_panel_messages(
+        panel,
+        mqtt,
+        settings=settings,
+        topic_prefix="texecom",
+        in_use_zones={1},
+        alarm_state=_SharedAlarmState(payload="disarmed"),
+        idle_timeout=0.05,
+        trust=trust,
+    )
+    assert trust.consume_session_collision() is True
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Panel at 127.0.0.1:10001 ended the session (sent +++).",
+        "Panel at 127.0.0.1:10001 closed the network connection. "
+        "Another client may have taken ComIP, or the panel restarted; "
+        "the add-on will reconnect.",
+    ],
+)
+async def test_listen_hangup_after_arm_ack_is_not_collision(message: str) -> None:
+    """Peer close and +++ still turn Connection off; they are not a torn follow-up."""
+    from texecom_alarm.app import _listen_panel_messages
+    from texecom_alarm.panel_trust import PanelTrust
+    from texecom_alarm.protocol.client import ForcedDisconnect
+
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+    trust.note_arm_acked("night")
+
+    panel = AsyncMock()
+
+    async def _recv(*, timeout: float = 1.0) -> object:
+        raise ForcedDisconnect(message)
+
+    panel.recv_message = _recv
+    settings = _static_settings()
+    await _listen_panel_messages(
+        panel,
+        mqtt,
+        settings=settings,
+        topic_prefix="texecom",
+        in_use_zones={1},
+        alarm_state=_SharedAlarmState(payload="disarmed"),
+        idle_timeout=0.05,
+        trust=trust,
+    )
+    assert trust.consume_session_collision() is False
+
+
+@pytest.mark.asyncio
+async def test_reconnect_lagging_disarmed_does_not_clear_arm_gate() -> None:
+    """Flags omit exit; a lagging unset snapshot must not forget this Night tap."""
+    from texecom_alarm.arm_commands import ArmGestureGate, handle_alarm_command
+
+    gate = ArmGestureGate()
+    gate.last_acked_ha_mode = "night"
+    alarm_state = _SharedAlarmState(payload="disarmed")
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    settings = _static_settings()
+    zones = [Zone(number=1, zone_type=1, name="DOOR")]
+    listen_n = {"n": 0}
+
+    async def _listen(*_args: object, **_kwargs: object) -> None:
+        listen_n["n"] += 1
+        if listen_n["n"] == 1:
+            return
+        raise asyncio.CancelledError()
+
+    async def _reconnect(*_args: object, **_kwargs: object) -> str:
+        return "disarmed"
+
+    with (
+        patch("texecom_alarm.app._listen_panel_messages", side_effect=_listen),
+        patch("texecom_alarm.app.reconnect_after_disconnect", new=_reconnect),
+        patch("texecom_alarm.app.maybe_publish_trigger_snapshot", new_callable=AsyncMock),
+    ):
+        with pytest.raises(asyncio.CancelledError):
+            await _listen_with_reconnect(
+                AsyncMock(),
+                mqtt,
+                settings=settings,
+                zones=zones,
+                zone_count=12,
+                topic_prefix="texecom",
+                in_use_zones={1},
+                alarm_state=alarm_state,
+                arm_gate=gate,
+            )
+
+    assert gate.last_acked_ha_mode == "night"
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    await handle_alarm_command(
+        panel,
+        settings,
+        "ARM_NIGHT",
+        get_current_alarm_state=lambda: alarm_state.payload,
+        arm_gate=gate,
+    )
+    panel.set_area_arm.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reconnect_armed_away_clears_night_gate() -> None:
+    """Keypad Away during the outage is a new gesture; Night from HA must still TX."""
+    from texecom_alarm.arm_commands import ArmGestureGate, handle_alarm_command
+
+    gate = ArmGestureGate()
+    gate.last_acked_ha_mode = "night"
+    alarm_state = _SharedAlarmState(payload="disarmed")
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    settings = _static_settings()
+    zones = [Zone(number=1, zone_type=1, name="DOOR")]
+    listen_n = {"n": 0}
+
+    async def _listen(*_args: object, **_kwargs: object) -> None:
+        listen_n["n"] += 1
+        if listen_n["n"] == 1:
+            return
+        raise asyncio.CancelledError()
+
+    async def _reconnect(*_args: object, **_kwargs: object) -> str:
+        return "armed_away"
+
+    with (
+        patch("texecom_alarm.app._listen_panel_messages", side_effect=_listen),
+        patch("texecom_alarm.app.reconnect_after_disconnect", new=_reconnect),
+        patch("texecom_alarm.app.maybe_publish_trigger_snapshot", new_callable=AsyncMock),
+    ):
+        with pytest.raises(asyncio.CancelledError):
+            await _listen_with_reconnect(
+                AsyncMock(),
+                mqtt,
+                settings=settings,
+                zones=zones,
+                zone_count=12,
+                topic_prefix="texecom",
+                in_use_zones={1},
+                alarm_state=alarm_state,
+                arm_gate=gate,
+            )
+
+    assert gate.last_acked_ha_mode is None
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    await handle_alarm_command(
+        panel,
+        settings,
+        "ARM_NIGHT",
+        get_current_alarm_state=lambda: alarm_state.payload,
+        arm_gate=gate,
+    )
+    panel.set_area_arm.assert_awaited_once()

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Protocol
 
+from texecom_alarm.alarm_flags_guard import flags_snapshot_may_replace_live
 from texecom_alarm.config import Settings
 from texecom_alarm.log_labels import area_state_label
 from texecom_alarm.mqtt.discovery import alarm_state_topic
@@ -176,10 +177,12 @@ async def publish_area_state_snapshot(
     settings: Settings,
     topic_prefix: str,
     zone_count: int,
+    current_alarm_payload: str | None = None,
 ) -> str:
     """GetAreaFlags snapshot → retained MQTT for area 1 only (ADR-009).
 
-    Returns the HA payload that was published.
+    Returns the HA payload that was published, or the existing live payload when
+    a lagging unset decode must not replace exit/entry (`arming` / `pending`).
     """
     area_size = area_size_for_zones(zone_count)
     if area_size != 1:
@@ -200,6 +203,19 @@ async def publish_area_state_snapshot(
         area_number=HOUSE_AREA_NUMBER,
         settings=settings,
     )
+    if not flags_snapshot_may_replace_live(current_alarm_payload, payload):
+        summary = _flags_summary_for_log(flags, area_size=area_size, area_number=HOUSE_AREA_NUMBER)
+        logger.debug(
+            "area_state_snapshot_publish_skipped area=%s live=%s decoded=%s (%s)",
+            HOUSE_AREA_NUMBER,
+            current_alarm_payload,
+            payload,
+            summary,
+        )
+        if current_alarm_payload is None:
+            # Guard returned False only when a live payload exists.
+            return payload
+        return current_alarm_payload
     await publish_alarm_state(mqtt, payload=payload, topic_prefix=topic_prefix)
     summary = _flags_summary_for_log(flags, area_size=area_size, area_number=HOUSE_AREA_NUMBER)
     logger.debug(

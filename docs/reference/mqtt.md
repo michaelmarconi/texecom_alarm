@@ -45,6 +45,12 @@ The app publishes retained `arming` on `{prefix}/alarm/state`, then the current
 payload, so the Home Assistant card can drop an optimistic tap. It does not set
 live alarm state to arming. `DISARM` is never gated.
 
+A second identical `ARM_*` after that mode already succeeded (or while the
+card shows that `armed_*` mode, or generic `arming` for this same gesture) is
+ignored — same idea as a duplicate `DISARM` when already unset. A different
+`ARM_*` still goes through, including while the card shows generic `arming`.
+Command topic payloads are unchanged.
+
 ## Ready to arm
 
 Three MQTT switches start **on**. Automations in Home Assistant turn them off

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Protocol
 
 from texecom_alarm.alarm_flags_guard import (
@@ -48,6 +49,34 @@ _PAYLOAD_TO_HA_MODE = {
     PAYLOAD_ARM_NIGHT: "night",
     PAYLOAD_ARM_HOME: "home",
 }
+
+
+@dataclass
+class ArmGestureGate:
+    """Remembers the last arm mode the panel ACK'd for this app lifetime.
+
+    MQTT arm commands are handled one after another. After the first ACK the
+    shared alarm payload is often still disarmed until the exit AREA event
+    arrives, so "already arming on MQTT" alone cannot suppress a double submit.
+    Same lifetime as the shared alarm state in the app.
+    """
+
+    last_acked_ha_mode: str | None = None
+
+    def observe_live_payload(self, payload: str | None) -> None:
+        """Clear this gesture when live state shows the house is unset or elsewhere.
+
+        Keypad/vendor can unset (or switch mode) without a Home Assistant Disarm.
+        Leave the gate set for arming, pending, and the same armed_* so a
+        double-submit while MQTT is still disarmed is still ignored.
+        """
+        if self.last_acked_ha_mode is None or payload is None:
+            return
+        if payload == "disarmed":
+            self.last_acked_ha_mode = None
+            return
+        if payload.startswith("armed_") and payload != f"armed_{self.last_acked_ha_mode}":
+            self.last_acked_ha_mode = None
 
 
 class MqttPublisher(Protocol):
@@ -204,11 +233,15 @@ async def handle_alarm_command(
     trust: PanelTrust | None = None,
     zone_count: int | None = None,
     ready_state: object | None = None,
+    arm_gate: ArmGestureGate | None = None,
 ) -> str | None:
     """Translate ARM_*/DISARM MQTT payloads into shared panel commands (ADR-008).
 
     DISARM when the house is already unset is a no-op: a queued duplicate must
-    not send a second SETAREADISARM into the post-ACK event burst.
+    not send a second SETAREADISARM into the post-ACK event burst. A second
+    identical ARM after that mode already ACK'd (or while MQTT already shows
+    that armed mode) is likewise a no-op. Generic arming does not ignore a
+    different arm mode.
 
     On success, ask the panel for area flags only after disarm when live
     AREA/LOG has not already published unset. Arm never does that follow-up
@@ -254,6 +287,10 @@ async def handle_alarm_command(
             if trust is not None:
                 await trust.record_command_failure(REASON_DISARM_DISCONNECT)
             return None
+        if arm_gate is not None:
+            arm_gate.last_acked_ha_mode = None
+        if trust is not None:
+            trust.clear_arm_ack()
         # Re-read live state after ACK — AREA may already be queued from the wait.
         current_after = _payload_after_ack(panel, settings, get_current_alarm_state, current)
         refreshed = await _refresh_alarm_from_flags(
@@ -313,6 +350,22 @@ async def handle_alarm_command(
                 )
         return None
 
+    armed_payload = f"armed_{ha_mode}"
+    if current == armed_payload:
+        logger.info(
+            "alarm_command_arm_ignored already=%s requested=%s",
+            current,
+            ha_mode,
+        )
+        return None
+    if arm_gate is not None and arm_gate.last_acked_ha_mode == ha_mode:
+        logger.info(
+            "alarm_command_arm_ignored already=acked_%s requested=%s",
+            ha_mode,
+            ha_mode,
+        )
+        return None
+
     logger.debug("alarm_command_arm mode=%s byte=%s", ha_mode, mode_byte)
     try:
         await panel.set_area_arm(mode_byte)
@@ -353,6 +406,20 @@ async def handle_alarm_command(
             )
         return None
     except ForcedDisconnect as exc:
+        live_state = get_current_alarm_state() if get_current_alarm_state is not None else None
+        already_acked = (trust is not None and trust.last_acked_arm_ha_mode == ha_mode) or (
+            live_state in ("arming", "pending") or live_state == armed_payload
+        )
+        if already_acked and exc.is_unreadable_stream():
+            logger.warning(
+                "Panel session became unreadable after arm mode %s already succeeded: %s "
+                "Treating as a collision to resync, not a failed arm.",
+                ha_mode,
+                exc,
+            )
+            if trust is not None:
+                trust.note_session_collision()
+            raise
         logger.warning(
             "Panel session ended during arm request for mode %s: %s",
             ha_mode,
@@ -360,14 +427,23 @@ async def handle_alarm_command(
         )
         if trust is not None:
             await trust.record_command_failure(REASON_ARM_DISCONNECT, ha_mode=ha_mode)
-        live_state = get_current_alarm_state() if get_current_alarm_state is not None else None
-        if mqtt is not None and topic_prefix is not None and live_state is not None:
+        # Do not publish disarmed over arming/pending from stale shared state.
+        if (
+            mqtt is not None
+            and topic_prefix is not None
+            and live_state is not None
+            and live_state not in ("arming", "pending")
+        ):
             await publish_alarm_state(
                 mqtt,
                 payload=live_state,
                 topic_prefix=topic_prefix,
             )
         return None
+    if arm_gate is not None:
+        arm_gate.last_acked_ha_mode = ha_mode
+    if trust is not None:
+        trust.note_arm_acked(ha_mode)
     # Re-read live state after ACK — AREA may have pushed arming during the command.
     current_after = _payload_after_ack(panel, settings, get_current_alarm_state, current)
     return await _refresh_alarm_from_flags(

@@ -109,6 +109,9 @@ class PanelTrust:
         # parsed. Reconnect consumes this so a first-attempt re-login can keep
         # Connection on instead of treating the tap as failed.
         self._session_collision = False
+        # Last arm HA mode the panel ACK'd; used to classify a later
+        # ForcedDisconnect on a duplicate same-mode TX as a collision.
+        self.last_acked_arm_ha_mode: str | None = None
         # Separate from _degraded_since/_mark_degraded on purpose (ADR-020): a
         # refused/unanswered check-in must never touch Connection/_live by
         # itself, only this streak-since timestamp, kept fully independent of
@@ -179,6 +182,14 @@ class PanelTrust:
             return False
         return (self._clock() - self._checkin_failure_since) >= self._checkin_patience
 
+    def note_arm_acked(self, ha_mode: str) -> None:
+        """Remember that this arm mode was ACK'd by the panel."""
+        self.last_acked_arm_ha_mode = ha_mode
+
+    def clear_arm_ack(self) -> None:
+        """Clear last arm ACK memory after a successful disarm."""
+        self.last_acked_arm_ha_mode = None
+
     def note_session_collision(self) -> None:
         """Remember that a successful tap's follow-up read could not be parsed.
 
@@ -211,6 +222,7 @@ class PanelTrust:
         self._last_failure_ha_mode = None
         self._checkin_failure_since = None
         self._session_collision = False
+        self.last_acked_arm_ha_mode = None
         await publish_panel_link_state(
             self._mqtt,
             topic_prefix=self._topic_prefix,

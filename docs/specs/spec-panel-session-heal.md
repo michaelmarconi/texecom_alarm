@@ -1,6 +1,6 @@
 # Spec: panel-session-heal
 
-**Date:** 2026-08-09  
+**Date:** 2026-09-03  
 **State:** Accepted ✅
 
 ---
@@ -31,7 +31,13 @@ live with zone/alarm state re-synced from the panel. That freshness entity’s
 friendly name in Home Assistant is **Alarm Panel Connection** (replacing
 **Alarm Panel Connected**). Household alerts stay in Home Assistant (e.g.
 automate on that signal); this app only makes the signal honest, recoverable,
-and clearly named.
+and clearly named. After Arm or Disarm has already succeeded, bytes that do not
+form a message mean we must log in again — not that the tap failed. **Alarm
+Panel Connection** stays on if that first re-login works. A hang-up or the panel
+ending the session still turns Connection off at once. After that login, house
+state is re-read; if we already know we are in exit or entry (`arming` /
+`pending`), a flags snapshot that looks unset must not become Off on the alarm
+entity.
 
 ## Scope
 
@@ -46,8 +52,11 @@ and clearly named.
 - Keep **Alarm Panel Connection** truthful: off only when we cannot talk (hung
   up, end of session, health-check patience exceeded, or a refused/timed-out
   arm or disarm); on through the patience window and through a first-attempt
-  re-login after a successful command whose later housekeeping read did not
-  parse; after a dead session, on only after state is re-synced from the panel.
+  re-login after a successful command whose later bytes did not form a message;
+  after a dead session, on only after state is re-synced from the panel.
+- After that re-login, do not publish unset over an alarm entity that already
+  shows exit or entry (`arming` / `pending`) when the flags snapshot still looks
+  unset.
 - Present that connectivity entity in Home Assistant with the friendly name
   **Alarm Panel Connection** (replacing **Alarm Panel Connected**).
 - Keep zone and alarm entities available with last-known state during recovery
@@ -137,6 +146,20 @@ Home Assistant, Then its friendly name is **Alarm Panel Connection** (not
 
 ---
 
+
+### AC6: Reconnect snapshot respects exit/entry
+
+Given the alarm entity already shows `arming` or `pending`, When a post-success
+re-login re-reads flags that still look unset, Then the alarm entity is not
+published Off over that exit/entry state. If the card is still Off after an
+arm that already succeeded, that same lagging unset snapshot must not forget
+the in-flight arm gesture (a later identical Arm is still ignored). Connection
+behaviour matches AC4 for the unreadable follow-up case.
+
+- **How we'll know:** end-to-end test (stand-in: FakePanel) plus unit tests for
+  the snapshot publish gate; do not claim CI proves a real panel under a live
+  event flood
+
 ## User Stories
 
 - As the household, I want monitoring to come back by itself after a mid-run panel
@@ -163,9 +186,12 @@ Home Assistant, Then its friendly name is **Alarm Panel Connection** (not
   premature “healthy” flicker during dead-session recovery.
 - Unanswered health checks still inside the patience window: Connection stays on;
   the session is not yet dead.
-- Successful arm or disarm followed by a housekeeping read that does not parse:
+- Successful arm or disarm followed by bytes that do not form a message:
   Connection stays on if the first re-login succeeds; that miss is not a failed
-  tap.
+  tap. Hang-up or end-of-session still turns Connection off at once.
+- Re-read after that login while the card already shows `arming` or `pending`:
+  a flags snapshot that looks unset must not publish Off over that exit/entry
+  state.
 - Soft trust degrade that later self-clears via a successful corroboration without
   a full session reset: still ends with Connection live and state current; this
   spec does not forbid that path, but does require healing when sitting forever

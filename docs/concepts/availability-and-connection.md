@@ -8,7 +8,7 @@ them on **separate** signals on purpose.
 | Question | What to look at | When it goes “off” |
 |----------|-----------------|-------------------|
 | Is the **app** running? | Alarm and zone entities’ availability (MQTT last will) | The add-on process has stopped |
-| Is the **panel link** live and trustworthy? | **Alarm Panel Connection** | The TCP session dropped, a routine keepalive check-in failed, or an arm/disarm was rejected or timed out |
+| Is the **panel link** live and trustworthy? | **Alarm Panel Connection** | Hang-up / end-of-session, health-check patience exceeded, or an arm/disarm refused or silently timed out (not a garbled follow-up after a successful arm/disarm whose first re-login works) |
 
 If the panel connection drops, **alarm and zone entities stay available** with
 their last known state. Dashboards and automations can still *see* a value;
@@ -24,10 +24,14 @@ see what happened.
 The sensor is off while the app is still running but should not be trusted for
 fresh panel state, for example:
 
-- The socket closed and the app is reconnecting
-- A routine keepalive check-in failed (after a small bounded retry — a
-  single odd reply right after zone activity is not enough on its own)
-- An arm or disarm was rejected or timed out, even if keepalives still succeed
+- The socket closed (hang-up) or the panel ended the session, and the app is
+  reconnecting
+- Health-check refusals or silence past the patience window
+- An arm or disarm was rejected, or timed out with a silent wait (or busy
+  retries exhausted), even if keepalives still succeed
+
+Unreadable bytes after an arm or disarm that already succeeded are a session
+resync, not a failed tap: Connection stays on if the first re-login works.
 
 A successful keepalive can turn it back on. If it stays off longer than the
 **force-reconnect window** (default 90 seconds), the app tears down the

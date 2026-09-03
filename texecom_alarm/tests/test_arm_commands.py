@@ -259,12 +259,14 @@ async def test_successful_arm_skips_refresh_when_live_is_arming() -> None:
 
 @pytest.mark.asyncio
 async def test_successful_arm_omits_flags_when_live_already_armed() -> None:
-    """Live AREA already published armed_* — skip the post-ACK flags round-trip."""
+    """Live AREA published armed_* during the ACK wait — skip post-ACK flags."""
     panel = MagicMock()
     panel.set_area_arm = AsyncMock()
     panel.get_area_flags = AsyncMock(return_value=bytes(72))
     mqtt = RecordingMqttPublisher()
     await mqtt.connect()
+    # First read (pre-TX) is still unset; after ACK, AREA has already settled.
+    states = iter(["disarmed", "armed_away", "armed_away"])
 
     result = await handle_alarm_command(
         panel,
@@ -272,7 +274,7 @@ async def test_successful_arm_omits_flags_when_live_already_armed() -> None:
         "ARM_AWAY",
         mqtt=mqtt,
         topic_prefix="texecom",
-        get_current_alarm_state=lambda: "armed_away",
+        get_current_alarm_state=lambda: next(states),
         zone_count=12,
     )
 
@@ -892,3 +894,357 @@ async def test_unready_arm_when_already_arming_skips_extra_arming_publish() -> N
         events[-1].payload if isinstance(events[-1].payload, str) else events[-1].payload.decode()
     )
     assert body["event_type"] == "home"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    ["ARM_NIGHT", "ARM_HOME", "ARM_AWAY"],
+)
+async def test_duplicate_same_mode_arm_after_ack_calls_panel_once(
+    payload: str,
+) -> None:
+    """Two identical ARM_* while shared state is still disarmed: one panel TX.
+
+    MQTT commands run one after another; after the first ACK the shared payload
+    is often still disarmed because the exit AREA event has not landed yet.
+    """
+    from texecom_alarm.arm_commands import ArmGestureGate
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    panel.set_area_disarm = AsyncMock()
+    gate = ArmGestureGate()
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        payload,
+        get_current_alarm_state=lambda: "disarmed",
+        arm_gate=gate,
+    )
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        payload,
+        get_current_alarm_state=lambda: "disarmed",
+        arm_gate=gate,
+    )
+
+    panel.set_area_arm.assert_awaited_once()
+    panel.set_area_disarm.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_arm_away_after_night_ack_still_calls_panel() -> None:
+    """A different arm mode after Night ACK must still reach the panel."""
+    from texecom_alarm.arm_commands import ArmGestureGate
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    gate = ArmGestureGate()
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_NIGHT",
+        get_current_alarm_state=lambda: "disarmed",
+        arm_gate=gate,
+    )
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_AWAY",
+        get_current_alarm_state=lambda: "disarmed",
+        arm_gate=gate,
+    )
+
+    assert panel.set_area_arm.await_count == 2
+    assert panel.set_area_arm.await_args_list[0].args == (1,)
+    assert panel.set_area_arm.await_args_list[1].args == (0,)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("current", ["arming", "armed_night"])
+async def test_arm_night_while_arming_or_armed_night_does_not_call_panel(
+    current: str,
+) -> None:
+    """Same-mode Night is ignored during this gesture's exit or once Night is set."""
+    from texecom_alarm.arm_commands import ArmGestureGate
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    gate = ArmGestureGate()
+    gate.last_acked_ha_mode = "night"
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_NIGHT",
+        get_current_alarm_state=lambda: current,
+        arm_gate=gate,
+    )
+
+    panel.set_area_arm.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", ["ARM_AWAY", "ARM_HOME"])
+async def test_different_mode_arm_while_arming_still_calls_panel(payload: str) -> None:
+    """Away or Home during Night exit must still reach the panel."""
+    from texecom_alarm.arm_commands import ArmGestureGate
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    gate = ArmGestureGate()
+    gate.last_acked_ha_mode = "night"
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        payload,
+        get_current_alarm_state=lambda: "arming",
+        arm_gate=gate,
+    )
+
+    panel.set_area_arm.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_forced_disconnect_after_arm_ack_is_collision_not_failed_arm() -> None:
+    """After Night already ACK'd, a later same-mode ForcedDisconnect is a collision."""
+    from texecom_alarm.panel_trust import PanelTrust
+    from texecom_alarm.protocol.client import ForcedDisconnect
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock(
+        side_effect=[None, ForcedDisconnect("sent data outside the Connect protocol")]
+    )
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_NIGHT",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "disarmed",
+        trust=trust,
+    )
+    with pytest.raises(ForcedDisconnect):
+        await handle_alarm_command(
+            panel,
+            _settings(),
+            "ARM_NIGHT",
+            mqtt=mqtt,
+            topic_prefix="texecom",
+            get_current_alarm_state=lambda: "disarmed",
+            trust=trust,
+        )
+
+    assert panel.set_area_arm.await_count == 2
+    assert trust.live is True
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    assert trust.consume_session_collision() is True
+    assert mqtt.payloads_for("texecom/panel_connection/state").count("OFF") == 0
+    # Stale shared disarmed must not be republished as a failed-arm flash.
+    assert mqtt.payloads_for("texecom/alarm/state") == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message",
+    [
+        "panel +++",
+        "peer closed the session",
+    ],
+)
+async def test_arm_hangup_after_prior_ack_is_not_collision(message: str) -> None:
+    """Hang-up after a prior arm ACK is a lost session, not a torn follow-up."""
+    from texecom_alarm.panel_trust import PanelTrust
+    from texecom_alarm.protocol.client import ForcedDisconnect
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock(side_effect=[None, ForcedDisconnect(message)])
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_NIGHT",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "disarmed",
+        trust=trust,
+    )
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_NIGHT",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "disarmed",
+        trust=trust,
+    )
+
+    assert panel.set_area_arm.await_count == 2
+    assert result is None
+    assert trust.live is False
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    assert trust.consume_session_collision() is False
+
+
+@pytest.mark.asyncio
+async def test_arm_hangup_while_mqtt_arming_is_not_collision() -> None:
+    """+++ during Away while the card already shows exit is hang-up, not collision."""
+    from texecom_alarm.panel_trust import PanelTrust
+    from texecom_alarm.protocol.client import ForcedDisconnect
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock(side_effect=ForcedDisconnect("panel +++"))
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+
+    result = await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_AWAY",
+        mqtt=mqtt,
+        topic_prefix="texecom",
+        get_current_alarm_state=lambda: "arming",
+        trust=trust,
+    )
+
+    panel.set_area_arm.assert_awaited_once()
+    assert result is None
+    assert trust.live is False
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "OFF"
+    assert trust.consume_session_collision() is False
+
+
+@pytest.mark.asyncio
+async def test_arm_unreadable_stream_while_mqtt_arming_is_collision() -> None:
+    """Torn Connect bytes during exit are still a collision to resync."""
+    from texecom_alarm.panel_trust import PanelTrust
+    from texecom_alarm.protocol.client import ForcedDisconnect
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock(
+        side_effect=ForcedDisconnect("sent data outside the Connect protocol")
+    )
+    mqtt = RecordingMqttPublisher()
+    await mqtt.connect()
+    await mqtt.publish("texecom/panel_connection/state", "ON", retain=True)
+    trust = PanelTrust(mqtt, topic_prefix="texecom", zone_count=12)
+
+    with pytest.raises(ForcedDisconnect):
+        await handle_alarm_command(
+            panel,
+            _settings(),
+            "ARM_AWAY",
+            mqtt=mqtt,
+            topic_prefix="texecom",
+            get_current_alarm_state=lambda: "arming",
+            trust=trust,
+        )
+
+    assert trust.live is True
+    assert mqtt.payloads_for("texecom/panel_connection/state")[-1] == "ON"
+    assert trust.consume_session_collision() is True
+
+
+@pytest.mark.asyncio
+async def test_same_mode_arm_after_live_unset_is_a_new_gesture() -> None:
+    """Keypad/vendor unset clears the gate; a later Night arm must reach the panel."""
+    from texecom_alarm.arm_commands import ArmGestureGate
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    gate = ArmGestureGate()
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_NIGHT",
+        get_current_alarm_state=lambda: "disarmed",
+        arm_gate=gate,
+    )
+    gate.observe_live_payload("disarmed")
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_NIGHT",
+        get_current_alarm_state=lambda: "disarmed",
+        arm_gate=gate,
+    )
+
+    assert panel.set_area_arm.await_count == 2
+    assert panel.set_area_arm.await_args_list[1].args == (1,)
+
+
+@pytest.mark.asyncio
+async def test_same_mode_arm_after_live_different_armed_mode_is_sent() -> None:
+    """Keypad Away while the gate still remembers Night: Night from HA is a new tap."""
+    from texecom_alarm.arm_commands import ArmGestureGate
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    gate = ArmGestureGate()
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_NIGHT",
+        get_current_alarm_state=lambda: "disarmed",
+        arm_gate=gate,
+    )
+    gate.observe_live_payload("armed_away")
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_NIGHT",
+        get_current_alarm_state=lambda: "armed_away",
+        arm_gate=gate,
+    )
+
+    assert panel.set_area_arm.await_count == 2
+    assert panel.set_area_arm.await_args_list[1].args == (1,)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("live", ["arming", "pending", "armed_night"])
+async def test_observe_live_exit_or_same_armed_does_not_clear_duplicate_gate(
+    live: str,
+) -> None:
+    """Exit/entry and same armed_* must not forget the double-submit race."""
+    from texecom_alarm.arm_commands import ArmGestureGate
+
+    panel = MagicMock()
+    panel.set_area_arm = AsyncMock()
+    gate = ArmGestureGate()
+
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_NIGHT",
+        get_current_alarm_state=lambda: "disarmed",
+        arm_gate=gate,
+    )
+    gate.observe_live_payload(live)
+    await handle_alarm_command(
+        panel,
+        _settings(),
+        "ARM_NIGHT",
+        get_current_alarm_state=lambda: "disarmed",
+        arm_gate=gate,
+    )
+
+    panel.set_area_arm.assert_awaited_once()

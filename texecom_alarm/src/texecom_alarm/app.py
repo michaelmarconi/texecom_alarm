@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from texecom_alarm import __version__
 from texecom_alarm.area_state import handle_area_message, publish_area_state_snapshot
-from texecom_alarm.arm_commands import handle_alarm_command
+from texecom_alarm.arm_commands import ArmGestureGate, handle_alarm_command
 from texecom_alarm.config import Settings, load_settings, warn_if_factory_udl
 from texecom_alarm.log_labels import log_event_label
 from texecom_alarm.logging_setup import TRACE_LEVEL, configure_logging
@@ -48,6 +48,33 @@ from texecom_alarm.zone_state import handle_zone_message, publish_zone_state_sna
 from texecom_alarm.zones import Zone, enumerate_zones
 
 logger = logging.getLogger(__name__)
+
+
+def _forced_disconnect_is_protocol_violation(exc: ForcedDisconnect) -> bool:
+    """True when the session died because bytes were outside Connect framing."""
+    return exc.is_unreadable_stream()
+
+
+def _observe_live_alarm_payload(
+    payload: str | None,
+    *,
+    arm_gate: ArmGestureGate | None,
+    trust: PanelTrust | None,
+) -> None:
+    """Keep duplicate-arm and post-ACK collision memory aligned with live state."""
+    if arm_gate is not None:
+        previous = arm_gate.last_acked_ha_mode
+        arm_gate.observe_live_payload(payload)
+        if trust is not None and previous is not None and arm_gate.last_acked_ha_mode is None:
+            trust.clear_arm_ack()
+    elif trust is not None and payload is not None:
+        # Listen-only tests may omit the gate; still drop ACK memory on unset.
+        if payload == "disarmed":
+            trust.clear_arm_ack()
+        elif payload.startswith("armed_") and trust.last_acked_arm_ha_mode is not None:
+            if payload != f"armed_{trust.last_acked_arm_ha_mode}":
+                trust.clear_arm_ack()
+
 
 # Panel drops passive listen-only sessions after ~60s; ~15s GETDATETIME keeps alive
 # (docs/protocol-reference.md). Fallback check-in schedule interval when neither
@@ -246,6 +273,7 @@ async def run(
             logger.debug("mqtt_ready_command_subscribed", extra={"topic": ready_topic})
 
         alarm_state = _SharedAlarmState(payload=initial_alarm_payload)
+        arm_gate = ArmGestureGate()
         in_use = {z.number for z in zones}
         listen_task = asyncio.create_task(
             _listen_with_reconnect(
@@ -259,6 +287,7 @@ async def run(
                 alarm_state=alarm_state,
                 idle_timeout=listen_idle_timeout,
                 trust=trust,
+                arm_gate=arm_gate,
             ),
             name="panel-listen",
         )
@@ -273,6 +302,7 @@ async def run(
                 zone_count=zone_count,
                 ready_state=ready_state,
                 ready_command_topics=ready_command_topics,
+                arm_gate=arm_gate,
             ),
             name="mqtt-alarm-commands",
         )
@@ -368,6 +398,7 @@ async def _listen_alarm_commands(
     zone_count: int | None = None,
     ready_state: _ReadyToArmState | None = None,
     ready_command_topics: dict[str, str] | None = None,
+    arm_gate: ArmGestureGate | None = None,
 ) -> None:
     """Subscribe loop: MQTT ARM_*/DISARM and ready-to-arm switch commands."""
     inbound = mqtt.inbound_messages  # type: ignore[attr-defined]
@@ -419,6 +450,7 @@ async def _listen_alarm_commands(
                 trust=trust,
                 zone_count=zone_count,
                 ready_state=ready_state,
+                arm_gate=arm_gate,
             )
             if new_payload is not None:
                 alarm_state.payload = new_payload
@@ -483,6 +515,7 @@ async def _listen_with_reconnect(
     alarm_state: _SharedAlarmState,
     idle_timeout: float = _KEEPALIVE_IDLE_TIMEOUT,
     trust: PanelTrust | None = None,
+    arm_gate: ArmGestureGate | None = None,
 ) -> None:
     """Listen for panel pushes; on ForcedDisconnect, asymmetric reconnect then resume."""
     # Survive outages: one rolling buffer across reconnect cycles (ADR-004).
@@ -500,6 +533,7 @@ async def _listen_with_reconnect(
                 alarm_state=alarm_state,
                 activity=activity,
                 trust=trust,
+                arm_gate=arm_gate,
             )
         except Exception:
             # Non-recoverable listen failure: mark panel-link degraded, never
@@ -531,8 +565,13 @@ async def _listen_with_reconnect(
             zones=zones,
             zone_count=zone_count,
             collision=collision,
+            current_alarm_payload=last_alarm_payload,
         )
         alarm_state.payload = last_alarm_payload
+        # Flags omit exit/entry. A lagging unset snapshot is not proof the house
+        # is Off, so do not forget this arm gesture. Live AREA still clears it.
+        if last_alarm_payload != "disarmed":
+            _observe_live_alarm_payload(last_alarm_payload, arm_gate=arm_gate, trust=trust)
         if trust is not None:
             await trust.reset_after_reconnect()
         # Snapshot may edge into triggered during the outage; use preserved buffer.
@@ -611,6 +650,7 @@ async def _listen_panel_messages(
     activity: TriggerActivityBuffer | None = None,
     trust: PanelTrust | None = None,
     zones: list[Zone] | None = None,
+    arm_gate: ArmGestureGate | None = None,
 ) -> None:
     """Steady-state loop until ForcedDisconnect.
 
@@ -664,6 +704,7 @@ async def _listen_panel_messages(
                                 "keeping the panel listen loop."
                             )
                         alarm_state.payload = new_payload
+                        _observe_live_alarm_payload(new_payload, arm_gate=arm_gate, trust=trust)
                     _raise_if_stuck_trust_relogin(trust)
                 continue
             if clock() - last_checkin_at >= idle_timeout:
@@ -697,6 +738,7 @@ async def _listen_panel_messages(
                             "keeping the panel listen loop."
                         )
                     alarm_state.payload = new_payload
+                    _observe_live_alarm_payload(new_payload, arm_gate=arm_gate, trust=trust)
                 _raise_if_stuck_trust_relogin(trust)
             body = frame.body
             if not body:
@@ -773,6 +815,7 @@ async def _listen_panel_messages(
                             "keeping the panel listen loop."
                         )
                     alarm_state.payload = new_payload
+                    _observe_live_alarm_payload(new_payload, arm_gate=arm_gate, trust=trust)
             else:
                 # OUTPUT / USER / DEBUG / unknown — not decoded for MQTT yet.
                 logger.log(
@@ -781,7 +824,13 @@ async def _listen_panel_messages(
                     _msg_subtype_label(subtype),
                     body.hex(),
                 )
-    except ForcedDisconnect:
+    except ForcedDisconnect as exc:
+        if trust is not None and _forced_disconnect_is_protocol_violation(exc):
+            if (
+                alarm_state.payload in ("arming", "pending")
+                or trust.last_acked_arm_ha_mode is not None
+            ):
+                trust.note_session_collision()
         return
 
 

@@ -1,6 +1,6 @@
 # Spec: panel-link-liveness
 
-**Date:** 2026-08-07  
+**Date:** 2026-09-03  
 **State:** Accepted ✅
 
 ---
@@ -130,6 +130,11 @@ recovery (no regression vs the existing clean-disconnect behaviour).
   resort, not the design for silent panel-path death.
 - Stuck zone state left from before degradation (e.g. a sensor left “on”): after
   recovery, re-sync must correct MQTT to the panel’s current truth.
+
+- Successful arm or disarm followed by bytes that do not form a message: that is
+  a session resync, not a failed tap; Connection stays on if the first re-login
+  works (see `spec-panel-session-heal.md`). Hang-up or end-of-session still turns
+  Connection off at once.
 
 ## Constraints
 

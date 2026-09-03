@@ -54,6 +54,7 @@ async def reconnect_after_disconnect(
     zone_count: int,
     sleep: Callable[[float], Awaitable[None]] | None = None,
     collision: bool = False,
+    current_alarm_payload: str | None = None,
 ) -> str:
     """Resume after ForcedDisconnect: spaced retries → LOGIN+snapshots → ON.
 
@@ -109,6 +110,7 @@ async def reconnect_after_disconnect(
                 settings=settings,
                 topic_prefix=topic_prefix,
                 zone_count=zone_count,
+                current_alarm_payload=current_alarm_payload,
             )
             await panel.set_event_messages()
             await publish_panel_link_state(mqtt, topic_prefix=topic_prefix, live=True)

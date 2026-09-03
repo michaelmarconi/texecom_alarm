@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A second identical Arm after that mode already succeeded (or while the card
+  shows that armed mode, or generic `arming` for this same gesture) is ignored,
+  so a queued duplicate does not talk to the panel during the exit event burst.
+  A different arm mode still goes through, including during exit. Once the
+  house is unset (including from the keypad), a later same-mode Arm is a new
+  tap and is sent.
+- Unreadable follow-up bytes after a successful Arm are treated as a session
+  resync, not a failed arm, including while the card still shows Off; **Alarm
+  Panel Connection** stays on if the first re-login works. A hang-up or
+  `+++` is still a lost session, not that resync, even if the card already
+  shows `arming` or a prior arm already succeeded.
+- A reconnect flags snapshot that still looks unset does not flash Off over an
+  alarm card that already shows exit or entry (`arming` / `pending`), and does
+  not forget an in-flight arm while the card is still Off.
+
+
 ## [0.3.6] - 2026-09-02
 
 ### Fixed

@@ -65,7 +65,11 @@ class ProtocolError(Exception):
 
 
 class ForcedDisconnect(Exception):
-    """Panel ended the session (``+++`` or peer close)."""
+    """Panel ended the session (``+++``, peer close, or bytes outside Connect)."""
+
+    def is_unreadable_stream(self) -> bool:
+        """True when death was torn/non-Connect bytes, not hang-up or ``+++``."""
+        return "outside the Connect" in str(self)
 
 
 class _BusyCommandTimeout(TimeoutError):

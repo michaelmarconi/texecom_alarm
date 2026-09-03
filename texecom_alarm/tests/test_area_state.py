@@ -339,3 +339,122 @@ async def test_handle_area_message_debug_includes_state_label() -> None:
         for handler in before_handlers:
             root.addHandler(handler)
         root.setLevel(before_level)
+
+
+@pytest.mark.asyncio
+async def test_snapshot_skips_disarmed_over_arming() -> None:
+    """Flags still look unset during exit; do not publish Off over arming."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        await mqtt.publish("texecom/alarm/state", "arming", retain=True)
+        settings = _settings()
+
+        returned = await publish_area_state_snapshot(
+            client,
+            mqtt,
+            settings=settings,
+            topic_prefix="texecom",
+            zone_count=12,
+            current_alarm_payload="arming",
+        )
+
+        assert returned == "arming"
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "arming"
+        assert CMD_GET_AREA_FLAGS in panel.commands_seen
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_snapshot_skips_disarmed_over_pending() -> None:
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        await mqtt.publish("texecom/alarm/state", "pending", retain=True)
+        settings = _settings()
+
+        returned = await publish_area_state_snapshot(
+            client,
+            mqtt,
+            settings=settings,
+            topic_prefix="texecom",
+            zone_count=12,
+            current_alarm_payload="pending",
+        )
+
+        assert returned == "pending"
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "pending"
+        await client.close()
+    finally:
+        await panel.stop()
+
+
+@pytest.mark.asyncio
+async def test_snapshot_publishes_disarmed_when_no_current_payload() -> None:
+    """Cold start still publishes unset from a quiet flags block."""
+    panel = FakePanel(
+        udl_password="1234",
+        zones=[FakeZone(number=1, zone_type=1, name="DOOR", status=0x00)],
+        zone_count=12,
+    )
+    await panel.start()
+    try:
+        client = PanelClient(
+            panel.host,
+            panel.port,
+            udl_password="1234",
+            login_delay=0.0,
+            response_timeout=0.5,
+        )
+        await client.connect()
+        await client.login()
+        mqtt = RecordingMqttPublisher()
+        await mqtt.connect()
+        settings = _settings()
+
+        returned = await publish_area_state_snapshot(
+            client,
+            mqtt,
+            settings=settings,
+            topic_prefix="texecom",
+            zone_count=12,
+            current_alarm_payload=None,
+        )
+
+        assert returned == "disarmed"
+        assert mqtt.payloads_for("texecom/alarm/state")[-1] == "disarmed"
+        await client.close()
+    finally:
+        await panel.stop()

@@ -1,40 +1,43 @@
 # Spec: alarm-control
 
-**Date:** 2026-08-01 (amended 2026-08-23)
+**Date:** 2026-09-03
 **State:** Accepted ✅
 
 ---
 
 ## Problem
 
-Today, arming to Home mode (`part_arm_2`) has never worked without crashing the
-the prior MQTT bridge add-on — the HA template wrapper has no `arm_home` handler at all,
-because it's never been safe to expose one. Separately, the add-on also crashes when
-the alarm is actually triggered (siren activation) — the exact moment reliability
-matters most. On top of both of these specific failure modes, the add-on is also
-generally crash/restart-prone (a suspected TX/RX collision bug), so arm/disarm
-control as a whole can't be trusted to keep working.
+The household arms and disarms from Home Assistant (dashboard, automations, or
+anything that drives the alarm entity). A double submit of the same arm — two
+identical commands a few tens of milliseconds apart — must not confuse the add-on:
+the panel may already have accepted the first arm and be busy sending exit
+events. If the add-on treats a torn follow-up as a failed arm, Home Assistant can
+briefly show Off and **Alarm Panel Connection** off while Night (or Home/Away) is
+actually in progress. During exit, a reconnect status read can still look unset;
+that must not flash Off over an in-progress exit or entry.
 
 ## Goal
 
-The `house_alarm_panel` wrapper entity — and through it, the household's automations
-(auto-arm on empty house, auto-disarm on return, the `im_leaving`/`cancel_leaving`
-scripts, garage integration) and HomeKit exposure — has a reliable underlying
-`alarm_control_panel` entity that supports all three arm modes (away, night, and
-home) plus disarm and accurate live state reporting, without crashing during either
-normal arm/disarm cycles or an actual alarm trigger.
+Arm away, night, and home, plus disarm from any state, work reliably: a second
+identical arm after that mode already succeeded (or while the card already shows
+that mode's `armed_*` state, or generic `arming` for this same gesture) does not
+go to the panel again; disarm and a different arm mode still do, including while
+the card shows generic `arming`. Live state includes arming and pending. A
+sounding alarm does not crash the add-on. Entity availability stays tied to the
+app process, not the panel link; freshness is a separate connection signal.
 
 ## Scope
 
 **In scope**
 
-- Arm away, arm night, and arm home, each reliably transitioning the panel to the
-  corresponding HA state without crashing the integration.
+- Arm away, arm night, and arm home, each reliably reaching the matching armed
+  (or arming) state without crashing the add-on — including when the same arm is
+  submitted twice in quick succession.
 - Disarm, reliably, from any state (already disarmed, armed_away, armed_night,
   armed_home, triggered, pending, arming).
 - Live reporting of the panel's current state (disarmed / armed_away / armed_night /
-  armed_home / triggered / pending / arming) so the wrapper entity and its dependent
-  automations/scripts/HomeKit exposure can react to it.
+  armed_home / triggered / pending / arming) so automations and dashboards can
+  react to it.
 - Surviving an actual alarm trigger (siren activation) without crashing, and
   correctly reporting the `triggered` state throughout the event.
 - A persisted snapshot of the most recent zone/log activity leading into a trigger
@@ -44,8 +47,6 @@ normal arm/disarm cycles or an actual alarm trigger.
   currently live or degraded, independent of the `alarm_control_panel`/zone
   entities' own state — those entities' availability is governed solely by whether
   the app itself is running, never by panel-link health.
-- Operation fully independent of the prior MQTT bridge, which will be uninstalled once this
-  capability is delivered.
 
 **Out of scope**
 
@@ -101,6 +102,30 @@ normal arm/disarm cycles or an actual alarm trigger.
      connectivity off, and snapshot attributes across reconnect; manual acceptance
      test for live trigger-time outage
 
+7. Given an arm mode has already succeeded for this gesture (panel accepted that
+   arm), or the alarm card already shows that mode's `armed_*` state, When a
+   second identical arm for the same mode is submitted, Then the add-on does
+   not send another arm to the panel. Generic `arming` (exit does not name the
+   mode) ignores only that same gesture's mode, not a different `ARM_*`. Disarm
+   and a different arm mode still go through. A reconnect flags snapshot that
+   still looks unset is not “the house is Off” for this gate — flags omit
+   exit/entry — so a later same-mode arm during that exit is still ignored.
+   Once the house is unset — including from the keypad or vendor app, not
+   only Home Assistant Disarm — a later same-mode arm is a new gesture and is sent.
+   - **How we'll know:** unit test and end-to-end test (stand-in: FakePanel); assert
+     a single panel arm for duplicate same-mode submits, that a different mode
+     (including while the card shows generic `arming`) or disarm still reaches
+     the panel, and that a same-mode arm after the house is unset is sent
+8. Given the panel has already accepted an arm, When a follow-up read of the stream
+   cannot be understood, Then that is not treated as a failed arm: the house still
+   ends in that armed or arming state, including while the card still shows Off
+   (connection behaviour is owned by the heal / liveness specs). A hang-up or
+   the panel ending the session (`+++`) is still a lost session, not that
+   unreadable-follow-up case — even if a prior arm already succeeded or the card
+   already shows `arming`.
+   - **How we'll know:** unit test and/or end-to-end test (stand-in: FakePanel);
+     Connection and heal details asserted in those specs' tests
+
 ## User Stories
 
 - As the `house_alarm_panel` wrapper entity (and the automations/scripts that target
@@ -127,11 +152,20 @@ normal arm/disarm cycles or an actual alarm trigger.
 - Integration restart while the panel is armed or triggered — must re-sync to the
   panel's actual current state on startup, not default to disarmed or another
   incorrect value.
-- Rapid successive arm/disarm commands (e.g. an accidental double-tap) — the
-  TX/RX collision crash pattern described in the brief is no longer defended
-  against in code; avoiding it depends on the panel being reached over its
-  dedicated local-control module (an install requirement), not on client-side
-  handling.
+- Rapid successive identical arm commands (e.g. an accidental double-tap) — after
+  that mode has already succeeded for this gesture, or while the card shows
+  that `armed_*` mode, the duplicate arm is ignored. Generic `arming` does not
+  ignore a different arm mode (for example Away during Night exit). Disarm is
+  still sent. A second disarm while already unset stays ignored as today. A
+  reconnect flags snapshot that still looks unset must not forget this
+  gesture (flags omit exit). Once the house is unset (including keypad /
+  vendor live state), a later same-mode arm is a new gesture and is sent.
+- Hang-up or `+++` while an arm is in flight is a lost session (Connection off),
+  not a torn-message collision, even if the card already shows `arming` or a
+  prior arm already succeeded. Unreadable Connect bytes after a successful arm
+  remain a collision to resync.
+- Alarm and zone entities are never marked unavailable because the panel link
+  dropped; only the app process being down does that (via MQTT Last-Will).
 
 ## Constraints
 
@@ -153,47 +187,11 @@ normal arm/disarm cycles or an actual alarm trigger.
 
 ## Open Questions
 
-- ~~Should the new `alarm_control_panel` entity ID exactly match today's
-  `alarm_control_panel.texecom_alarm_arm_status` naming, or is a documented
-  rename/migration (updating `house_alarm.yaml`'s target) acceptable?~~
-  **Answered 2026-08-05; zone shape amended 2026-08-07:** Keep
-  `alarm_control_panel.texecom_alarm_arm_status` (same as today for the panel
-  entity). Friendly name is `Texecom Alarm`. Zone Entity IDs use the
-  `texecom_alarm_*` scheme with an explicit `_zone_{N}` suffix (see
-  `spec-zone-monitoring.md`) — not bit-identical legacy zone IDs; cutover may need
-  household updates later.
-- ~~Can the panel's own protocol (e.g. `GETAREADETAILS`, `cmd=35`) report each
-  Part-Arm slot's configured role/name?~~ **Answered 2026-08-04:** `GETAREADETAILS`
-  returns area identity only (`HOUSE` / unused areas), not Part-Arm slot roles —
-  see `docs/protocol-reference.md`. Auto-detection via this command is not
-  available; the Home/Night-to-slot mapping remains a manual add-on config value
-  unless a different unexercised command is later found to expose it.
-- ~~May Away be assigned to a Part-Arm slot in add-on config?~~
-  **Answered 2026-08-08:** No. Away is always full arm; Part-Arm radios are
-  Home / Night / Unused only. Assigning Away to a slot produced a live false
-  `disarmed` after Part-Arm settle (slot 3 → state 8 unmapped).
+None open for this change.
 
 ## Spike Candidates
 
-- Whether the new integration can expose the alarm as a more natively-modeled HA
-  alarm system (e.g. via MQTT `alarm_control_panel` discovery) in a way that removes
-  the need for the `house_alarm_panel` template wrapper layer entirely, versus
-  keeping the current two-layer (raw entity + template wrapper) architecture.
-  (Raised during the spec interview — architectural/technical choice, needs
-  `/analyse` investigation.)
-- ~~The exact byte-level command framing for `arm_home` (`part_arm_2`) and for
-  reliably surviving/reporting a triggered event without inducing the suspected
-  TX/RX collision crash~~ — **resolved 2026-08-04, superseded 2026-08-26:**
-  `arm_home` framing is settled and covered; the TX/RX collision survival
-  mechanism this originally called for has since been retired from the app
-  in favour of a dedicated-module install requirement.
-- Whether isolating the panel's Com Port from ARC/remote-reporting traffic (see
-  `docs/protocol-reference.md`) also shortens or eliminates the trigger-time forced
-  disconnect itself, distinct from the ordinary arm/disarm collision noise SPIKE-002
-  tested it against.
-- ~~Whether `GETAREADETAILS` (`cmd=35`) exposes each Part-Arm slot's configured
-  name/role~~ — **resolved 2026-08-04 without a dedicated spike:** it does not;
-  see Open Questions above and `docs/protocol-reference.md`.
+None for this change.
 
 ## Review
 
