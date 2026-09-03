@@ -158,6 +158,11 @@ Notifications, HomeKit, and household arming rules belong in your own Home
 Assistant setup — not inside this add-on. Use the ready-to-arm switches and
 the blocked-arm event as the generic refuse mechanism.
 
+Apple Home has no arming or pending states. Exposing the MQTT alarm entity
+directly makes the iPhone slider jump to Away during exit. Use a template
+facade instead:
+[Expose the alarm to HomeKit](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/expose-alarm-to-homekit.md).
+
 ## Further reading
 
 These open the GitHub repository — Home Assistant does not serve the extra
@@ -166,6 +171,7 @@ markdown files from this App.
 - [Getting started](https://github.com/michaelmarconi/texecom_alarm/blob/main/README.md#getting-started)
 - [Configure Home and Night](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/configure-part-arm.md)
 - [Refuse an arm that is not ready](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/use-ready-to-arm.md)
+- [Expose the alarm to HomeKit](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/expose-alarm-to-homekit.md)
 - [Stop other Connect clients](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md)
 - HA locked out only while the alarm is sounding:
   [wrong network module / COM-port signalling](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md)

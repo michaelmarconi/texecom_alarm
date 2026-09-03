@@ -24,6 +24,9 @@ automations; this add-on only honours the switches.
 
 HomeKit and the iOS app may still offer a mode whose switch is off. Choosing
 it must still refuse — do not treat a missing button as the safety mechanism.
+If you expose Apple Home, use a
+[HomeKit facade](expose-alarm-to-homekit.md) so the slider does not jump to
+Away during exit.
 
 ## Notify on a blocked arm
 
@@ -37,3 +40,4 @@ MQTT lookup: [MQTT reference](../reference/mqtt.md#blocked-arm-event).
 
 - Option and entity overview: [Documentation](../../texecom_alarm/DOCS.md#what-appears-in-home-assistant)
 - Topics and payloads: [MQTT reference](../reference/mqtt.md#ready-to-arm)
+- Apple Home: [How to expose the alarm to HomeKit](expose-alarm-to-homekit.md)

@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Notifications, HomeKit, and household arming rules belong in **your** Home Assistant configuration — not in this add-on. Feature requests that are really automations will usually be closed with a pointer to do them in HA.
+        Notifications, HomeKit, and household arming rules belong in **your** Home Assistant configuration — not in this add-on. For Apple Home, see [How to expose the alarm to HomeKit](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/expose-alarm-to-homekit.md). Feature requests that are really automations will usually be closed with a pointer to do them in HA.
   - type: textarea
     id: problem
     attributes:

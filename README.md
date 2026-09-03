@@ -128,6 +128,7 @@ Home Assistant).
 | Install and configuration options            | [Documentation](https://github.com/michaelmarconi/texecom_alarm/blob/main/texecom_alarm/DOCS.md) (`DOCS.md` is also the Supervisor docs tab)             |
 | Map Home / Night to Part-Arm                 | [How to configure Part-Arm](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/configure-part-arm.md)                   |
 | Refuse an arm when a mode is not ready       | [How to use ready-to-arm](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/use-ready-to-arm.md)                      |
+| Show the alarm in Apple Home                 | [How to expose the alarm to HomeKit](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/expose-alarm-to-homekit.md)    |
 | Free the panel’s Connect slot                | [Stop other Connect clients](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/how-to/stop-other-connect-clients.md)          |
 | Disarm fails only during an alarm            | [Wrong network module](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/ha-loses-panel-during-alarm.md)                      |
 | Why zones stay available when the link drops | [Availability vs panel connection](https://github.com/michaelmarconi/texecom_alarm/blob/main/docs/concepts/availability-and-connection.md) |

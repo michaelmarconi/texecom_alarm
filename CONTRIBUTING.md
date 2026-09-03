@@ -18,7 +18,8 @@ In scope: the panel session, MQTT entities this add-on publishes, and docs for
 operators.
 
 Out of scope: household automations, notifications, and HomeKit rules. Those
-stay in the operator’s Home Assistant configuration.
+stay in the operator’s Home Assistant configuration. Apple Home setup:
+[How to expose the alarm to HomeKit](docs/how-to/expose-alarm-to-homekit.md).
 
 ## Protocol contributions
 

@@ -45,6 +45,9 @@ The app publishes retained `arming` on `{prefix}/alarm/state`, then the current
 payload, so the Home Assistant card can drop an optimistic tap. It does not set
 live alarm state to arming. `DISARM` is never gated.
 
+Apple Home maps `arming` to Away. Do not expose this entity to HomeKit Bridge;
+use a [HomeKit facade](../how-to/expose-alarm-to-homekit.md).
+
 A second identical `ARM_*` after that mode already succeeded (or while the
 card shows that `armed_*` mode, or generic `arming` for this same gesture) is
 ignored — same idea as a duplicate `DISARM` when already unset. A different
