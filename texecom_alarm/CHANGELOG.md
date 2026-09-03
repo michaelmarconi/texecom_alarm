@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-09-03
+
 ### Fixed
 
 - A second identical Arm after that mode already succeeded (or while the card
@@ -23,7 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A reconnect flags snapshot that still looks unset does not flash Off over an
   alarm card that already shows exit or entry (`arming` / `pending`), and does
   not forget an in-flight arm while the card is still Off.
-
 
 ## [0.3.6] - 2026-09-02
 
